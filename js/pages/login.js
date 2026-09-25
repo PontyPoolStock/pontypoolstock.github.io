@@ -10,7 +10,7 @@ import {
 
 const STORAGE_KEY = USER_STORAGE_KEY;
 
-//* The URL the login page talks to: Neon unless a URL was saved from the login screen
+//^ Neon hosts the API function (hello.ts) on the `production` branch of the Pontypool project.
 export function getConfiguredApiUrl() {
   return getSavedApiUrl();
 }
@@ -32,16 +32,15 @@ export async function initLogin() {
     loginForm.addEventListener("submit", handleLogin);
   }
 
-  const apiInput = document.getElementById("apiUrlInput");
-  const saveBtn = document.getElementById("saveApiUrlBtn");
-  if (apiInput) {
-    apiInput.value = getConfiguredApiUrl();
-  }
-  if (saveBtn) {
-    saveBtn.addEventListener("click", () => {
-      const url = apiInput?.value || "";
-      const nextUrl = setConfiguredApiUrl(url);
-      alert(`Database URL saved: ${nextUrl}`);
+  // Password visibility toggle helper
+  const toggleBtn = document.getElementById("togglePasswordBtn");
+  const pwdInput = document.getElementById("loginPassword");
+  const toggleIcon = document.getElementById("togglePasswordIcon");
+  if (toggleBtn && pwdInput && toggleIcon) {
+    toggleBtn.addEventListener("click", () => {
+      const isPassword = pwdInput.type === "password";
+      pwdInput.type = isPassword ? "text" : "password";
+      toggleIcon.className = isPassword ? "bi bi-eye-slash" : "bi bi-eye";
     });
   }
 }
@@ -51,11 +50,19 @@ async function handleLogin(event) {
   event.preventDefault();
 
   const email = document.getElementById("loginEmail")?.value.trim();
-  const password = document.getElementById("loginPassword")?.value.trim();
+  const password = document.getElementById("loginPassword")?.value;
+  const rememberMe = document.getElementById("rememberMe")?.checked !== false;
+  const submitBtn = document.getElementById("loginSubmitBtn");
 
   if (!email || !password) {
     showError("Please enter both email and password.");
     return;
+  }
+
+  // Visual loading feedback on submit button
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Signing in...`;
   }
 
   try {
@@ -69,8 +76,12 @@ async function handleLogin(event) {
 
     if (!user || user.error) {
       showError(
-        "Unable to reach the configured database. Check your Neon URL and try again.",
+        user?.error || "Invalid credentials or unable to reach database. Please check your credentials.",
       );
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span class="btn-text">Sign In</span><i class="bi bi-arrow-right ms-1"></i>`;
+      }
       return;
     }
 
@@ -81,16 +92,33 @@ async function handleLogin(event) {
       role: user.role,
     };
 
-    if (user.token) {
-      saveAuthToken(user.token);
+    try {
+      // Remember-me unchecked = session-only login so closing the tab signs out.
+      const storage = rememberMe ? localStorage : sessionStorage;
+      const otherStorage = rememberMe ? sessionStorage : localStorage;
+      otherStorage.removeItem(STORAGE_KEY);
+      storage.setItem(STORAGE_KEY, JSON.stringify(currentUser));
+      if (user.token) {
+        if (rememberMe) {
+          saveAuthToken(user.token);
+        } else {
+          try { sessionStorage.setItem("pontypool_token", user.token); } catch {}
+          try { localStorage.removeItem("pontypool_token"); } catch {}
+        }
+      }
+    } catch {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(currentUser));
+      if (user.token) saveAuthToken(user.token);
     }
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentUser));
 
     window.location.replace("./index.html");
   } catch (error) {
     console.error("Login error:", error);
-    showError("Login failed. Please try again.");
+    showError("Login failed. Please check your connection and try again.");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<span class="btn-text">Sign In</span><i class="bi bi-arrow-right ms-1"></i>`;
+    }
   }
 }
 
@@ -103,14 +131,17 @@ function showError(message) {
   errorDiv.classList.remove("d-none");
 }
 
-//* Read the currently logged-in user from local storage
+//* Read the currently logged-in user from browser storage (persistent or session-only)
 export function getCurrentUser() {
   try {
-    const currentUser = localStorage.getItem(STORAGE_KEY);
-    return currentUser ? JSON.parse(currentUser) : null;
+    const fromLocal = localStorage.getItem(STORAGE_KEY);
+    if (fromLocal) return JSON.parse(fromLocal);
+    const fromSession = sessionStorage.getItem(STORAGE_KEY);
+    return fromSession ? JSON.parse(fromSession) : null;
   } catch (error) {
     console.error("Unable to read current user:", error);
     localStorage.removeItem(STORAGE_KEY);
+    try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
     return null;
   }
 }

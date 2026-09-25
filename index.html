@@ -11,16 +11,24 @@
     <link rel="canonical" href="https://pontypoolstock.github.io/" />
     <link rel="icon" type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23facc15'/%3E%3Cpath d='M16 22l16-8 16 8-16 8-16-8zm0 8l16 8 16-8v12L32 50 16 42V30z' fill='black'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
     <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
-    <link rel="stylesheet" href="./css/style.css?v=20260924-1">
+    <link rel="stylesheet" href="./css/style.css?v=20260925-5">
   </head>
 
   <body class="d-flex">
 
-    <aside class="sidebar">
+    <button id="sidebarToggle" class="sidebar-toggle" aria-label="Open navigation menu" aria-controls="appSidebar" aria-expanded="false">
+      <i class="bi bi-list"></i>
+    </button>
+    <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+
+    <aside class="sidebar" id="appSidebar" aria-label="Application navigation">
       <div class="sidebar-logo">
         <img class="sidebar-logo-image" src="./pontylogo.jpeg"
           alt="Pontypool Electricals and Lighting" />
@@ -93,7 +101,103 @@
       src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="./js/main.js?v=20260925-1" type="module"></script>
+    <script src="./js/main.js?v=20260925-5" type="module"></script>
+    <script>
+      // Mobile drawer + global click ripple. Pure UI, no data changes.
+      (function () {
+        function closeSidebar() {
+          document.body.classList.remove("sidebar-open");
+          var t = document.getElementById("sidebarToggle");
+          if (t) {
+            t.setAttribute("aria-expanded", "false");
+            t.setAttribute("aria-label", "Open navigation menu");
+            var icon = t.querySelector("i");
+            if (icon) icon.className = "bi bi-list";
+          }
+        }
+        function setToggleIcon(open) {
+          var t = document.getElementById("sidebarToggle");
+          if (!t) return;
+          var icon = t.querySelector("i");
+          if (icon) icon.className = open ? "bi bi-x-lg" : "bi bi-list";
+        }
+        function toggleSidebar() {
+          var open = !document.body.classList.contains("sidebar-open");
+          document.body.classList.toggle("sidebar-open", open);
+          if (open) document.body.classList.add("drawer-used");
+          var t = document.getElementById("sidebarToggle");
+          if (t) {
+            t.setAttribute("aria-expanded", open ? "true" : "false");
+            t.setAttribute("aria-label", open ? "Close navigation menu" : "Open navigation menu");
+          }
+          setToggleIcon(open);
+        }
+        function bindSidebar() {
+          var toggle = document.getElementById("sidebarToggle");
+          var backdrop = document.getElementById("sidebarBackdrop");
+          if (toggle && !toggle.dataset.bound) {
+            toggle.dataset.bound = "1";
+            toggle.addEventListener("click", function (e) {
+              e.stopPropagation();
+              toggleSidebar();
+            });
+          }
+          if (backdrop && !backdrop.dataset.bound) {
+            backdrop.dataset.bound = "1";
+            backdrop.addEventListener("click", closeSidebar);
+          }
+        }
+        bindSidebar();
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", bindSidebar);
+        }
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") closeSidebar();
+        });
+        document.addEventListener("click", function (e) {
+          if (e.target.closest && e.target.closest(".nav-item") && window.innerWidth <= 992) closeSidebar();
+        });
+        // Swipe right from left edge opens, swipe left closes.
+        var touchStartX = null;
+        document.addEventListener("touchstart", function (e) {
+          if (e.touches.length === 1) touchStartX = e.touches[0].clientX;
+        }, { passive: true });
+        document.addEventListener("touchend", function (e) {
+          if (touchStartX === null) return;
+          var startX = touchStartX;
+          var endX = e.changedTouches[0].clientX;
+          touchStartX = null;
+          if (window.innerWidth > 992) return;
+          if (endX - startX > 70 && startX < 60) toggleSidebarOpen(true);
+          else if (startX - endX > 70) toggleSidebarOpen(false);
+        }, { passive: true });
+        function toggleSidebarOpen(open) {
+          document.body.classList.toggle("sidebar-open", open);
+          if (open) document.body.classList.add("drawer-used");
+          var t = document.getElementById("sidebarToggle");
+          if (t) {
+            t.setAttribute("aria-expanded", open ? "true" : "false");
+            var icon = t.querySelector("i");
+            if (icon) icon.className = open ? "bi bi-x-lg" : "bi bi-list";
+          }
+        }
+        // Material-style click ripple for buttons and nav items.
+        document.addEventListener("pointerdown", function (e) {
+          var el = e.target.closest ? e.target.closest(".btn, .nav-item, .toolbar .btn-add, .action-btn, .page-link") : null;
+          if (!el) return;
+          var rect = el.getBoundingClientRect();
+          var size = Math.max(rect.width, rect.height);
+          var dot = document.createElement("span");
+          dot.className = "ink-ripple";
+          dot.style.width = dot.style.height = size + "px";
+          dot.style.left = (e.clientX - rect.left - size / 2) + "px";
+          dot.style.top = (e.clientY - rect.top - size / 2) + "px";
+          if (getComputedStyle(el).position === "static") el.style.position = "relative";
+          el.appendChild(dot);
+          setTimeout(function () { dot.remove(); }, 600);
+        });
+      })();
+    </script>
   </body>
 
 </html>
