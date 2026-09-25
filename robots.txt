@@ -3,4 +3,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://abdulrahmanSiraj.github.io/inventory-management-system/sitemap.xml
+Sitemap: https://pontypoolstock.github.io/sitemap.xml
