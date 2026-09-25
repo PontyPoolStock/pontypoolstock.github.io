@@ -7,9 +7,9 @@ import {
 } from "./form.js";
 
 import {
-  isVaildProductData,
-  isVaildCategoryData,
-  isVaildStockAdjustmentData,
+  isValidProductData,
+  isValidCategoryData,
+  isValidStockAdjustmentData,
   GetCurrentDate,         
   buildStorableImageUrl,
   escapeHtml,
@@ -25,15 +25,17 @@ import {getCurrentUser} from "../pages/login.js";
 export async function getModal(obj, action, id, onAfterSave) {
   const objModalName = `${obj}Modal`;
   document.querySelector(`#${objModalName}`)?.remove();
-  let modalTitle = `${action} ${obj}`;
-  if (obj === "stockAdjustments") modalTitle = `${action} Stock Adjustment`;
+  //^ Friendly titles — the raw entity names would read "Add products" / "Edit categories"
+  const entityLabel = { products: "Product", categories: "Category" }[obj] || "Stock Adjustment";
+  const modalTitle = `${action} ${entityLabel}`;
 
   let html = `
-  <div class="modal fade" id="${objModalName}" tabindex="-1">
-    <div class="modal-dialog">
+  <div class="modal fade" id="${objModalName}" tabindex="-1" aria-labelledby="${objModalName}Title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
-          <h4>${modalTitle}</h4>
+          <h4 class="modal-title fs-5" id="${objModalName}Title">${modalTitle}</h4>
+          <button type="button" class="btn-close" aria-label="Close"></button>
         </div>
         <div class="modal-body">`;
 
@@ -44,7 +46,7 @@ export async function getModal(obj, action, id, onAfterSave) {
   html += `</div>
         <div class="modal-footer">
           <button type="button" class="btn btn-primary save-btn">Save</button>
-          <button type="button" class="btn btn-secondary close-btn" data-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-secondary close-btn">Close</button>
         </div>
       </div>
     </div>
@@ -82,8 +84,8 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         productsForAdjustment = await fetchData("products");
       }
 
-      let isVaild = vaildData(obj, data, id, productsForAdjustment, ratings);
-      if (!isVaild) return;
+      let isValid = validateData(obj, data, id, productsForAdjustment, ratings);
+      if (!isValid) return;
 
       if (obj === "products") {
         //^ the ratings drive price and stock, so the totals always stay in sync
@@ -204,21 +206,26 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
     });
 }
 
-function vaildData(obj, data, id, products, ratings = []) {
+function validateData(obj, data, id, products, ratings = []) {
   let result = true;
-  if (obj === "products") result = isVaildProductData(data, id, ratings);
-  else if (obj === "categories") result = isVaildCategoryData(data);
-  else if (obj === "stockAdjustments") result = isVaildStockAdjustmentData(data, products);
+  if (obj === "products") result = isValidProductData(data, id, ratings);
+  else if (obj === "categories") result = isValidCategoryData(data);
+  else if (obj === "stockAdjustments") result = isValidStockAdjustmentData(data, products);
   return result;
 }
 
+//^ Both the header "x" and the footer Close button ask before discarding, so an
+//^ accidental tap can never silently drop a half-filled form.
 function closeBtnEvent(modalElement, modal) {
   modalElement
-    .querySelector(".close-btn")
-    .addEventListener("click", function () {
-      if (confirm("Are you sure you want to discard changes?")) {
-        modal.hide();
-      }
+    .querySelectorAll(".close-btn, .btn-close")
+    .forEach(function (button) {
+      button.addEventListener("click", function (event) {
+        event.preventDefault();
+        if (confirm("Are you sure you want to discard changes?")) {
+          modal.hide();
+        }
+      });
     });
 }
 

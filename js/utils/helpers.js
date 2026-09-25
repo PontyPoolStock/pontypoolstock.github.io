@@ -1,14 +1,14 @@
 //* Validation Functions for Products
 //* Only the product name is required — price, quantity, unit, category, code
 //* and the rating rows may all be left empty; safe defaults are applied on save.
-export function isVaildProductData(data, id, variants = []) {
+export function isValidProductData(data, id, variants = []) {
   document
     .querySelectorAll(".errorMes")
     .forEach((item) => (item.innerHTML = ""));
   normalizeProductUnit(data);
 
   const ratingRows = Array.isArray(variants) ? variants : [];
-  return isVaildName(data.name) && isVaildVariantRows(ratingRows);
+  return isValidName(data.name) && isValidVariantRows(ratingRows);
 }
 
 //* Suggested colours for a rating — the field also accepts any colour typed in
@@ -16,7 +16,7 @@ export const RATING_COLOURS = ["White", "Warm White", "RGB"];
 
 //* Rating rows are freely combinable (watts + colour + amperes) and optional:
 //* nothing blocks the save — values are only trimmed and clamped to safe numbers.
-function isVaildVariantRows(variants) {
+function isValidVariantRows(variants) {
   const errorBox = document.querySelector(".errorMes-variants");
   if (errorBox) errorBox.innerHTML = "";
 
@@ -36,7 +36,7 @@ function isVaildVariantRows(variants) {
 }
 //* Only a non-empty name is required — a product or category may leave every
 //* other field (code, price, quantity, unit, category, parent) empty.
-function isVaildName(name) {
+function isValidName(name) {
   if (String(name ?? "").trim().length === 0) {
     document.querySelector(".errorMes-name").innerHTML = `Name is required`;
     return false;
@@ -56,7 +56,7 @@ function normalizeProductUnit(data) {
   data.unit = aliases[String(data.unit || "").trim().toLowerCase()] || data.unit;
 }
 
-export function isVaildCategoryData(data) {
+export function isValidCategoryData(data) {
   document
     .querySelectorAll(".errorMes")
     .forEach((item) => (item.innerHTML = ""));
@@ -67,17 +67,17 @@ export function isVaildCategoryData(data) {
     return false;
   }
 
-  return isVaildName(data.name);
+  return isValidName(data.name);
 }
 
 //* Validation — stock adjustments
-export function isVaildStockAdjustmentData(data, products) {
+export function isValidStockAdjustmentData(data, products) {
   document
     .querySelectorAll(".errorMes")
     .forEach((item) => (item.innerHTML = ""));
-  const v1 = isVaildAdjustmentProductId(data.productId);
-  const v2 = isVaildAdjustmentType(data.type);
-  const v3 = isVaildAdjustmentQuantity(
+  const v1 = isValidAdjustmentProductId(data.productId);
+  const v2 = isValidAdjustmentType(data.type);
+  const v3 = isValidAdjustmentQuantity(
     data.quantity,
     data.type,
     data.productId,
@@ -86,7 +86,7 @@ export function isVaildStockAdjustmentData(data, products) {
   );
   return v1 && v2 && v3;
 }
-function isVaildAdjustmentProductId(productId) {
+function isValidAdjustmentProductId(productId) {
   if (!productId || String(productId).trim() === "") {
     document.querySelector(".errorMes-productId").innerHTML =
       "Product is required";
@@ -94,7 +94,7 @@ function isVaildAdjustmentProductId(productId) {
   }
   return true;
 }
-function isVaildAdjustmentType(type) {
+function isValidAdjustmentType(type) {
   if (type !== "increase" && type !== "decrease") {
     document.querySelector(".errorMes-type").innerHTML =
       "Select a valid adjustment type";
@@ -102,7 +102,7 @@ function isVaildAdjustmentType(type) {
   }
   return true;
 }
-function isVaildAdjustmentQuantity(quantityStr, type, productId, products, variantLabel = "") {
+function isValidAdjustmentQuantity(quantityStr, type, productId, products, variantLabel = "") {
   if (
     quantityStr === undefined
     || quantityStr === null
@@ -235,7 +235,7 @@ export function escapeHtml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
-export function formatEGP(amount) {
+export function formatCurrency(amount) {
   const num = Math.round((Number(amount) || 0) * 100) / 100;
   return `KSh ${num.toLocaleString("en-US")}`;
 }
@@ -312,6 +312,8 @@ export function getActionStyle(action = "") {
 
   if (safeAction.includes("SALE_EDITED"))
     return { color: "warning", label: "edit sale" };
+  if (safeAction.includes("SALE_DELETED"))
+    return { color: "danger", label: "delete sale" };
   if (safeAction.includes("SALE_RECORDED"))
     return { color: "success", label: "sale" };
   if (safeAction.includes("STOCK_ADJUSTMENT"))
@@ -382,7 +384,7 @@ export function sortData(data) {
   return [...data].sort((a, b) => {
     const dateA = new Date(a.updatedAt || a.createdAt);
     const dateB = new Date(b.updatedAt || b.createdAt);
-    return dateB - dateA; // الأحدث أولاً
+    return dateB - dateA; // newest first
   });
 }
 

@@ -1,7 +1,7 @@
 import { fetchData } from "../services/api.js";
 import {
   escapeHtml,
-  formatEGP,
+  formatCurrency,
   getLowStockProducts,
   getTotalInventoryValue,
   activityRowHtml,
@@ -93,7 +93,7 @@ function renderDashboard(adjustments, sales) {
               <i class="bi bi-currency-dollar text-success"></i>
               <span>Inventory Value</span>
             </div>
-            <div class="fs-4 fw-bold mt-2 text-success">${formatEGP(totalValue)}</div>
+            <div class="fs-4 fw-bold mt-2 text-success">${formatCurrency(totalValue)}</div>
             <div class="small text-muted mt-1">Total stock value</div>
           </div>
         </div>
@@ -170,8 +170,8 @@ function renderPeriodSummaryCard(label, adjustments, sales, icon, period) {
     <article class="dashboard-period-card dashboard-period-card-${period}">
       <div class="dashboard-period-card-title"><span>${label}</span><i class="bi ${icon}"></i></div>
       <span class="dashboard-period-card-kicker">Sales revenue</span>
-      <strong>${formatEGP(salesTotal)}</strong>
-      <small>${sales.length} sale${sales.length === 1 ? "" : "s"} <b>·</b> avg ${formatEGP(averageSale)}</small>
+      <strong>${formatCurrency(salesTotal)}</strong>
+      <small>${sales.length} sale${sales.length === 1 ? "" : "s"} <b>·</b> avg ${formatCurrency(averageSale)}</small>
       <div class="dashboard-period-breakdown">
         <span><i class="bi bi-arrow-up-right"></i> ${added} units added</span>
         <span><i class="bi bi-arrow-down-right"></i> ${removed} units removed</span>

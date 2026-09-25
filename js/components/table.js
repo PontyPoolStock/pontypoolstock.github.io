@@ -1,7 +1,18 @@
+import { formatCurrency } from "../utils/helpers.js";
+
 export default function renderTable(data, cols, actions = true) {
   if (!data || data.length === 0) {
     return '<p class="text-center text-muted py-4">No data available</p>';
   }
+
+  //^ Price is money, so it goes through the same formatter as the rest of the app
+  //^ rather than being hand-prefixed here, which kept the two out of step.
+  const cellValue = (item, col) => {
+    const value = item[col];
+    if (value === null || value === undefined || value === "") return "-";
+    if (col === "price") return formatCurrency(value);
+    return value;
+  };
 
   //^ Table Display on Desktop >>>>>>>>>> hidden on mobile
   let table = `
@@ -12,26 +23,24 @@ export default function renderTable(data, cols, actions = true) {
   `;
 
   cols.forEach((col) => {
-    table += `<th>${getColumnLabel(col)}</th>`;
+    table += `<th scope="col">${getColumnLabel(col)}</th>`;
   });
-  if (actions) table += `<th>ACTIONS</th>`;
+  if (actions) table += `<th scope="col">ACTIONS</th>`;
 
   table += `</tr></thead><tbody>`;
 
   data.forEach((item) => {
     table += `<tr>`;
     cols.forEach((col) => {
-      let value = item[col];
-      if (col === "price" && value !== null && value !== undefined && value !== "") value = `KSh ${value}`;
-      table += `<td>${value || "-"}</td>`;
+      table += `<td>${cellValue(item, col)}</td>`;
     });
     if (actions) {
       table += `
         <td>
-          <button class="action-btn edit-btn" data-id="${item.id}">
+          <button class="action-btn edit-btn" data-id="${item.id}" title="Edit" aria-label="Edit">
             <i class="bi bi-pencil"></i>
           </button>
-          <button class="action-btn delete-btn" data-id="${item.id}">
+          <button class="action-btn delete-btn" data-id="${item.id}" title="Delete" aria-label="Delete">
             <i class="bi bi-trash"></i>
           </button>
         </td>
@@ -42,8 +51,7 @@ export default function renderTable(data, cols, actions = true) {
 
   table += `</tbody></table></div>`;
 
-  //^ Table Display on Moblie >>>>>>>>>> hidden on Desktop
-  //^ in moblie we made cards instead of table
+  //^ Cards replace the table on mobile, where a wide table would need sideways scrolling
   let cards = `<div class="d-md-none d-flex flex-column gap-3 p-2">`;
 
   data.forEach((item) => {
@@ -54,15 +62,14 @@ export default function renderTable(data, cols, actions = true) {
     `;
 
     cols.forEach((col, index) => {
-      let value = item[col];
-      if (col === "price" && value !== null && value !== undefined && value !== "") value = `KSh ${value}`;
+      const value = cellValue(item, col);
       if (index === 0) {
-        cards += `<div class="fw-bold mb-2">${value || "-"}</div>`;
+        cards += `<div class="fw-bold mb-2">${value}</div>`;
       } else {
         cards += `
           <div class="d-flex gap-2 small mb-1">
-            <span class="fw-medium text-secondary" style="min-width:80px">${getColumnLabel(col)}:</span>
-            <span>${value || "-"}</span>
+            <span class="fw-medium text-secondary card-field-label">${getColumnLabel(col)}:</span>
+            <span>${value}</span>
           </div>
         `;
       }
@@ -73,10 +80,10 @@ export default function renderTable(data, cols, actions = true) {
     if (actions) {
       cards += `
         <div class="d-flex flex-column gap-2 ms-3">
-          <button class="action-btn edit-btn" data-id="${item.id}">
+          <button class="action-btn edit-btn" data-id="${item.id}" title="Edit" aria-label="Edit">
             <i class="bi bi-pencil"></i>
           </button>
-          <button class="action-btn delete-btn" data-id="${item.id}">
+          <button class="action-btn delete-btn" data-id="${item.id}" title="Delete" aria-label="Delete">
             <i class="bi bi-trash"></i>
           </button>
         </div>

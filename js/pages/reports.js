@@ -2,7 +2,7 @@ import { fetchData } from "../services/api.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import {
   escapeHtml,
-  formatEGP,
+  formatCurrency,
   getLowStockProducts,
   getInventoryValueRowsSorted,
   getTotalInventoryValue,
@@ -65,7 +65,7 @@ function renderReports() {
               <i class="bi bi-currency-dollar text-success"></i>
               <div class="fw-semibold">Total Inventory Value</div>
             </div>
-            <div class="fs-4 fw-bold mt-2">${formatEGP(totalValue)}</div>
+            <div class="fs-4 fw-bold mt-2">${formatCurrency(totalValue)}</div>
           </div>
         </div>
       </div>
@@ -276,7 +276,7 @@ function renderValueTable(valueRowsSlice) {
     rowsHtml += `
       <tr>
         <td class="fw-semibold">${escapeHtml(r.name)}</td>
-        <td class="fw-bold text-end">${formatEGP(r.value)}</td>
+        <td class="fw-bold text-end">${formatCurrency(r.value)}</td>
       </tr>
     `;
   }

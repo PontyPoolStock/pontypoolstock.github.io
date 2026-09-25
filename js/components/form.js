@@ -18,12 +18,12 @@ export async function makeProductForm(id, categoryId = "") {
   <form>
     <div class="row mb-3">
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="name">Product Name *</label>
-        <input type="text" class="form-control" name="name" placeholder="e.g Laptop Pro" value="${escAttr(id ? (product.name || "") : "")}">
+        <label class="text-secondary form-label" for="name">Product Name *</label>
+        <input type="text" class="form-control" name="name" placeholder="e.g. Laptop Pro" value="${escAttr(id ? (product.name || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-name"></div>
       </div>
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="sku">Code</label>
+        <label class="text-secondary form-label" for="sku">Code</label>
         <input type="text" class="form-control" name='sku'  placeholder="Optional code, e.g. LP-001" value="${escAttr(id ? (product.sku || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-sku"></div>
       </div>
@@ -31,13 +31,13 @@ export async function makeProductForm(id, categoryId = "") {
 
     <div class="row mb-3">
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="categoryId">Category</label>
+        <label class="text-secondary form-label" for="categoryId">Category</label>
         ${categoryIsLocked ? `<input type="hidden" name="categoryId" value="${selectedCategoryId}">` : ""}
         ${displayProductsOptions("category", selectedCategoryId, categories, categories, categoryIsLocked)}
         <div class="text-danger fw-bold errorMes errorMes-categoryId"></div>
       </div>
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="price">Price</label>
+        <label class="text-secondary form-label" for="price">Price</label>
         <input type="number" class="form-control" name="price" placeholder="0.00" value="${escAttr(id ? product.price : "")}">
         <div class="text-danger fw-bold errorMes errorMes-price"></div>
 
@@ -47,13 +47,13 @@ export async function makeProductForm(id, categoryId = "") {
 
     <div class="row mb-3">
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="quantity">Quantity</label>
+        <label class="text-secondary form-label" for="quantity">Quantity</label>
         <input type="number" class="form-control" name='quantity'  placeholder="0" value="${escAttr(id ? product.quantity : "")}">
         <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
 
       </div>
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="unit">Unit</label>
+        <label class="text-secondary form-label" for="unit">Unit</label>
         <input type="text" class="form-control" name='unit'  placeholder="Pcs / kg / box" value="${escAttr(id ? (product.unit || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-unit"></div>
 
@@ -254,7 +254,7 @@ export async function makeCategoryForm(id, parentCategoryId = "") {
   <form>
     <div class="row mb-3">
       <div class="col-12">
-        <label class="text-secondary" class="form-label" for="name">Category Name *</label>
+        <label class="text-secondary form-label" for="name">Category Name *</label>
         <input type="text" class="form-control" name="name" placeholder="e.g Electronics" value="${escAttr(id ? (category.name || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-name"></div>
       </div>

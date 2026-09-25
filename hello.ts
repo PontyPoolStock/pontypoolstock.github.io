@@ -232,9 +232,9 @@ function clearLoginAttempts(request: Request) {
 }
 
 //* Sales are written through a single transaction so a sale can never exist
-//* without its stock deduction (and vice versa). Sales rows are append-only:
-//* PUT /sales/<id> and DELETE /sales/<id> are refused so history and stock
-//* cannot drift apart. Correcting a mistake = Stock Adjustment.
+//* without its stock deduction (and vice versa). Editing and deleting a sale go
+//* through their own transactions that reverse the original stock movement in
+//* the same breath, so history and stock can never drift apart.
 async function recordSale(body: Record<string, unknown>) {
   const productId = String(body.productId ?? "").trim();
   const quantity = Number(body.quantity);
@@ -353,7 +353,10 @@ async function recordSale(body: Record<string, unknown>) {
 //* Edit a recorded sale: put the original stock back, then take the corrected
 //* amount out, all inside one transaction. If anything fails, nothing changes.
 //* This is what keeps "sales revenue" and "stock on hand" telling one story.
-async function updateSale(id: string, body: Record<string, unknown>) {
+async function updateSale(
+  id: string,
+  body: Record<string, unknown>,
+): Promise<{ error?: string; status?: number; sale?: Record<string, unknown> }> {
   const quantity = Number(body.quantity);
   const unitPrice = Number(body.unitPrice);
   const productId = String(body.productId ?? "").trim();
@@ -489,7 +492,7 @@ async function applyStockDelta(
   variantIndex: unknown,
   delta: number,
   isGiveBack: boolean,
-) {
+): Promise<{ error?: string; productName?: string }> {
   const result = await client.query(
     "SELECT * FROM products WHERE id = $1 FOR UPDATE",
     [productId],
@@ -552,6 +555,71 @@ async function applyStockDelta(
   );
 
   return { productName };
+}
+
+//* Voiding a sale is the exact mirror of recording one: the stock it consumed
+//* goes back to the same rating, the row is removed, and both happen in one
+//* transaction. A partial failure would leave revenue and stock on hand
+//* disagreeing, so everything here either lands together or not at all.
+async function deleteSale(
+  id: string,
+): Promise<{ error?: string; status?: number; deleted?: boolean; id?: number }> {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    //* Lock the sale row so two concurrent deletes of the same sale serialise
+    const saleResult = await client.query(
+      "SELECT * FROM sales WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    const sale = saleResult.rows[0];
+    if (!sale) {
+      await client.query("ROLLBACK");
+      return { error: "Not found", status: 404 };
+    }
+
+    const quantity = Number(sale.quantity) || 0;
+    const total = Number(sale.total) || 0;
+    const soldAt = sale.sold_at ? new Date(sale.sold_at) : new Date();
+
+    //* products.product_id is ON DELETE SET NULL, so a sale can outlive its
+    //* product. There is then no stock left to return the units to, so the
+    //* delete still goes ahead rather than being blocked forever.
+    let productName = String(sale.product_name || "Product");
+    if (sale.product_id) {
+      const variantIndex = await resolveOriginalVariantIndex(client, sale);
+      const giveBack = await applyStockDelta(
+        client, sale.product_id, variantIndex, quantity, true,
+      );
+      if (giveBack.error) {
+        await client.query("ROLLBACK");
+        return giveBack;
+      }
+      if (giveBack.productName) productName = giveBack.productName;
+    }
+
+    await client.query("DELETE FROM sales WHERE id = $1", [id]);
+
+    await client.query(
+      `INSERT INTO activity_log (action, details, "user", timestamp) VALUES ($1, $2, $3, $4)`,
+      [
+        "SALE_DELETED",
+        `Sale deleted: ${quantity} × ${productName} — KSh ${total} (stock returned)`,
+        "admin",
+        soldAt.toISOString(),
+      ],
+    );
+
+    await client.query("COMMIT");
+    return { deleted: true, id: Number(id) };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function saleVariantName(productName: string, variant: Record<string, unknown>) {
@@ -641,18 +709,17 @@ export default async function api(request: Request): Promise<Response> {
     }
 
     //* Editing a sale reverses the old stock movement and applies the new one in
-    //* one transaction, so revenue and stock can never disagree. Deleting stays
-    //* refused: voiding is done by recording a corrected sale instead.
+    //* one transaction, so revenue and stock can never disagree. Deleting voids
+    //* the sale the same way: stock goes back and the row goes, together.
     if (request.method === "PUT" && id && typedResource === "sales") {
       const result = await updateSale(id, await readBody(request));
       if (result.error) return json({ error: result.error }, result.status || 400);
       return json(result.sale);
     }
-    if (request.method === "DELETE" && typedResource === "sales") {
-      return json(
-        { error: "Sales history cannot be deleted. Edit the sale to correct it, or use Stock Adjustments to correct stock." },
-        405,
-      );
+    if (request.method === "DELETE" && id && typedResource === "sales") {
+      const result = await deleteSale(id);
+      if (result.error) return json({ error: result.error }, result.status || 400);
+      return json(result);
     }
 
     if (request.method === "POST") {

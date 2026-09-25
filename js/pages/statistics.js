@@ -1,7 +1,7 @@
 import { fetchData } from "../services/api.js";
 import {
   escapeHtml,
-  formatEGP,
+  formatCurrency,
   getProductStock,
   getProductStockValue,
   getLowStockProducts,
@@ -70,21 +70,21 @@ function renderStatistics() {
   const cards = [
     {
       label: "Sales Today",
-      value: formatEGP(getSalesTotal(salesToday)),
+      value: formatCurrency(getSalesTotal(salesToday)),
       detail: `${salesToday.length} transaction${salesToday.length === 1 ? "" : "s"}`,
       icon: "bi-graph-up-arrow",
       tone: "yellow",
     },
     {
       label: "Total Sales",
-      value: formatEGP(getSalesTotal(periodSales)),
+      value: formatCurrency(getSalesTotal(periodSales)),
       detail: `${periodSales.length} in selected period`,
       icon: "bi-cash-stack",
       tone: "purple",
     },
     {
       label: "Inventory Value",
-      value: formatEGP(getTotalInventoryValue(products)),
+      value: formatCurrency(getTotalInventoryValue(products)),
       detail: "Current stock value",
       icon: "bi-wallet2",
       tone: "green",
@@ -259,7 +259,7 @@ function renderDailySalesTable(rows) {
             <tr>
               <td><strong>${formatSalesDay(row.day)}</strong></td>
               <td>${row.transactions}</td>
-              <td class="text-end fw-semibold">${formatEGP(row.total)}</td>
+              <td class="text-end fw-semibold">${formatCurrency(row.total)}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -309,7 +309,7 @@ function renderCategoryTable(rows) {
               <td><span class="category-mark"></span><strong>${escapeHtml(row.name)}</strong></td>
               <td>${row.products}</td>
               <td>${row.units.toLocaleString("en-US")}</td>
-              <td class="text-end fw-semibold">${formatEGP(row.value)}</td>
+              <td class="text-end fw-semibold">${formatCurrency(row.value)}</td>
             </tr>
           `).join("")}
         </tbody>

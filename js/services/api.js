@@ -159,16 +159,21 @@ export async function updateData(endpoint, id, data) {
   }
 }
 
+//* Returns { ok, error } rather than a bare boolean: a rejected delete is
+//* almost always a real reason worth showing ("the product no longer exists",
+//* "not found"), not a generic failure, so the caller needs the detail.
+//* The existing product/category callers ignore the result and still work.
 export async function deleteData(endpoint, id) {
   try {
     const response = await fetchWithFallback(`${endpoint}/${id}`, {
       method: "DELETE",
     });
     clearDataCache(endpoint);
-    return response.ok;
+    if (response.status === 204) return { ok: true, error: "" };
+    return { ok: response.ok, error: response.ok ? "" : "Delete failed" };
   } catch (error) {
     console.error("Error deleting data:", error);
-    return false;
+    return { ok: false, error: error?.message || "Unable to delete" };
   }
 }
 

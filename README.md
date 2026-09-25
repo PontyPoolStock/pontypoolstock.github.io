@@ -32,6 +32,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries
 - 🛒 **Record Sale** — Sell a product or a specific rating; stock, sales totals, and the activity log update together
 - ✏️ **Edit Sale** — Correct a mis-keyed sale (product, rating, quantity, price); the original stock is returned and re-deducted atomically
+- 🗑️ **Delete Sale** — Void a sale outright; the units it consumed are returned to the same rating in the same transaction, so revenue and stock never drift apart
 - 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking (no sales revenue)
 - 📈 **Reports** — Low stock and inventory value reports
 - 📋 **Activity Log** — Track all important actions
@@ -152,14 +153,14 @@ Base URL: `js/config.js` → `https://br-blue-base-b451rqwn-api.compute.c-6.us-e
 | POST | `/categories` | Add new category |
 | PUT | `/categories/:id` | Update category |
 | DELETE | `/categories/:id` | Delete category |
-| GET | `/adjustments` | Get all stock adjustments |
-| POST | `/adjustments` | Add stock adjustment |
+| GET | `/stockAdjustments` | Get all stock adjustments |
+| POST | `/stockAdjustments` | Add stock adjustment |
 | GET | `/activityLog` | Get activity log |
 | POST | `/activityLog` | Log an action |
 | GET | `/sales` | Get sales |
 | POST | `/sales` | Record a sale (transactionally: validates stock, deducts it, writes the sale + activity log) |
 | PUT | `/sales/:id` | Edit a sale (transactionally: returns the original stock, takes the corrected amount, logs `SALE_EDITED`) |
-| DELETE | `/sales/:id` | Refused `405` — correct a sale by editing it |
+| DELETE | `/sales/:id` | Void a sale and return its stock to the same rating |
 | POST | `/auth/login` | Validate email and password |
 
 ---
@@ -228,7 +229,8 @@ npm run share   # terminal 2: opens a public https://pontypool.loca.lt tunnel
 ## 🧩 Components
 
 ### `table.js`
-Generates a dynamic HTML table from any array of objects.
+Generates a dynamic HTML table from any array of objects — a real table on
+desktop, and cards on phones so nothing needs sideways scrolling.
 
 ```javascript
 renderTable(data, columns, actions)
@@ -237,8 +239,11 @@ renderTable(data, columns, actions)
 // actions — boolean, show edit/delete buttons (default: true)
 ```
 
+A `price` column is formatted through the shared currency helper automatically.
+
 ### `pagination.js`
-Renders pagination controls with rows-per-page selector.
+Renders pagination controls with a rows-per-page selector. Returns an empty
+string when there is nothing to page through.
 
 ```javascript
 renderPagination(totalItems, currentPage, pageSize)
@@ -256,27 +261,45 @@ getModal(obj, action, id, onSuccess)
 // onSuccess — callback after successful save
 ```
 
+The dialog is scrollable and both its close buttons ask before discarding, so a
+half-filled form is never lost to a stray tap.
+
 ### `form.js`
 Builds form HTML for each entity.
 
 ```javascript
-makeProductForm(id)
-makeCategoryForm(id)
+makeProductForm(id, categoryId)
+makeCategoryForm(id, parentCategoryId)
+makeStockAdjustmentForm()
 ```
 
 ---
 
 ## ✅ Validation Rules
 
+Only the **name** is required. Every other field may be left blank, and safe
+defaults are applied on save (empty price/quantity become `0`, empty SKU
+becomes `null`).
+
 ### Product
-- Name: required, 4–25 characters
-- SKU: required, format `LETTERS-000` (e.g. `LP-001`)
-- Price, Quantity, Reorder Level: required, greater than zero
-- Unit: required, must be `pcs`, `kg`, or `box`
+- Name: required, must not be blank
+- Code (SKU): optional, trimmed
+- Price, Quantity: optional, clamped to `0` or more
+- Unit: optional, normalised to `pcs` / `kg` / `box` (e.g. `2 boxes` also sets quantity)
+- Ratings / variants: optional and freely combinable (watts + colour + amperes)
 
 ### Category
-- Name: required, 4–25 characters
-- Description: required, 11–40 characters
+- Name: required, must not be blank
+- Parent: optional, but a category cannot be its own parent
+
+### Stock adjustment
+- Product and type (`increase` / `decrease`): required
+- Quantity: required, a whole number greater than `0`, and a decrease can never
+  take stock below `0`
+
+### Sale
+- Product and selling price: required
+- Quantity: a whole number greater than `0`, and never more than the stock on hand
 
 ---
 

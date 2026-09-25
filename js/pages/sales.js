@@ -1,8 +1,8 @@
-﻿import renderPagination, { paginateData } from "../components/pagination.js";
-import { fetchData, postData, updateData } from "../services/api.js";
+import renderPagination, { paginateData } from "../components/pagination.js";
+import { fetchData, postData, updateData, deleteData } from "../services/api.js";
 import {
   escapeHtml,
-  formatEGP,
+  formatCurrency,
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantPrice,
@@ -57,7 +57,7 @@ function renderSalesPage() {
       <div class="sale-hero-stats">
         <div class="sale-hero-stat">
           <span>Sales today</span>
-          <strong>${formatEGP(getSalesTotal(today))}</strong>
+          <strong>${formatCurrency(getSalesTotal(today))}</strong>
         </div>
         <div class="sale-hero-stat">
           <span>Units today</span>
@@ -65,7 +65,7 @@ function renderSalesPage() {
         </div>
         <div class="sale-hero-stat">
           <span>All time</span>
-          <strong>${formatEGP(getSalesTotal(sales))}</strong>
+          <strong>${formatCurrency(getSalesTotal(sales))}</strong>
         </div>
       </div>
     </section>
@@ -150,9 +150,14 @@ function getTableHtml(filteredList = lastFiltered) {
         <td class="text-nowrap">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</td>
         <td>${escapeHtml(sale.productName || "")}</td>
         <td class="text-end">${Number(sale.quantity) || 0}</td>
-        <td class="text-end">${formatEGP(sale.unitPrice)}</td>
-        <td class="text-end fw-semibold">${formatEGP(sale.total)}</td>
-        <td class="text-end"><button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button></td>
+        <td class="text-end">${formatCurrency(sale.unitPrice)}</td>
+        <td class="text-end fw-semibold">${formatCurrency(sale.total)}</td>
+        <td class="text-end">
+          <div class="d-inline-flex gap-1">
+            <button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>
+            <button class="action-btn sale-delete-btn" data-id="${sale.id}" title="Delete sale" aria-label="Delete sale"><i class="bi bi-trash"></i></button>
+          </div>
+        </td>
       </tr>
     `)
     .join("");
@@ -162,14 +167,17 @@ function getTableHtml(filteredList = lastFiltered) {
       <div class="bg-white border rounded p-3 shadow-sm sale-history-card">
         <div class="d-flex justify-content-between align-items-start gap-2">
           <div class="fw-semibold">${escapeHtml(sale.productName || "")}</div>
-          <span class="badge rounded-pill sale-total-badge">${formatEGP(sale.total)}</span>
+          <span class="badge rounded-pill sale-total-badge">${formatCurrency(sale.total)}</span>
         </div>
         <small class="text-muted">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</small>
         <div class="d-flex gap-3 small mt-2">
           <span>${Number(sale.quantity) || 0} sold</span>
-          <span class="text-muted">@${formatEGP(sale.unitPrice)} each</span>
+          <span class="text-muted">@${formatCurrency(sale.unitPrice)} each</span>
         </div>
-        <button class="btn btn-outline-secondary btn-sm mt-3 sale-edit-btn w-100" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit Sale</button>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>
+          <button class="btn btn-outline-danger btn-sm sale-delete-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-trash"></i> Delete</button>
+        </div>
       </div>
     `)
     .join("");
@@ -219,6 +227,11 @@ function setupEventListeners() {
     if (editBtn) {
       const sale = sales.find((item) => String(item.id) === editBtn.dataset.id);
       if (sale) openEditSaleModal(sale);
+      return;
+    }
+    const deleteBtn = event.target.closest(".sale-delete-btn");
+    if (deleteBtn) {
+      handleDeleteSale(deleteBtn.dataset.id);
       return;
     }
     const pageBtn = event.target.closest(".page-link");
@@ -334,7 +347,7 @@ function updateSalePreview() {
   const unitPrice = Math.max(0, Number(document.getElementById("saleUnitPrice")?.value) || 0);
   const preview = document.getElementById("saleTotalPreview");
   if (!preview) return;
-  const next = formatEGP(quantity * unitPrice);
+  const next = formatCurrency(quantity * unitPrice);
   if (preview.textContent === next) return;
   preview.textContent = next;
   //* A quick pop when the total changes makes the KSh figure feel live
@@ -354,7 +367,7 @@ async function handleRecordSale(event) {
   const hasVariants = getProductVariants(getSelectedProduct()).length > 0;
   const variantIndex = hasVariants ? String(variantSelect?.value ?? "") : "";
 
-  if (!isVaildSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants })) return;
+  if (!isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants })) return;
 
   const button = document.getElementById("recordSaleBtn");
   isSubmitting = true;
@@ -387,12 +400,12 @@ async function handleRecordSale(event) {
   currentPage = 1;
   renderSalesPage();
   showSaleFormMessage(
-    `Sale recorded: ${quantity} x ${result.productName || "product"} - ${formatEGP(result.total)}`,
+    `Sale recorded: ${quantity} x ${result.productName || "product"} - ${formatCurrency(result.total)}`,
     "success",
   );
 }
 
-function isVaildSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants }) {
+function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants }) {
   document.querySelectorAll(".errorMes").forEach((item) => { item.textContent = ""; });
   let valid = true;
 
@@ -438,6 +451,78 @@ function showSaleFormMessage(message, tone) {
   alert.innerHTML = `<i class="bi bi-${icon} me-2"></i>${escapeHtml(message)}`;
 }
 
+//* The history refreshes rebuild the whole page, which would throw away a
+//* half-filled Record Sale form. Deleting an old sale is unrelated to what is
+//* currently being typed, so the form is carried across the re-render.
+function captureSaleFormState() {
+  return {
+    productId: document.getElementById("saleProductSelect")?.value || "",
+    variantIndex: document.getElementById("saleVariantSelect")?.value ?? "",
+    quantity: document.getElementById("saleQuantity")?.value ?? "",
+    unitPrice: document.getElementById("saleUnitPrice")?.value ?? "",
+  };
+}
+
+function restoreSaleFormState(state) {
+  if (!state) return;
+  const productSelect = document.getElementById("saleProductSelect");
+  if (!productSelect) return;
+
+  productSelect.value = state.productId;
+  populateVariantSelect(document.getElementById("saleVariantSelect"));
+  const variantSelect = document.getElementById("saleVariantSelect");
+  if (variantSelect && state.variantIndex) variantSelect.value = state.variantIndex;
+
+  const quantityInput = document.getElementById("saleQuantity");
+  const priceInput = document.getElementById("saleUnitPrice");
+  if (quantityInput) quantityInput.value = state.quantity;
+  if (priceInput) priceInput.value = state.unitPrice;
+  updateSalePreview();
+}
+
+//* Voiding a sale returns the units it took to stock on the server, inside the
+//* same transaction that removes the row, so the two can never drift apart.
+async function handleDeleteSale(id) {
+  const sale = sales.find((item) => String(item.id) === String(id));
+  if (!sale) return;
+
+  const quantity = Number(sale.quantity) || 0;
+  const label = sale.productName || "this product";
+  const units = `${quantity} unit${quantity === 1 ? "" : "s"}`;
+  const ok = confirm(
+    `Delete this sale?\n\n${quantity} × ${label} — ${formatCurrency(sale.total)}\n\n`
+    + `${units} will be returned to stock.`,
+  );
+  if (!ok) return;
+
+  const formState = captureSaleFormState();
+  const result = await deleteData("sales", sale.id);
+  if (!result.ok) {
+    //* The API can refuse for a real reason (missing product or rating), so
+    //* show what it said rather than a generic "something went wrong".
+    showSaleFormMessage(
+      String(result.error || "Unable to delete this sale.").replace(/^Request failed with status \d+\s*:\s*/, ""),
+      "danger",
+    );
+    return;
+  }
+
+  //* Re-fetch so the history, the KSh totals and stock all reflect the delete
+  await loadData();
+  lastFiltered = [...sales];
+  //* Removing the last row of the final page would otherwise strand the user
+  //* on an empty page, so step back one page when that happens.
+  const totalPages = Math.max(1, Math.ceil(lastFiltered.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  renderSalesPage();
+  restoreSaleFormState(formState);
+  showSaleFormMessage(
+    `Sale deleted: ${quantity} × ${label} — ${units} returned to stock.`,
+    "success",
+  );
+}
+
 function openEditSaleModal(sale) {
   document.getElementById("editSaleModal")?.remove();
 
@@ -453,10 +538,13 @@ function openEditSaleModal(sale) {
     .join("");
 
   const html = `
-    <div class="modal fade" id="editSaleModal" tabindex="-1">
-      <div class="modal-dialog">
+    <div class="modal fade" id="editSaleModal" tabindex="-1" aria-labelledby="editSaleModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-          <div class="modal-header"><h4>Edit Sale</h4></div>
+          <div class="modal-header">
+            <h4 class="modal-title fs-5" id="editSaleModalTitle">Edit Sale</h4>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
           <div class="modal-body">
             <form id="editSaleForm" novalidate>
               <div id="editSaleAlert" class="alert d-none mb-3" role="alert"></div>
@@ -643,7 +731,7 @@ function filterSales() {
   document.getElementById("salesTableContainer").innerHTML = getTableHtml(lastFiltered);
   document.getElementById("salesHistoryStats").textContent =
     term || period
-      ? `${lastFiltered.length} sale${lastFiltered.length === 1 ? "" : "s"} - ${formatEGP(getSalesTotal(lastFiltered))}`
+      ? `${lastFiltered.length} sale${lastFiltered.length === 1 ? "" : "s"} - ${formatCurrency(getSalesTotal(lastFiltered))}`
       : "";
 }
 
