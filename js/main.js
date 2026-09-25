@@ -31,11 +31,27 @@ $(document).ready(function () {
   });
 });
 
+// Page currently on screen — used to make re-tapping its nav row a no-op.
+let renderedPage = null;
+
 function navigateTo(text) {
+  // Re-tapping the row you're already on: settle scroll to the top instead of
+  // blanking the page and replaying every entrance animation.
+  if (text === renderedPage && $("#pageContent").children().length > 0) {
+    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  renderedPage = text;
+
   $("#pageTitle").text(text);
   $(".nav-item").removeClass("active-content");
   $(`.nav-item[data-page="${text}"]`).addClass("active-content");
-  $("#pageContent").html('<div class="p-4 text-muted">Loading...</div>');
+  $("#pageContent").html(
+    '<div class="page-loading" role="status">' +
+      '<div class="spinner-border spinner-border-sm text-warning" aria-hidden="true"></div>' +
+      "<span>Loading...</span>" +
+      "</div>"
+  );
 
   localStorage.setItem("currentPage", text);
 

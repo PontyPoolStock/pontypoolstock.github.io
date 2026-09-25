@@ -77,6 +77,17 @@ main {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Centered spinner shown while a page's data loads. */
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 3rem 1rem;
+  color: #737373;
+  font-size: 0.9rem;
+}
+
 .sidebar {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
@@ -123,6 +134,16 @@ main {
 
 .sidebar-toggle:active {
   transform: scale(0.94);
+}
+
+/* The icon swings between the list and close glyphs as the drawer opens. */
+.sidebar-toggle i {
+  display: block;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.sidebar-open .sidebar-toggle i {
+  transform: rotate(90deg);
 }
 
 .sidebar-backdrop {
@@ -1377,17 +1398,13 @@ body.sidebar-open .sidebar-backdrop {
     overflow: hidden;
   }
 
+  /* The base .sidebar transition slides the drawer in from off-canvas — no
+     competing keyframes here, so opening can't snap or fight the transition. */
   body.sidebar-open .sidebar {
     transform: translateX(0);
     visibility: visible;
     z-index: 1101;
     transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-    animation: sidebarSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  @keyframes sidebarSlideIn {
-    from { transform: translateX(-30px); opacity: 0.6; }
-    to { transform: translateX(0); opacity: 1; }
   }
 
   body.sidebar-open .sidebar-logo-text,
@@ -1434,8 +1451,14 @@ body.sidebar-open .sidebar-backdrop {
     justify-content: flex-start;
   }
 
+  /* Keep the fixed hamburger (44px wide at left:10px, z-index above the
+     drawer) clear of the logo — the image starts to its right instead. */
   .sidebar-logo {
-    padding: 20px 16px 12px;
+    padding: 20px 16px 12px 62px;
+  }
+
+  .sidebar-logo::after {
+    left: 62px;
   }
 
   .sidebar-logo-image {
@@ -1766,9 +1789,9 @@ body.sidebar-open .sidebar-backdrop {
   to { transform: scale(3.2); opacity: 0; }
 }
 
-/* Ripple reads on the dark sidebar too. */
+/* Ripple reads on the dark sidebar too — kept soft so taps feel calm. */
 .nav-item .ink-ripple {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .nav-item {
@@ -1813,9 +1836,9 @@ body.sidebar-open .sidebar-backdrop {
   color: #000000;
 }
 
-.nav-item.active-content {
-  animation: navPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+/* Click feedback on nav rows is colour-only: the chip, icon and accent bar
+   transition in over ~0.25s with zero transform, so tapping rows can never
+   read as a shake or pop. (navPop is kept for pagination chips below.) */
 
 @keyframes navPop {
   from { transform: scale(0.97); }
@@ -2033,6 +2056,17 @@ body.sidebar-open .sidebar-nav > *:nth-child(n+11) { animation-delay: 0.33s; }
 @keyframes rowIn {
   from { opacity: 0; transform: translateY(7px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Status badges pop in as their row renders. No fill mode on purpose: once
+   the pop ends, the existing badge hover rules take back control of transform. */
+.status-badge {
+  animation: badgePop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes badgePop {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* Pagination: active page pops. */
