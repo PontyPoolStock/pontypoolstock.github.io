@@ -35,12 +35,14 @@ body {
   color: var(--pontypool-black);
   display: flex;
   min-height: 100vh;
+  /* `clip` rather than `hidden`, and no overflow-y here. Any overflow on <body>
+     turns it into a scroll container of its own, and `position: sticky` then
+     measures against <body> instead of the page - which silently stops the
+     sidebar from sticking and lets it slide away with the content. The
+     scrollbar slot is already reserved by the <html> rule above, so dropping
+     overflow-y here costs nothing. */
   overflow-x: hidden;
-  /* Keep the scrollbar slot reserved at all times. Without this, navigating to
-     a short page lets the page scrollbar disappear and reappear, shoving the
-     whole layout sideways by the scrollbar width on every nav tap. */
-  overflow-y: scroll;
-  scrollbar-gutter: stable;
+  overflow-x: clip;
   letter-spacing: -0.01em;
 }
 
@@ -67,16 +69,15 @@ main {
   display: flex;
   flex-direction: column;
 }
+
 .contentContainer {
   flex: 1;
 }
 
+/* Page scrolls as one normal document: the header rides away with the content
+   instead of hovering over it, so the translucent/blur treatment that only made
+   sense for a pinned bar is gone. */
 .contentContainer > header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: rgb(255 255 255 / 88%) !important;
-  backdrop-filter: blur(14px);
   box-shadow: 0 8px 22px rgb(15 23 42 / 6%);
 }
 
@@ -105,6 +106,9 @@ main {
   min-width: var(--sidebar-width);
   height: 100vh;
   height: 100dvh;
+  /* Sticky at the top of the page: the sidebar holds its place at the side of
+     the screen while the content scrolls past it. This only works while <body>
+     is not a scroll container - see the overflow note in the body rule. */
   position: -webkit-sticky;
   position: sticky;
   top: 0;
