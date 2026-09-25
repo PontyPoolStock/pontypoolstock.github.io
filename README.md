@@ -30,7 +30,8 @@ This system helps teams track inventory, manage categories, monitor stock levels
 - 📦 **Product Management** — Add, edit, delete, search, and filter products by category and status
 - 🏷️ **Categories** — Manage product categories with product count tracking
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries
-- 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking
+- 🛒 **Record Sale** — Sell a product or a specific rating; stock, sales totals, and the activity log update together
+- 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking (no sales revenue)
 - 📈 **Reports** — Low stock and inventory value reports
 - 📋 **Activity Log** — Track all important actions
 - 🚨 **Low Stock Alerts** — Visual warnings based on reorder level
@@ -87,6 +88,7 @@ inventory-management-system/
         ├── products.js         # Product management
         ├── categories.js       # Category management
         ├── statistics.js       # Management statistics
+        ├── sales.js             # Record Sale + sales history
         ├── stockadjustment.js      # Stock adjustments
         ├── reports.js          # Reports page
         └── activity.js         # Activity log
@@ -154,7 +156,9 @@ Base URL: `js/config.js` → `https://br-blue-base-b451rqwn-api.compute.c-6.us-e
 | GET | `/activityLog` | Get activity log |
 | POST | `/activityLog` | Log an action |
 | GET | `/sales` | Get sales |
-| POST | `/sales` | Record a sale |
+| POST | `/sales` | Record a sale (transactionally: validates stock, deducts it, writes the sale + activity log) |
+| PUT | `/sales/:id` | Refused `405` — sales history is append-only |
+| DELETE | `/sales/:id` | Refused `405` — correct stock with a Stock Adjustment instead |
 | POST | `/auth/login` | Validate email and password |
 
 ---

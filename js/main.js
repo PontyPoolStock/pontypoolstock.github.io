@@ -11,6 +11,7 @@ import { loadReports } from "./pages/reports.js";
 import { loadActivityLog } from "./pages/activity.js";
 import { loadDashboard } from "./pages/dashboard.js";
 import { loadStockAdjustments } from "./pages/stockadjustment.js";
+import { loadSales } from "./pages/sales.js";
 import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 
@@ -79,6 +80,9 @@ function navigateTo(text) {
       break;
     case "Reports":
       loadReports();
+      break;
+    case "Record Sale":
+      loadSales();
       break;
     case "Stock Adjustments":
       loadStockAdjustments();

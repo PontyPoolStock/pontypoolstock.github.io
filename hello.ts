@@ -229,6 +229,127 @@ function clearLoginAttempts(request: Request) {
   loginAttempts.delete(loginAttemptKey(request));
 }
 
+//* Sales are written through a single transaction so a sale can never exist
+//* without its stock deduction (and vice versa). Sales rows are append-only:
+//* PUT /sales/<id> and DELETE /sales/<id> are refused so history and stock
+//* cannot drift apart. Correcting a mistake = Stock Adjustment.
+async function recordSale(body: Record<string, unknown>) {
+  const productId = String(body.productId ?? "").trim();
+  const quantity = Number(body.quantity);
+  const unitPrice = Number(body.unitPrice);
+  const variantRaw = body.variantIndex;
+
+  if (!productId) return { error: "Product is required" };
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return { error: "Quantity must be a whole number greater than 0" };
+  }
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+    return { error: "Selling price must be 0 or more" };
+  }
+
+  const total = Math.round(unitPrice * quantity * 100) / 100;
+  const soldAt = new Date();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    //* Lock the product row so two simultaneous sales cannot oversell it
+    const productResult = await client.query(
+      "SELECT * FROM products WHERE id = $1 FOR UPDATE",
+      [productId],
+    );
+    const product = productResult.rows[0];
+    if (!product) {
+      await client.query("ROLLBACK");
+      return { error: "Product not found" };
+    }
+
+    const variants: Record<string, unknown>[] = Array.isArray(product.variants)
+      ? product.variants
+      : [];
+    let productName = String(product.name || "");
+    let nextQuantity = Number(product.quantity) || 0;
+    let nextVariants: Record<string, unknown>[] | null = null;
+
+    if (variants.length) {
+      const index = Number.parseInt(String(variantRaw ?? ""), 10);
+      const variant = Number.isNaN(index) ? undefined : variants[index];
+      if (!variant) {
+        await client.query("ROLLBACK");
+        return { error: "Select the rating being sold" };
+      }
+      const available = Number(variant.quantity) || 0;
+      if (available < quantity) {
+        await client.query("ROLLBACK");
+        return { error: `Only ${available} in stock for this rating` };
+      }
+
+      nextVariants = variants.map((item, position) => (
+        position === index ? { ...item, quantity: available - quantity } : item
+      ));
+      nextQuantity = nextVariants.reduce(
+        (sum, item) => sum + (Number(item.quantity) || 0),
+        0,
+      );
+      productName = saleVariantName(productName, variant);
+    } else {
+      const available = nextQuantity;
+      if (available < quantity) {
+        await client.query("ROLLBACK");
+        return { error: `Only ${available} in stock` };
+      }
+      nextQuantity = available - quantity;
+    }
+
+    await client.query(
+      nextVariants
+        ? "UPDATE products SET quantity = $1, variants = $2, updated_at = NOW() WHERE id = $3"
+        : "UPDATE products SET quantity = $1, updated_at = NOW() WHERE id = $2",
+      nextVariants
+        ? [nextQuantity, JSON.stringify(nextVariants), productId]
+        : [nextQuantity, productId],
+    );
+
+    const saleResult = await client.query(
+      `INSERT INTO sales (product_id, product_name, quantity, unit_price, total, sold_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [productId, productName, quantity, unitPrice, total, soldAt],
+    );
+
+    await client.query(
+      `INSERT INTO activity_log (action, details, "user", timestamp) VALUES ($1, $2, $3, $4)`,
+      [
+        "SALE_RECORDED",
+        `Sale recorded: ${quantity} × ${productName} — KSh ${total}`,
+        "admin",
+        soldAt,
+      ],
+    );
+
+    await client.query("COMMIT");
+    return { sale: toCamel(saleResult.rows[0]) };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function saleVariantName(productName: string, variant: Record<string, unknown>) {
+  const ampsRaw = variant.amps;
+  const amps =
+    ampsRaw !== "" && ampsRaw !== null && ampsRaw !== undefined && Number.isFinite(Number(ampsRaw))
+      ? `${Number(ampsRaw)}A`
+      : "";
+  const suffix = [variant.label, variant.colour, amps]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+  return suffix ? `${productName} ${suffix}` : productName;
+}
+
 export default async function api(request: Request): Promise<Response> {
   const origin = request.headers.get("Origin");
   const headers = getCorsHeaders(origin);
@@ -293,6 +414,22 @@ export default async function api(request: Request): Promise<Response> {
         : await pool.query(`SELECT * FROM ${table} ORDER BY updated_at DESC, id DESC`);
       if (id && !result.rows[0]) return json({ error: "Not found" }, 404);
       return json(id ? toCamel(result.rows[0]) : result.rows.map(toCamel));
+    }
+
+    //* Recorded sales go through the transaction above, not the generic insert
+    if (request.method === "POST" && typedResource === "sales") {
+      const result = await recordSale(await readBody(request));
+      if (result.error) return json({ error: result.error }, 400);
+      return json(result.sale, 201);
+    }
+
+    //* Sales history is append-only: editing or deleting a recorded sale would
+    //* leave the revenue totals disagreeing with the stock it already moved.
+    if (typedResource === "sales" && (request.method === "PUT" || request.method === "DELETE")) {
+      return json(
+        { error: "Sales history cannot be edited or deleted. Use Stock Adjustments to correct stock." },
+        405,
+      );
     }
 
     if (request.method === "POST") {

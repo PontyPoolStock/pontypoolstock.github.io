@@ -310,6 +310,8 @@ function cleanActivityDetails(value) {
 export function getActionStyle(action = "") {
   const safeAction = String(action);
 
+  if (safeAction.includes("SALE_RECORDED"))
+    return { color: "success", label: "sale" };
   if (safeAction.includes("STOCK_ADJUSTMENT"))
     return { color: "warning", label: "adjust" };
   if (safeAction.includes("RECEIVE_ORDER"))

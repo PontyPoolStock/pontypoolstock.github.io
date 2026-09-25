@@ -1627,7 +1627,8 @@ body.sidebar-open .sidebar-backdrop {
   #addOrderBtn,
   #addCategoryBtn,
   #addSupplierBtn,
-  #addAdjustmentBtn {
+  #addAdjustmentBtn,
+  #recordSaleBtn {
     width: 100%;
   }
 
@@ -2131,6 +2132,206 @@ a:hover {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+
+/* ===== Record Sale page ===== */
+.sale-hero {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  color: #f5f5f5;
+  background:
+    radial-gradient(circle at 88% -20%, rgba(250, 204, 21, 0.28), transparent 55%),
+    linear-gradient(135deg, #0a0a0a 0%, #171717 60%, #1f1f1f 100%);
+  border: 1px solid #262626;
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+  animation: saleHeroIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes saleHeroIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.sale-hero-text h3 {
+  margin: 0.2rem 0 0.35rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.sale-hero-text p {
+  max-width: 46ch;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #a3a3a3;
+}
+
+.sale-hero .statistics-kicker {
+  color: var(--pontypool-yellow);
+}
+
+.sale-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sale-hero-stat {
+  min-width: 8.5rem;
+  padding: 0.7rem 0.9rem;
+  background: rgb(255 255 255 / 6%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+  transition: border-color 0.22s ease, background 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sale-hero-stat:hover {
+  background: rgb(255 255 255 / 10%);
+  border-color: rgba(250, 204, 21, 0.4);
+  transform: translateY(-2px);
+}
+
+.sale-hero-stat span {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a3a3a3;
+}
+
+.sale-hero-stat strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.15rem;
+  color: var(--pontypool-yellow);
+}
+
+.sale-form-card {
+  padding: 1.35rem;
+  background: #fff;
+  border: 1px solid var(--pontypool-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  animation: cardRise 0.45s 0.06s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sale-form-card .form-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #525252;
+}
+
+.sale-form-card .form-control,
+.sale-form-card .form-select {
+  border-radius: 10px;
+}
+
+.sale-total-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef9c3 100%);
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  border-radius: 14px;
+}
+
+.sale-total-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a16207;
+}
+
+.sale-total-value {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #000000;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sale-total-value.bump {
+  animation: totalBump 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes totalBump {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+.sale-form-alert {
+  animation: alertSlide 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sale-history-table thead th {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #737373;
+  white-space: nowrap;
+}
+
+.sale-total-badge {
+  font-weight: 700;
+  color: #000000;
+  background: var(--pontypool-yellow);
+}
+
+.sale-history-card {
+  border-left: 4px solid var(--pontypool-yellow);
+}
+
+.sale-history-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: #737373;
+  background: #fff;
+  border: 1px dashed var(--pontypool-border);
+  border-radius: 14px;
+}
+
+.sale-history-empty i {
+  font-size: 1.9rem;
+  color: #ca8a04;
+}
+
+@media (max-width: 575.98px) {
+  .sale-hero {
+    padding: 1.15rem;
+  }
+
+  .sale-hero-stat {
+    flex: 1 1 100%;
+  }
+
+  .sale-total-row {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .sale-total-row .btn {
+    width: 100%;
+  }
+}
 
 /* Keyboard focus gets a brand-colored ring. */
 button:focus-visible,
