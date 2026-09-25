@@ -43,6 +43,11 @@ function navigateTo(text) {
   }
   renderedPage = text;
 
+  // A genuine page switch: return to the top instantly and deliberately.
+  // Otherwise the browser force-clamps the scroll position while the old
+  // content is torn down, which throws the view around as the new page loads.
+  window.scrollTo(0, 0);
+
   $("#pageTitle").text(text);
   $(".nav-item").removeClass("active-content");
   $(`.nav-item[data-page="${text}"]`).addClass("active-content");

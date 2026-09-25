@@ -17,6 +17,13 @@
   --sidebar-drawer-width: min(84vw, 300px);
 }
 
+html {
+  /* Belt-and-braces with the `body` rule below: guarantee the page scrollbar
+     slot exists permanently so nothing can ever shift sideways on navigation. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--pontypool-font);
   background-color: var(--pontypool-soft);
@@ -29,6 +36,11 @@ body {
   display: flex;
   min-height: 100vh;
   overflow-x: hidden;
+  /* Keep the scrollbar slot reserved at all times. Without this, navigating to
+     a short page lets the page scrollbar disappear and reappear, shoving the
+     whole layout sideways by the scrollbar width on every nav tap. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   letter-spacing: -0.01em;
 }
 
@@ -68,21 +80,21 @@ main {
   box-shadow: 0 8px 22px rgb(15 23 42 / 6%);
 }
 
-#pageContent > * {
-  animation: pageContentIn 0.28s ease both;
-}
-
+/* Entrance for page content. (The `#pageContent > *` selector lives further
+   down with the full motion set; this is only the keyframe definition.) */
 @keyframes pageContentIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Centered spinner shown while a page's data loads. */
+/* Centered spinner shown while a page's data loads. Sized so the temporary
+   loading state can never be short enough to drop the page scrollbar. */
 .page-loading {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
+  min-height: 55vh;
   padding: 3rem 1rem;
   color: #737373;
   font-size: 0.9rem;
@@ -154,7 +166,17 @@ body.sidebar-open .sidebar-toggle i {
   backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.28s ease;
+  /* The drawer is the only view where this overlay is visible, so it only
+     transitions there. On desktop the overlay sits at opacity 1 and is never
+     animated, and a full-viewport `backdrop-filter` layer that repaints as
+     page content swaps underneath it is a common source of visible jank. */
+  transition: none;
+}
+
+@media (max-width: 992px) {
+  .sidebar-backdrop {
+    transition: opacity 0.28s ease;
+  }
 }
 
 body.sidebar-open .sidebar-backdrop {
@@ -1797,10 +1819,11 @@ body.sidebar-open .sidebar-backdrop {
 .nav-item {
   position: relative;
   overflow: hidden;
+  /* Paint-only transitions. `box-shadow` is deliberately excluded: animating it
+     repaints the entire sidebar on every frame. */
   transition:
     background 0.25s ease,
-    color 0.25s ease,
-    box-shadow 0.25s ease;
+    color 0.25s ease;
 }
 
 /* Left accent bar marks the active row — hover never moves anything, so
