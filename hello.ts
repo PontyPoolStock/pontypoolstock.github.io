@@ -20,7 +20,7 @@ const tableNames = {
 
 const fieldMap = {
   users: ["name", "email", "password", "role"],
-  products: ["name", "sku", "category_id", "price", "quantity", "reorder_level", "unit", "image_url"],
+  products: ["name", "sku", "category_id", "price", "quantity", "reorder_level", "unit", "image_url", "variants"],
   categories: ["name", "description", "image_url"],
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
@@ -166,7 +166,12 @@ function sqlColumn(field: string) {
 }
 
 function getDatabaseValues(fields: string[], body: Record<string, unknown>) {
-  return fields.map((field) => body[field]);
+  //^ the variants column is jsonb, so arrays/objects must be serialised to JSON text
+  return fields.map((field) => {
+    const value = body[field];
+    if (field !== "variants" || typeof value === "string") return value;
+    return JSON.stringify(value);
+  });
 }
 
 async function readBody(request: Request) {

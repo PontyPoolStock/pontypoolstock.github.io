@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS products (
   reorder_level INTEGER NOT NULL DEFAULT 0 CHECK (reorder_level >= 0),
   unit TEXT NOT NULL,
   image_url TEXT,
+  variants JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -174,7 +174,7 @@ function filterProducts() {
     //^ Search by name, sku, or category name
     if (searchTerm) {
       const ratingsText = getProductVariants(p)
-        .map((variant) => `${variant.label || ""} ${variant.sku || ""}`)
+        .map((variant) => `${variant.label || ""} ${variant.sku || ""} ${variant.colour || ""} ${variant.amps ?? ""}`)
         .join(" ")
         .toLowerCase();
       let matches =
@@ -265,7 +265,7 @@ function getProductThumbnail(imageUrl, name) {
   if (!imageUrl) return `<span class="entity-thumbnail entity-thumbnail-empty" aria-label="No product image"><i class="bi bi-box-seam"></i></span>`;
   return `<img class="entity-thumbnail" src="${imageUrl}" alt="${name} image" onerror="this.remove();" />`;
 }
-//* Shows every rating of a product inside its own row ("4W: 20 · 8W: 15")
+//* Shows every rating of a product inside its own row ("4W · White · 0.05A: 20")
 function getRatingsHtml(variants) {
   if (!variants.length) return "";
 
@@ -274,7 +274,17 @@ function getRatingsHtml(variants) {
       const qty = Number(variant.quantity) || 0;
       const min = Number(variant.reorderLevel) || 0;
       const tone = qty <= 0 ? "status-out" : qty <= min ? "status-low" : "";
-      return `<span class="variant-chip ${tone}">${variant.label || "-"}: ${qty}</span>`;
+      const details = [variant.label || "-"];
+      if (variant.colour) details.push(variant.colour);
+      if (
+        variant.amps !== "" &&
+        variant.amps !== null &&
+        variant.amps !== undefined &&
+        Number.isFinite(Number(variant.amps))
+      ) {
+        details.push(`${Number(variant.amps)}A`);
+      }
+      return `<span class="variant-chip ${tone}">${details.join(" · ")}: ${qty}</span>`;
     })
     .join("");
 

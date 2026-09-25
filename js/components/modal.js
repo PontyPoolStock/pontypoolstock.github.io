@@ -304,7 +304,8 @@ function updateStockAdjustmentCurrentDisplay() {
     for (const variant of variants) {
       const option = document.createElement("option");
       option.value = variant.label || "";
-      option.textContent = `${variant.label} (Qty: ${Number(variant.quantity) || 0})`;
+      const colourSuffix = variant.colour ? ` — ${variant.colour}` : "";
+      option.textContent = `${variant.label}${colourSuffix} (Qty: ${Number(variant.quantity) || 0})`;
       variantSelect.appendChild(option);
     }
   }

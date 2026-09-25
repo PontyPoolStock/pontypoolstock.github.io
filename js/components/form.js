@@ -3,6 +3,7 @@ import {
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantPriceRange,
+  RATING_COLOURS,
 } from "../utils/helpers.js";
 export async function makeProductForm(id, categoryId = "") {
   let product = "";
@@ -71,6 +72,7 @@ export async function makeProductForm(id, categoryId = "") {
         <div class="text-muted small mt-1">
           Optional — for products sold in several ratings (e.g. St64 in 4W, 8W, 12W).
           Price and stock are tracked per rating, and Quantity holds the total.
+          Every rating needs a colour (White / Warm White / RGB); amperes are optional.
         </div>
         <div id="variantsList" class="d-flex flex-column gap-2 mt-2">${ratingRows}</div>
         <div class="text-danger fw-bold errorMes errorMes-variants"></div>
@@ -112,6 +114,8 @@ function displayProductsOptions(type, id, data, allCategories, locked = false) {
 
 //* One editable rating row inside the product form
 function variantRowHtml(variant = {}) {
+  const colourValue = String(variant.colour || "").trim();
+  const colourLower = colourValue.toLowerCase();
   return `
     <div class="variant-row border rounded p-2" data-variant-row>
       <div class="row g-2 align-items-end">
@@ -143,6 +147,23 @@ function variantRowHtml(variant = {}) {
         <div class="col-4 col-md-1">
           <button type="button" class="btn btn-sm btn-outline-danger w-100" data-remove-variant
             title="Remove rating">&times;</button>
+        </div>
+      </div>
+      <div class="row g-2 mt-1 align-items-end">
+        <div class="col-6 col-md-3">
+          <label class="form-label small text-secondary mb-1">Colour *</label>
+          <select class="form-select form-select-sm" data-field="colour">
+            <option value="" ${colourValue ? "" : "selected"}>Select colour</option>
+            ${RATING_COLOURS.map(
+              (option) =>
+                `<option value="${option}" ${colourLower === option.toLowerCase() ? "selected" : ""}>${option}</option>`,
+            ).join("")}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small text-secondary mb-1">Amperes (A)</label>
+          <input type="number" class="form-control form-control-sm" data-field="amps"
+            value="${escAttr(variant.amps ?? "")}" min="0" step="0.01" placeholder="e.g. 0.05">
         </div>
       </div>
     </div>
@@ -200,12 +221,15 @@ export function collectProductVariants() {
   return [...list.querySelectorAll("[data-variant-row]")]
     .map((row) => {
       const valueOf = (field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
+      const ampsRaw = valueOf("amps");
       return {
         label: valueOf("label"),
         sku: valueOf("sku"),
         price: Number(valueOf("price")) || 0,
         quantity: Number(valueOf("quantity")) || 0,
         reorderLevel: Number(valueOf("reorderLevel")) || 0,
+        colour: valueOf("colour"),
+        amps: ampsRaw === "" ? "" : Number(ampsRaw),
       };
     })
     .filter((variant) => variant.label || variant.sku || variant.price || variant.quantity || variant.reorderLevel);

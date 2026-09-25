@@ -19,6 +19,9 @@ export function isVaildProductData(data, id, variants = []) {
   return v1 && v2 && v3 && v4 && v5 && v6 && v7;
 }
 
+//* The colours a rating can be sold in — must match the Colour dropdown in the product form
+export const RATING_COLOURS = ["White", "Warm White", "RGB"];
+
 //* Every rating needs its own name and price, and a quantity of 0 or more
 function isVaildVariantRows(variants) {
   if (!variants.length) return true;
@@ -30,12 +33,18 @@ function isVaildVariantRows(variants) {
     const label = String(variant.label || "").trim();
     const price = Number(variant.price);
     const quantity = Number(variant.quantity);
+    const colour = String(variant.colour || "").trim().toLowerCase();
+    const amps = variant.amps;
     let message = "";
 
     if (!label) message = "Every rating needs a name (e.g. 4W).";
     else if (seen.has(label.toLowerCase())) message = `Rating "${label}" is used twice.`;
+    else if (!RATING_COLOURS.some((option) => option.toLowerCase() === colour))
+      message = `Rating "${label}" needs a colour: White, Warm White, or RGB.`;
     else if (!Number.isFinite(price) || price <= 0) message = `Rating "${label}" needs a price above 0.`;
     else if (!Number.isFinite(quantity) || quantity < 0) message = `Rating "${label}" needs a quantity of 0 or more.`;
+    else if (amps !== "" && amps !== null && amps !== undefined && (!Number.isFinite(Number(amps)) || Number(amps) < 0))
+      message = `Rating "${label}" needs amperes of 0 or more.`;
 
     if (message) {
       if (errorBox) errorBox.innerHTML = message;
