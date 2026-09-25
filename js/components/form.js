@@ -31,13 +31,13 @@ export async function makeProductForm(id, categoryId = "") {
 
     <div class="row mb-3">
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="categoryId">Category *</label>
+        <label class="text-secondary" class="form-label" for="categoryId">Category</label>
         ${categoryIsLocked ? `<input type="hidden" name="categoryId" value="${selectedCategoryId}">` : ""}
         ${displayProductsOptions("category", selectedCategoryId, categories, categories, categoryIsLocked)}
         <div class="text-danger fw-bold errorMes errorMes-categoryId"></div>
       </div>
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="price">Price *</label>
+        <label class="text-secondary" class="form-label" for="price">Price</label>
         <input type="number" class="form-control" name="price" placeholder="0.00" value= "${id ? product.price : ""}" >
         <div class="text-danger fw-bold errorMes errorMes-price"></div>
 
@@ -47,13 +47,13 @@ export async function makeProductForm(id, categoryId = "") {
 
     <div class="row mb-3">
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="quantity">Quantity *</label>
+        <label class="text-secondary" class="form-label" for="quantity">Quantity</label>
         <input type="number" class="form-control" name='quantity'  placeholder="0" value="${id ? product.quantity : ""}">
         <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
 
       </div>
       <div class="col-6">
-        <label class="text-secondary" class="form-label" for="unit">Unit *</label>
+        <label class="text-secondary" class="form-label" for="unit">Unit</label>
         <input type="text" class="form-control" name='unit'  placeholder="Pcs / kg / box" value="${id ? product.unit : ""}">
         <div class="text-danger fw-bold errorMes errorMes-unit"></div>
 
@@ -70,11 +70,14 @@ export async function makeProductForm(id, categoryId = "") {
           </button>
         </div>
         <div class="text-muted small mt-1">
-          Optional — for products sold in several ratings (e.g. St64 in 4W, 8W, 12W).
-          Price and stock are tracked per rating, and Quantity holds the total.
-          Every rating needs a colour (White / Warm White / RGB); amperes are optional.
+          Optional — add as many rows as you like, freely combining watts, colour and amperes (e.g. 4W · White · 0.05A).
+          Price and stock are tracked per row, and Quantity holds the total.
+          Everything except the product name can be left empty.
         </div>
         <div id="variantsList" class="d-flex flex-column gap-2 mt-2">${ratingRows}</div>
+        <datalist id="ratingColourSuggestions">
+          ${RATING_COLOURS.map((option) => `<option value="${option}">`).join("")}
+        </datalist>
         <div class="text-danger fw-bold errorMes errorMes-variants"></div>
       </div>
     </div>
@@ -103,6 +106,9 @@ function displayProductsOptions(type, id, data, allCategories, locked = false) {
   if (!data.length) {
     selectInput += `<option value="" selected disabled>No categories yet - add one in the Categories section</option>`;
   }
+  if (data.length) {
+    selectInput += `<option value="" ${id ? "" : "selected"}>No category</option>`;
+  }
   data.forEach(function (item) {
     let selected = "";
     if (Number(item.id) === Number(id)) selected = "selected";
@@ -114,15 +120,13 @@ function displayProductsOptions(type, id, data, allCategories, locked = false) {
 
 //* One editable rating row inside the product form
 function variantRowHtml(variant = {}) {
-  const colourValue = String(variant.colour || "").trim();
-  const colourLower = colourValue.toLowerCase();
   return `
     <div class="variant-row border rounded p-2" data-variant-row>
       <div class="row g-2 align-items-end">
         <div class="col-6 col-md-3">
-          <label class="form-label small text-secondary mb-1">Rating</label>
+          <label class="form-label small text-secondary mb-1">Watts</label>
           <input type="text" class="form-control form-control-sm" data-field="label"
-            value="${escAttr(variant.label || "")}" placeholder="4W">
+            value="${escAttr(variant.label || "")}" placeholder="e.g. 4W">
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label small text-secondary mb-1">Code</label>
@@ -151,14 +155,10 @@ function variantRowHtml(variant = {}) {
       </div>
       <div class="row g-2 mt-1 align-items-end">
         <div class="col-6 col-md-3">
-          <label class="form-label small text-secondary mb-1">Colour *</label>
-          <select class="form-select form-select-sm" data-field="colour">
-            <option value="" ${colourValue ? "" : "selected"}>Select colour</option>
-            ${RATING_COLOURS.map(
-              (option) =>
-                `<option value="${option}" ${colourLower === option.toLowerCase() ? "selected" : ""}>${option}</option>`,
-            ).join("")}
-          </select>
+          <label class="form-label small text-secondary mb-1">Colour</label>
+          <input type="text" class="form-control form-control-sm" data-field="colour"
+            list="ratingColourSuggestions" value="${escAttr(variant.colour || "")}"
+            placeholder="White / Warm White / RGB / any">
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label small text-secondary mb-1">Amperes (A)</label>
@@ -232,7 +232,16 @@ export function collectProductVariants() {
         amps: ampsRaw === "" ? "" : Number(ampsRaw),
       };
     })
-    .filter((variant) => variant.label || variant.sku || variant.price || variant.quantity || variant.reorderLevel);
+    .filter(
+      (variant) =>
+        variant.label
+        || variant.sku
+        || variant.colour
+        || variant.amps !== ""
+        || variant.price
+        || variant.quantity
+        || variant.reorderLevel,
+    );
 }
 
 export async function makeCategoryForm(id, parentCategoryId = "") {

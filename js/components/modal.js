@@ -15,6 +15,7 @@ import {
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantPriceRange,
+  getVariantName,
 } from "../utils/helpers.js";
 
 import { postData, updateData, fetchData } from "../services/api.js";
@@ -83,14 +84,25 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
       let isVaild = vaildData(obj, data, id, productsForAdjustment, ratings);
       if (!isVaild) return;
 
-      //^ the ratings drive price and stock, so the totals always stay in sync
       if (obj === "products") {
+        //^ the ratings drive price and stock, so the totals always stay in sync
         data.variants = ratings;
         if (ratings.length) {
           const range = getVariantPriceRange(ratings);
           data.price = range ? range.min : 0;
           data.quantity = getVariantsTotalQuantity(ratings);
         }
+
+        //^ nothing is required but the name — empty optional fields become defaults
+        data.name = String(data.name ?? "").trim();
+        data.sku = String(data.sku ?? "").trim() || null;
+        data.unit = String(data.unit ?? "").trim();
+        data.categoryId = String(data.categoryId ?? "").trim() || null;
+        data.price = Math.max(0, Number(data.price) || 0);
+        data.quantity = Math.max(0, Number(data.quantity) || 0);
+      } else if (obj === "categories") {
+        data.name = String(data.name ?? "").trim();
+        data.parentId = String(data.parentId ?? "").trim() || null;
       }
 
       if (obj === "stockAdjustments") {
@@ -100,9 +112,9 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         const qty = parseInt(data.quantity, 10);
         const type = data.type;
         const variants = getProductVariants(product);
-        const rating = variants.find(
-          (item) => String(item.label) === String(data.variantLabel || ""),
-        );
+        //* The rating dropdown stores the row index, so duplicated watts stay unique
+        const ratingIndex = Number.parseInt(String(data.variantLabel ?? ""), 10);
+        const rating = Number.isNaN(ratingIndex) ? undefined : variants[ratingIndex];
         if (variants.length && !rating) {
           document.querySelector(".errorMes-variantLabel").innerHTML =
             "Select the rating you are adjusting.";
@@ -117,7 +129,7 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
         await postData("stockAdjustments", {
           productId: product.id,
-          productName: rating ? `${product.name} ${rating.label}` : product.name,
+          productName: getVariantName(product, rating),
           type,
           quantity: qty,
           date: nowIso,
@@ -126,8 +138,8 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         });
 
         if (rating) {
-          const nextVariants = variants.map((item) => (
-            String(item.label) === String(rating.label)
+          const nextVariants = variants.map((item, index) => (
+            index === ratingIndex
               ? { ...item, quantity: newQty }
               : item
           ));
@@ -143,7 +155,7 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         const sign = type === "increase" ? "+" : "−";
         await postData("activityLog", {
           action: "STOCK_ADJUSTMENT",
-          details: `Stock adjustment: ${sign}${qty} ${rating ? `${product.name} ${rating.label}` : product.name}`,
+          details: `Stock adjustment: ${sign}${qty} ${getVariantName(product, rating)}`,
           user: "admin",
           timestamp: nowIso,
         });
@@ -298,23 +310,29 @@ function updateStockAdjustmentCurrentDisplay() {
     variants = [];
   }
 
-  //^ ratings of the chosen product become the second dropdown
+  //^ ratings of the chosen product become the second dropdown (keyed by row index)
   if (variantSelect) {
     variantSelect.innerHTML = "";
-    for (const variant of variants) {
+    variants.forEach((variant, index) => {
       const option = document.createElement("option");
-      option.value = variant.label || "";
-      const colourSuffix = variant.colour ? ` — ${variant.colour}` : "";
-      option.textContent = `${variant.label}${colourSuffix} (Qty: ${Number(variant.quantity) || 0})`;
+      option.value = String(index);
+      const bits = [
+        variant.label || `Row ${index + 1}`,
+        variant.colour || "",
+        variant.amps !== "" && variant.amps !== null && variant.amps !== undefined
+          && Number.isFinite(Number(variant.amps))
+          ? `${Number(variant.amps)}A`
+          : "",
+      ].filter(Boolean);
+      option.textContent = `${bits.join(" · ")} (Qty: ${Number(variant.quantity) || 0})`;
       variantSelect.appendChild(option);
-    }
+    });
   }
   variantWrapper?.classList.toggle("d-none", !variants.length);
   if (variantError) variantError.innerHTML = "";
 
-  const chosen = variants.find(
-    (variant) => String(variant.label) === String(variantSelect?.value || ""),
-  );
+  const chosenIndex = Number.parseInt(String(variantSelect?.value ?? ""), 10);
+  const chosen = Number.isNaN(chosenIndex) ? undefined : variants[chosenIndex];
   const qty = chosen
     ? Number(chosen.quantity) || 0
     : opt.dataset.qty !== undefined

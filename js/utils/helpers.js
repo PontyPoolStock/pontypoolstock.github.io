@@ -1,4 +1,6 @@
 //* Validation Functions for Products
+//* Only the product name is required — price, quantity, unit, category, code
+//* and the rating rows may all be left empty; safe defaults are applied on save.
 export function isVaildProductData(data, id, variants = []) {
   document
     .querySelectorAll(".errorMes")
@@ -6,108 +8,37 @@ export function isVaildProductData(data, id, variants = []) {
   normalizeProductUnit(data);
 
   const ratingRows = Array.isArray(variants) ? variants : [];
-  const hasRatings = ratingRows.length > 0;
-
-  //^ price and quantity are derived from the ratings when the product has any
-  const v1 = isVaildName(data.name);
-  const v2 = isVaildSku(data.sku, id);
-  const v3 = hasRatings || isVaildNumber(data.price, "price");
-  const v4 = hasRatings || isVaildNumber(data.quantity, "quantity");
-  const v5 = isVaildUnit(data.unit);
-  const v6 = isVaildCategoryId(data.categoryId);
-  const v7 = isVaildVariantRows(ratingRows);
-  return v1 && v2 && v3 && v4 && v5 && v6 && v7;
+  return isVaildName(data.name) && isVaildVariantRows(ratingRows);
 }
 
-//* The colours a rating can be sold in — must match the Colour dropdown in the product form
+//* Suggested colours for a rating — the field also accepts any colour typed in
 export const RATING_COLOURS = ["White", "Warm White", "RGB"];
 
-//* Every rating needs its own name and price, and a quantity of 0 or more
+//* Rating rows are freely combinable (watts + colour + amperes) and optional:
+//* nothing blocks the save — values are only trimmed and clamped to safe numbers.
 function isVaildVariantRows(variants) {
-  if (!variants.length) return true;
-
   const errorBox = document.querySelector(".errorMes-variants");
-  const seen = new Set();
+  if (errorBox) errorBox.innerHTML = "";
 
   for (const variant of variants) {
-    const label = String(variant.label || "").trim();
-    const price = Number(variant.price);
-    const quantity = Number(variant.quantity);
-    const colour = String(variant.colour || "").trim().toLowerCase();
-    const amps = variant.amps;
-    let message = "";
-
-    if (!label) message = "Every rating needs a name (e.g. 4W).";
-    else if (seen.has(label.toLowerCase())) message = `Rating "${label}" is used twice.`;
-    else if (!RATING_COLOURS.some((option) => option.toLowerCase() === colour))
-      message = `Rating "${label}" needs a colour: White, Warm White, or RGB.`;
-    else if (!Number.isFinite(price) || price <= 0) message = `Rating "${label}" needs a price above 0.`;
-    else if (!Number.isFinite(quantity) || quantity < 0) message = `Rating "${label}" needs a quantity of 0 or more.`;
-    else if (amps !== "" && amps !== null && amps !== undefined && (!Number.isFinite(Number(amps)) || Number(amps) < 0))
-      message = `Rating "${label}" needs amperes of 0 or more.`;
-
-    if (message) {
-      if (errorBox) errorBox.innerHTML = message;
-      return false;
-    }
-    seen.add(label.toLowerCase());
+    variant.label = String(variant.label ?? "").trim();
+    variant.sku = String(variant.sku ?? "").trim();
+    variant.colour = String(variant.colour ?? "").trim();
+    variant.price = Math.max(0, Number(variant.price) || 0);
+    variant.quantity = Math.max(0, Number(variant.quantity) || 0);
+    variant.reorderLevel = Math.max(0, Number(variant.reorderLevel) || 0);
+    variant.amps =
+      variant.amps === "" || variant.amps === null || variant.amps === undefined
+        ? ""
+        : Math.max(0, Number(variant.amps) || 0);
   }
   return true;
 }
-function isVaildCategoryId(categoryId) {
-  if (categoryId) return true;
-  document.querySelector(".errorMes-categoryId").innerHTML =
-    "Please select a category for this product.";
-  return false;
-}
+//* Only a non-empty name is required — a product or category may leave every
+//* other field (code, price, quantity, unit, category, parent) empty.
 function isVaildName(name) {
-  if (name.length === 0) {
-    document.querySelector(".errorMes-name").innerHTML =
-      `Product Name is required`;
-    return false;
-  }
-  if (name.length <= 3 || name.length > 25) {
-    document.querySelector(".errorMes-name").innerHTML =
-      `Product Name should be bigger than 3 characters and less than 25`;
-    return false;
-  }
-  return true;
-}
-function isVaildSku(sku) {
-  if (!sku || sku.trim().length === 0) return true;
-  const skuRegex = /^[A-Z]+-\d{3}$/;
-  if (!skuRegex.test(sku)) {
-    document.querySelector(".errorMes-sku").innerHTML =
-      "Invalid code format. Please use 'LETTERS-000'.";
-    return false;
-  }
-  return true;
-}
-function isVaildNumber(num, type) {
-  if (num.length === 0) {
-    document.querySelector(`.errorMes-${type}`).innerHTML =
-      `Product ${type} is required`;
-    return false;
-  }
-  num = Number(num);
-  if (num <= 0) {
-    document.querySelector(`.errorMes-${type}`).innerHTML =
-      `Product ${type} should be bigger than zero`;
-    return false;
-  }
-  return true;
-}
-function isVaildUnit(unit) {
-  if (unit.length === 0) {
-    document.querySelector(`.errorMes-unit`).innerHTML =
-      `Product unit is required`;
-    return false;
-  }
-  let units = ["pcs", "kg", "box"];
-  unit = unit.toLowerCase().trim();
-  if (!units.includes(unit)) {
-    document.querySelector(`.errorMes-unit`).innerHTML =
-      `Product unit should be pcs, kg, or box`;
+  if (String(name ?? "").trim().length === 0) {
+    document.querySelector(".errorMes-name").innerHTML = `Name is required`;
     return false;
   }
   return true;
@@ -194,9 +125,11 @@ function isVaildAdjustmentQuantity(quantityStr, type, productId, products, varia
         "Product not found";
       return false;
     }
-    const variant = getProductVariants(product).find(
-      (item) => String(item.label) === String(variantLabel || ""),
-    );
+    //* The rating dropdown stores the row index, so duplicated watts stay unique
+    const variantIndex = Number.parseInt(String(variantLabel ?? ""), 10);
+    const variant = getProductVariants(product)[
+      Number.isNaN(variantIndex) ? -1 : variantIndex
+    ];
     const oldQty = variant
       ? getVariantQuantity(variant)
       : Number(product.quantity) || 0;
@@ -236,10 +169,20 @@ export function getVariantPriceRange(variants) {
   if (!prices.length) return null;
   return { min: Math.min(...prices), max: Math.max(...prices) };
 }
-//* "St64 12W" — used by alerts, reports, adjustments and the activity log
+//* "St64 4W · White · 0.05A" — used by alerts, reports, adjustments and the log
 export function getVariantName(product, variant) {
   const name = String(product?.name || "");
-  return variant?.label ? `${name} ${variant.label}`.trim() : name;
+  if (!variant) return name;
+  const ampsRaw = variant.amps;
+  const amps =
+    ampsRaw !== "" && ampsRaw !== null && ampsRaw !== undefined && Number.isFinite(Number(ampsRaw))
+      ? `${Number(ampsRaw)}A`
+      : "";
+  const suffix = [variant.label, variant.colour, amps]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+  return suffix ? `${name} ${suffix}` : name;
 }
 //* Total stock of one product (sum of its ratings, or its own quantity)
 export function getProductStock(product) {

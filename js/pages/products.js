@@ -258,8 +258,9 @@ function updateStats(count, searchTerm, categoryId, statusFilter) {
 }
 
 function getCategoryName(id) {
+  if (id === "" || id === null || id === undefined) return "-";
   let cat = categories.find((e) => e.id == id);
-  return cat ? cat.name : "undefined";
+  return cat ? cat.name : "-";
 }
 function getProductThumbnail(imageUrl, name) {
   if (!imageUrl) return `<span class="entity-thumbnail entity-thumbnail-empty" aria-label="No product image"><i class="bi bi-box-seam"></i></span>`;
@@ -274,7 +275,8 @@ function getRatingsHtml(variants) {
       const qty = Number(variant.quantity) || 0;
       const min = Number(variant.reorderLevel) || 0;
       const tone = qty <= 0 ? "status-out" : qty <= min ? "status-low" : "";
-      const details = [variant.label || "-"];
+      const details = [];
+      if (variant.label) details.push(variant.label);
       if (variant.colour) details.push(variant.colour);
       if (
         variant.amps !== "" &&
@@ -284,6 +286,7 @@ function getRatingsHtml(variants) {
       ) {
         details.push(`${Number(variant.amps)}A`);
       }
+      if (!details.length) details.push("-");
       return `<span class="variant-chip ${tone}">${details.join(" · ")}: ${qty}</span>`;
     })
     .join("");

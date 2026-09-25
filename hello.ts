@@ -21,7 +21,7 @@ const tableNames = {
 const fieldMap = {
   users: ["name", "email", "password", "role"],
   products: ["name", "sku", "category_id", "price", "quantity", "reorder_level", "unit", "image_url", "variants"],
-  categories: ["name", "description", "image_url"],
+  categories: ["name", "description", "parent_id", "image_url"],
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
   sales: ["product_id", "product_name", "quantity", "unit_price", "total", "sold_at"],
@@ -145,6 +145,7 @@ function getFields(resource: keyof typeof fieldMap, body: Record<string, unknown
 function normalizeBody(body: Record<string, unknown>) {
   const aliases = {
     categoryId: "category_id",
+    parentId: "parent_id",
     reorderLevel: "reorder_level",
     imageUrl: "image_url",
     productId: "product_id",
@@ -157,7 +158,13 @@ function normalizeBody(body: Record<string, unknown>) {
   const normalized = Object.fromEntries(
     Object.entries(body).map(([key, value]) => [aliases[key as keyof typeof aliases] || key, value]),
   );
+  //^ empty optional fields become NULL / 0 so NOT NULL + CHECK columns accept them
   if (normalized.sku === "") normalized.sku = null;
+  if (normalized.category_id === "") normalized.category_id = null;
+  if (normalized.parent_id === "") normalized.parent_id = null;
+  if (normalized.price === "") normalized.price = 0;
+  if (normalized.quantity === "") normalized.quantity = 0;
+  if (normalized.reorder_level === "") normalized.reorder_level = 0;
   return normalized;
 }
 
