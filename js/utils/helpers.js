@@ -237,7 +237,7 @@ export function escapeHtml(value) {
 }
 export function formatEGP(amount) {
   const num = Math.round((Number(amount) || 0) * 100) / 100;
-  return `EGP ${num.toLocaleString("en-US")}`;
+  return `KSh ${num.toLocaleString("en-US")}`;
 }
 //* Shared by the Products status badge and the status filter so they always agree
 export function getProductStatusCode(product) {

@@ -22,7 +22,7 @@ export default function renderTable(data, cols, actions = true) {
     table += `<tr>`;
     cols.forEach((col) => {
       let value = item[col];
-      if (col === "price" && value !== null && value !== undefined && value !== "") value = `EGP ${value}`;
+      if (col === "price" && value !== null && value !== undefined && value !== "") value = `KSh ${value}`;
       table += `<td>${value || "-"}</td>`;
     });
     if (actions) {
@@ -55,7 +55,7 @@ export default function renderTable(data, cols, actions = true) {
 
     cols.forEach((col, index) => {
       let value = item[col];
-      if (col === "price" && value !== null && value !== undefined && value !== "") value = `EGP ${value}`;
+      if (col === "price" && value !== null && value !== undefined && value !== "") value = `KSh ${value}`;
       if (index === 0) {
         cards += `<div class="fw-bold mb-2">${value || "-"}</div>`;
       } else {
