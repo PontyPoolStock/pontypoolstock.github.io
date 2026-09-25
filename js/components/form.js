@@ -69,9 +69,6 @@ export async function makeProductForm(id, categoryId = "") {
             <i class="bi bi-plus-lg"></i> Add rating
           </button>
         </div>
-        <div class="text-muted small mt-1">
-          Everything except the product name can be left empty.
-        </div>
         <div id="variantsList" class="d-flex flex-column gap-2 mt-2">${ratingRows}</div>
         <datalist id="ratingColourSuggestions">
           ${RATING_COLOURS.map((option) => `<option value="${option}">`).join("")}

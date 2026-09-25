@@ -45,7 +45,7 @@ body {
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--pontypool-yellow);
 }
 
 main {
@@ -212,6 +212,7 @@ body.sidebar-open .sidebar-backdrop {
   cursor: pointer;
   color: #a3a3a3;
   font-size: 0.875rem;
+  user-select: none;
   transition:
     background 0.2s,
     color 0.2s;
@@ -220,6 +221,7 @@ body.sidebar-open .sidebar-backdrop {
 .nav-item i {
   font-size: 1rem;
   min-width: 18px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s ease;
 }
 
 .nav-item:hover {
@@ -888,6 +890,13 @@ body.sidebar-open .sidebar-backdrop {
   color: #94a3b8;
 }
 
+.toolbar .search-wrap:focus-within {
+  background: #ffffff;
+  border-color: rgba(250, 204, 21, 0.7);
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.18);
+  transform: translateY(-1px);
+}
+
 .toolbar select {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -897,6 +906,16 @@ body.sidebar-open .sidebar-backdrop {
   color: #475569;
   outline: none;
   cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toolbar select:hover {
+  border-color: #cbd5e1;
+}
+
+.toolbar select:focus {
+  border-color: rgba(250, 204, 21, 0.7);
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.18);
 }
 
 .toolbar .btn-add {
@@ -1654,7 +1673,7 @@ body.sidebar-open .sidebar-backdrop {
 
 ::selection {
   background: rgba(250, 204, 21, 0.45);
-  color: #0f172a;
+  color: #000000;
 }
 
 #pageContent > * {
@@ -1747,33 +1766,62 @@ body.sidebar-open .sidebar-backdrop {
   to { transform: scale(3.2); opacity: 0; }
 }
 
+/* Ripple reads on the dark sidebar too. */
+.nav-item .ink-ripple {
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .nav-item {
   position: relative;
   overflow: hidden;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.nav-item:hover {
-  transform: translateX(4px);
+/* Left accent bar grows in on hover/active — the row itself never moves, so
+   sweeping the mouse across the nav can't jitter. */
+.nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  background: var(--pontypool-yellow);
+  border-radius: 0 3px 3px 0;
+  transform: translateY(-50%);
+  transition: height 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
 }
 
+.nav-item:hover::before,
+.nav-item.active-content::before {
+  height: 55%;
+}
+
+.nav-item.active-content::before {
+  background: #000000;
+}
+
+/* Icon eases into a yellow glow instead of wiggling on every hover. */
 .nav-item:hover i {
-  animation: iconWiggle 0.4s ease;
+  transform: scale(1.18);
+  color: var(--pontypool-yellow);
+}
+
+.nav-item.active-content:hover i {
+  color: #000000;
 }
 
 .nav-item:active {
-  transform: translateX(2px) scale(0.98);
+  transform: scale(0.98);
 }
 
 .nav-item.active-content {
   animation: navPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes iconWiggle {
-  0% { transform: rotate(0) scale(1); }
-  35% { transform: rotate(-12deg) scale(1.15); }
-  70% { transform: rotate(10deg) scale(1.1); }
-  100% { transform: rotate(0) scale(1); }
 }
 
 @keyframes navPop {
@@ -1787,12 +1835,7 @@ body.sidebar-open .sidebar-backdrop {
 
 .table tbody tr:hover {
   background: #fffbeb;
-  transform: scale(1.005);
   box-shadow: inset 3px 0 0 var(--pontypool-yellow);
-}
-
-.table tbody tr:active {
-  transform: scale(0.998);
 }
 
 .form-control,
@@ -1839,6 +1882,15 @@ body.sidebar-open .sidebar-backdrop {
 @keyframes backdropFade {
   from { opacity: 0; }
   to { opacity: 0.5; }
+}
+
+/* Modal close button spins on hover. */
+.btn-close {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+}
+
+.btn-close:hover {
+  transform: rotate(90deg);
 }
 
 .action-btn,
@@ -1920,6 +1972,62 @@ body.drawer-used .sidebar-toggle::after {
   animation: none;
   opacity: 0;
 }
+
+/* Sidebar micro-interactions: logo tilt, profile glow, dark scrollbar. */
+.sidebar-logo-image {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+}
+
+.sidebar-logo-image:hover {
+  transform: translateY(-2px) rotate(-1deg) scale(1.03);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+}
+
+.user-info {
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.user-info:hover {
+  border-color: rgba(250, 204, 21, 0.35);
+}
+
+.user-info i:first-child {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.user-info i:first-child:hover {
+  transform: scale(1.08);
+  background: rgba(250, 204, 21, 0.22);
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.28);
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 204, 21, 0.85);
+}
+
+/* Nav rows cascade in on desktop page loads too (the sidebar-open rules below
+   take over while the mobile drawer is open). */
+.sidebar-nav > * {
+  animation: drawerItemIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sidebar-nav > *:nth-child(1) { animation-delay: 0.04s; }
+.sidebar-nav > *:nth-child(2) { animation-delay: 0.08s; }
+.sidebar-nav > *:nth-child(3) { animation-delay: 0.12s; }
+.sidebar-nav > *:nth-child(4) { animation-delay: 0.16s; }
+.sidebar-nav > *:nth-child(5) { animation-delay: 0.2s; }
+.sidebar-nav > *:nth-child(6) { animation-delay: 0.24s; }
+.sidebar-nav > *:nth-child(7) { animation-delay: 0.28s; }
+.sidebar-nav > *:nth-child(8) { animation-delay: 0.32s; }
+.sidebar-nav > *:nth-child(9) { animation-delay: 0.36s; }
+.sidebar-nav > *:nth-child(n+10) { animation-delay: 0.4s; }
 
 /* Drawer navigation: each row slides in with a stagger when the drawer opens. */
 body.sidebar-open .sidebar-nav > * {
@@ -2009,6 +2117,14 @@ a:hover {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+
+/* Keyboard focus gets a brand-colored ring. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--pontypool-yellow);
+  outline-offset: 2px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
