@@ -85,7 +85,7 @@ main {
   position: -webkit-sticky;
   position: sticky;
   top: 0;
-  background: var(--pontypool-black);
+  background: #000000;
   display: flex;
   flex-direction: column;
   z-index: 1000;
@@ -107,11 +107,11 @@ main {
   justify-content: center;
   border: 1px solid rgba(250, 204, 21, 0.45);
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.92);
+  background: rgba(0, 0, 0, 0.92);
   backdrop-filter: blur(10px);
   color: var(--pontypool-yellow);
   font-size: 1.35rem;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35), 0 0 16px rgba(250, 204, 21, 0.25);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), 0 0 16px rgba(250, 204, 21, 0.25);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
@@ -129,7 +129,7 @@ main {
   position: fixed;
   inset: 0;
   z-index: 1100;
-  background: rgba(2, 6, 23, 0.55);
+  background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
@@ -184,7 +184,7 @@ body.sidebar-open .sidebar-backdrop {
 
 .sidebar-logo small {
   font-size: 0.72rem;
-  color: var(--pontypool-muted);
+  color: #9e9e9e;
 }
 
 .sidebar-nav {
@@ -199,7 +199,7 @@ body.sidebar-open .sidebar-backdrop {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #475569;
+  color: #737373;
   padding: 12px 8px 4px;
 }
 
@@ -210,7 +210,7 @@ body.sidebar-open .sidebar-backdrop {
   padding: 9px 12px;
   border-radius: 8px;
   cursor: pointer;
-  color: #94a3b8;
+  color: #a3a3a3;
   font-size: 0.875rem;
   transition:
     background 0.2s,
@@ -223,13 +223,13 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 .nav-item:hover {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: #1f1f1f;
+  color: #f0f0f0;
 }
 
 .nav-item.active-content {
   background: var(--pontypool-yellow);
-  color: var(--pontypool-black);
+  color: #000000;
   box-shadow: 0 6px 14px rgb(250 204 21 / 14%);
   font-weight: 700;
 }
@@ -1280,7 +1280,7 @@ body.sidebar-open .sidebar-backdrop {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(99, 102, 241, 0.18);
+  background: rgba(255, 255, 255, 0.14);
   flex-shrink: 0;
   font-size: 1.55rem;
   color: #fff;
@@ -1343,7 +1343,7 @@ body.sidebar-open .sidebar-backdrop {
     height: 100vh;
     height: 100dvh;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 24px 0 60px rgba(2, 6, 23, 0.45);
+    box-shadow: 24px 0 60px rgba(0, 0, 0, 0.45);
     transform: translateX(-105%);
     visibility: hidden;
     transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0.32s;
