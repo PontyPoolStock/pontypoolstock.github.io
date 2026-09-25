@@ -256,15 +256,11 @@ body.sidebar-open .sidebar-backdrop {
   color: #a3a3a3;
   font-size: 0.875rem;
   user-select: none;
-  transition:
-    background 0.2s,
-    color 0.2s;
 }
 
 .nav-item i {
   font-size: 1rem;
   min-width: 18px;
-  transition: color 0.25s ease;
 }
 
 .nav-item:hover {
@@ -1819,11 +1815,9 @@ body.sidebar-open .sidebar-backdrop {
 .nav-item {
   position: relative;
   overflow: hidden;
-  /* Paint-only transitions. `box-shadow` is deliberately excluded: animating it
-     repaints the entire sidebar on every frame. */
-  transition:
-    background 0.25s ease,
-    color 0.25s ease;
+  /* No transitions at all. A tweened background/colour on click was reading as
+     a jolt; the highlight now swaps in a single frame. */
+  transition: none;
 }
 
 /* Left accent bar marks the active row — hover never moves anything, so
@@ -1838,15 +1832,14 @@ body.sidebar-open .sidebar-backdrop {
   background: var(--pontypool-yellow);
   border-radius: 0 3px 3px 0;
   transform: translateY(-50%);
-  transition: height 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Accent bar appears in one frame — animating its height made the active row
+     look like it was twitching on click. */
+  transition: none;
   pointer-events: none;
 }
 
 .nav-item.active-content::before {
   height: 55%;
-}
-
-.nav-item.active-content::before {
   background: #000000;
 }
 

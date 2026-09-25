@@ -1,5 +1,9 @@
 //* Reads and writes go to the Neon database by default (see js/config.js)
 //^ `npm run server` is only needed if you want to test offline against data/db.json
+//^ Sidebar click feedback is intentionally instant and movement-free: the active
+//^  highlight swaps with no transform and no transition, so a mouse click can
+//^  never read as a shake or pop. (Ripples are disabled on nav rows for the
+//^  same reason - see the pointerdown handler in index.html.)
 
 import { loadProducts } from "./pages/products.js";
 import { loadCategories } from "./pages/categories.js";
