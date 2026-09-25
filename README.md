@@ -31,6 +31,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 - 🏷️ **Categories** — Manage product categories with product count tracking
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries
 - 🛒 **Record Sale** — Sell a product or a specific rating; stock, sales totals, and the activity log update together
+- ✏️ **Edit Sale** — Correct a mis-keyed sale (product, rating, quantity, price); the original stock is returned and re-deducted atomically
 - 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking (no sales revenue)
 - 📈 **Reports** — Low stock and inventory value reports
 - 📋 **Activity Log** — Track all important actions
@@ -157,8 +158,8 @@ Base URL: `js/config.js` → `https://br-blue-base-b451rqwn-api.compute.c-6.us-e
 | POST | `/activityLog` | Log an action |
 | GET | `/sales` | Get sales |
 | POST | `/sales` | Record a sale (transactionally: validates stock, deducts it, writes the sale + activity log) |
-| PUT | `/sales/:id` | Refused `405` — sales history is append-only |
-| DELETE | `/sales/:id` | Refused `405` — correct stock with a Stock Adjustment instead |
+| PUT | `/sales/:id` | Edit a sale (transactionally: returns the original stock, takes the corrected amount, logs `SALE_EDITED`) |
+| DELETE | `/sales/:id` | Refused `405` — correct a sale by editing it |
 | POST | `/auth/login` | Validate email and password |
 
 ---

@@ -24,7 +24,7 @@ const fieldMap = {
   categories: ["name", "description", "parent_id", "image_url"],
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
-  sales: ["product_id", "product_name", "quantity", "unit_price", "total", "sold_at"],
+  sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "sold_at"],
 };
 
 const toCamel = (row: Record<string, unknown>) => ({
@@ -38,6 +38,7 @@ const toCamel = (row: Record<string, unknown>) => ({
   newQuantity: row.new_quantity,
   unitPrice: row.unit_price,
   soldAt: row.sold_at,
+  variantIndex: row.variant_index,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -154,6 +155,7 @@ function normalizeBody(body: Record<string, unknown>) {
     newQuantity: "new_quantity",
     unitPrice: "unit_price",
     soldAt: "sold_at",
+    variantIndex: "variant_index",
   };
   const normalized = Object.fromEntries(
     Object.entries(body).map(([key, value]) => [aliases[key as keyof typeof aliases] || key, value]),
@@ -311,10 +313,21 @@ async function recordSale(body: Record<string, unknown>) {
         : [nextQuantity, productId],
     );
 
+    //* variant_index is stored so a later edit knows which rating to give back
     const saleResult = await client.query(
-      `INSERT INTO sales (product_id, product_name, quantity, unit_price, total, sold_at)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [productId, productName, quantity, unitPrice, total, soldAt],
+      `INSERT INTO sales (product_id, product_name, variant_index, quantity, unit_price, total, sold_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        productId,
+        productName,
+        Number.isNaN(Number.parseInt(String(variantRaw ?? ""), 10))
+          ? null
+          : Number.parseInt(String(variantRaw), 10),
+        quantity,
+        unitPrice,
+        total,
+        soldAt,
+      ],
     );
 
     await client.query(
@@ -335,6 +348,210 @@ async function recordSale(body: Record<string, unknown>) {
   } finally {
     client.release();
   }
+}
+
+//* Edit a recorded sale: put the original stock back, then take the corrected
+//* amount out, all inside one transaction. If anything fails, nothing changes.
+//* This is what keeps "sales revenue" and "stock on hand" telling one story.
+async function updateSale(id: string, body: Record<string, unknown>) {
+  const quantity = Number(body.quantity);
+  const unitPrice = Number(body.unitPrice);
+  const productId = String(body.productId ?? "").trim();
+  const variantRaw = body.variantIndex;
+
+  if (!productId) return { error: "Product is required" };
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return { error: "Quantity must be a whole number greater than 0" };
+  }
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+    return { error: "Selling price must be 0 or more" };
+  }
+
+  const total = Math.round(unitPrice * quantity * 100) / 100;
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    //* Lock the sale row so two concurrent edits of the same sale serialise
+    const saleResult = await client.query(
+      "SELECT * FROM sales WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    const sale = saleResult.rows[0];
+    if (!sale) {
+      await client.query("ROLLBACK");
+      return { error: "Not found", status: 404 };
+    }
+
+    const oldQuantity = Number(sale.quantity) || 0;
+    const oldUnitPrice = Number(sale.unit_price) || 0;
+    const soldAt = sale.sold_at ? new Date(sale.sold_at) : new Date();
+
+    //* 1. Give the original stock back (to the product and rating it left)
+    const oldVariantIndex = await resolveOriginalVariantIndex(client, sale);
+    const giveBack = await applyStockDelta(
+      client, sale.product_id, oldVariantIndex, oldQuantity, true,
+    );
+    if (giveBack.error) {
+      await client.query("ROLLBACK");
+      return giveBack;
+    }
+
+    //* 2. Take the corrected amount out
+    const newVariantIndex = variantRaw === null || variantRaw === undefined || variantRaw === ""
+      ? null
+      : Number(variantRaw);
+    const take = await applyStockDelta(client, productId, newVariantIndex, -quantity, false);
+    if (take.error) {
+      //* Undo the give-back so a refused edit leaves stock untouched
+      await client.query("ROLLBACK");
+      return take;
+    }
+
+    //* 3. Rewrite the sale row itself
+    const updated = await client.query(
+      `UPDATE sales
+         SET product_id = $1, product_name = $2, variant_index = $3,
+             quantity = $4, unit_price = $5, total = $6, sold_at = $7, updated_at = NOW()
+       WHERE id = $8
+       RETURNING *`,
+      [
+        productId,
+        take.productName,
+        newVariantIndex,
+        quantity,
+        unitPrice,
+        total,
+        soldAt,
+        id,
+      ],
+    );
+
+    //* 4. Leave a clear trail of what changed
+    const before = `${oldQuantity} x ${sale.product_name} @ KSh ${oldUnitPrice}`;
+    const after = `${quantity} x ${take.productName} @ KSh ${unitPrice}`;
+    await client.query(
+      `INSERT INTO activity_log (action, details, "user", timestamp) VALUES ($1, $2, $3, $4)`,
+      [
+        "SALE_EDITED",
+        `Sale corrected: ${before} -> ${after}`,
+        "admin",
+        new Date(),
+      ],
+    );
+
+    await client.query("COMMIT");
+    return { sale: toCamel(updated.rows[0]) };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+//* Sales recorded before variant_index existed have no stored rating. Recover it
+//* by matching the saved product_name against the product's rating rows, so an
+//* old sale can still be edited and its stock returned to the right rating.
+async function resolveOriginalVariantIndex(
+  client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+  sale: Record<string, unknown>,
+) {
+  const stored = Number.parseInt(String(sale.variant_index ?? ""), 10);
+  if (!Number.isNaN(stored)) return stored;
+
+  const result = await client.query(
+    "SELECT name, variants FROM products WHERE id = $1",
+    [sale.product_id],
+  );
+  const product = result.rows[0];
+  const variants: Record<string, unknown>[] = Array.isArray(product?.variants)
+    ? product.variants
+    : [];
+  if (!variants.length) return null;
+
+  const savedName = String(sale.product_name || "");
+  const found = variants.findIndex((variant) => {
+    const label = String(variant.label ?? "").trim();
+    const colour = String(variant.colour ?? "").trim();
+    if (label && savedName.includes(label)) return true;
+    return Boolean(colour && savedName.includes(colour));
+  });
+  return found >= 0 ? found : null;
+}
+
+//* Move one product's stock by `delta` (positive = add, negative = remove),
+//* honouring the rating rows when the product has them.
+async function applyStockDelta(
+  client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+  productId: unknown,
+  variantIndex: unknown,
+  delta: number,
+  isGiveBack: boolean,
+) {
+  const result = await client.query(
+    "SELECT * FROM products WHERE id = $1 FOR UPDATE",
+    [productId],
+  );
+  const product = result.rows[0];
+  if (!product) {
+    return {
+      error: isGiveBack
+        ? "The product for this sale no longer exists, so its stock cannot be adjusted."
+        : "Product not found",
+    };
+  }
+
+  const variants: Record<string, unknown>[] = Array.isArray(product.variants)
+    ? product.variants
+    : [];
+  let productName = String(product.name || "");
+  let nextQuantity = Number(product.quantity) || 0;
+  let nextVariants: Record<string, unknown>[] | null = null;
+
+  if (variants.length) {
+    const index = Number.parseInt(String(variantIndex ?? ""), 10);
+    const variant = Number.isNaN(index) ? undefined : variants[index];
+    if (!variant) {
+      return {
+        error: isGiveBack
+          ? "The rating sold for this sale no longer exists, so its stock cannot be adjusted."
+          : "Select the rating being sold",
+      };
+    }
+    const current = Number(variant.quantity) || 0;
+    const updated = current + delta;
+    if (updated < 0) {
+      return { error: `Only ${current} in stock for this rating` };
+    }
+    nextVariants = variants.map((item, position) => (
+      position === index ? { ...item, quantity: updated } : item
+    ));
+    nextQuantity = nextVariants.reduce(
+      (sum, item) => sum + (Number(item.quantity) || 0),
+      0,
+    );
+    productName = saleVariantName(productName, variant);
+  } else {
+    const current = nextQuantity;
+    const updated = current + delta;
+    if (updated < 0) {
+      return { error: `Only ${current} in stock` };
+    }
+    nextQuantity = updated;
+  }
+
+  await client.query(
+    nextVariants
+      ? "UPDATE products SET quantity = $1, variants = $2, updated_at = NOW() WHERE id = $3"
+      : "UPDATE products SET quantity = $1, updated_at = NOW() WHERE id = $2",
+    nextVariants
+      ? [nextQuantity, JSON.stringify(nextVariants), product.id]
+      : [nextQuantity, product.id],
+  );
+
+  return { productName };
 }
 
 function saleVariantName(productName: string, variant: Record<string, unknown>) {
@@ -423,11 +640,17 @@ export default async function api(request: Request): Promise<Response> {
       return json(result.sale, 201);
     }
 
-    //* Sales history is append-only: editing or deleting a recorded sale would
-    //* leave the revenue totals disagreeing with the stock it already moved.
-    if (typedResource === "sales" && (request.method === "PUT" || request.method === "DELETE")) {
+    //* Editing a sale reverses the old stock movement and applies the new one in
+    //* one transaction, so revenue and stock can never disagree. Deleting stays
+    //* refused: voiding is done by recording a corrected sale instead.
+    if (request.method === "PUT" && id && typedResource === "sales") {
+      const result = await updateSale(id, await readBody(request));
+      if (result.error) return json({ error: result.error }, result.status || 400);
+      return json(result.sale);
+    }
+    if (request.method === "DELETE" && typedResource === "sales") {
       return json(
-        { error: "Sales history cannot be edited or deleted. Use Stock Adjustments to correct stock." },
+        { error: "Sales history cannot be deleted. Edit the sale to correct it, or use Stock Adjustments to correct stock." },
         405,
       );
     }

@@ -1,5 +1,5 @@
 ﻿import renderPagination, { paginateData } from "../components/pagination.js";
-import { fetchData, postData } from "../services/api.js";
+import { fetchData, postData, updateData } from "../services/api.js";
 import {
   escapeHtml,
   formatEGP,
@@ -152,6 +152,7 @@ function getTableHtml(filteredList = lastFiltered) {
         <td class="text-end">${Number(sale.quantity) || 0}</td>
         <td class="text-end">${formatEGP(sale.unitPrice)}</td>
         <td class="text-end fw-semibold">${formatEGP(sale.total)}</td>
+        <td class="text-end"><button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button></td>
       </tr>
     `)
     .join("");
@@ -166,8 +167,9 @@ function getTableHtml(filteredList = lastFiltered) {
         <small class="text-muted">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</small>
         <div class="d-flex gap-3 small mt-2">
           <span>${Number(sale.quantity) || 0} sold</span>
-          <span class="text-muted">@ ${formatEGP(sale.unitPrice)} each</span>
+          <span class="text-muted">@${formatEGP(sale.unitPrice)} each</span>
         </div>
+        <button class="btn btn-outline-secondary btn-sm mt-3 sale-edit-btn w-100" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit Sale</button>
       </div>
     `)
     .join("");
@@ -178,7 +180,7 @@ function getTableHtml(filteredList = lastFiltered) {
         <thead>
           <tr>
             <th>Date</th><th>Product</th><th class="text-end">Quantity</th>
-            <th class="text-end">Price</th><th class="text-end">Total</th>
+            <th class="text-end">Price</th><th class="text-end">Total</th><th></th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -213,6 +215,12 @@ function setupEventListeners() {
 
   const container = document.getElementById("salesTableContainer");
   container?.addEventListener("click", (event) => {
+    const editBtn = event.target.closest(".sale-edit-btn");
+    if (editBtn) {
+      const sale = sales.find((item) => String(item.id) === editBtn.dataset.id);
+      if (sale) openEditSaleModal(sale);
+      return;
+    }
     const pageBtn = event.target.closest(".page-link");
     if (!pageBtn) return;
     const totalPages = Math.ceil(lastFiltered.length / PAGE_SIZE);
@@ -428,6 +436,193 @@ function showSaleFormMessage(message, tone) {
   const icon = tone === "success" ? "check-circle-fill" : "exclamation-triangle-fill";
   alert.className = `alert alert-${tone} sale-form-alert`;
   alert.innerHTML = `<i class="bi bi-${icon} me-2"></i>${escapeHtml(message)}`;
+}
+
+function openEditSaleModal(sale) {
+  document.getElementById("editSaleModal")?.remove();
+
+  const productOptions = products
+    .map((product) => {
+      const variants = getProductVariants(product);
+      const stock = variants.length
+        ? getVariantsTotalQuantity(variants)
+        : Number(product.quantity) || 0;
+      const sold = String(product.id) === String(sale.productId);
+      return `<option value="${product.id}" ${stock <= 0 && !sold ? "disabled" : ""}>${escapeHtml(product.name || "")} - ${stock} in stock</option>`;
+    })
+    .join("");
+
+  const html = `
+    <div class="modal fade" id="editSaleModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header"><h4>Edit Sale</h4></div>
+          <div class="modal-body">
+            <form id="editSaleForm" novalidate>
+              <div id="editSaleAlert" class="alert d-none mb-3" role="alert"></div>
+              <div class="mb-3">
+                <label class="form-label" for="editSaleProductSelect">Product *</label>
+                <select name="productId" id="editSaleProductSelect" class="form-select">
+                  <option value="">Select product</option>
+                  ${productOptions}
+                </select>
+                <div class="text-danger fw-bold errorMes errorMes-productId"></div>
+              </div>
+              <div class="mb-3 d-none" id="editSaleVariantWrapper">
+                <label class="form-label" for="editSaleVariantSelect">Rating *</label>
+                <select name="variantIndex" id="editSaleVariantSelect" class="form-select"></select>
+                <div class="text-danger fw-bold errorMes errorMes-variantIndex"></div>
+              </div>
+
+              <div class="row mb-3">
+                <div class="col-6">
+                  <label class="form-label" for="editSaleQuantity">Quantity *</label>
+                  <input type="number" min="1" step="1" id="editSaleQuantity" class="form-control" value="${Number(sale.quantity) || 1}">
+                  <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label" for="editSaleUnitPrice">Selling price (KSh) *</label>
+                  <input type="number" min="0" step="0.01" id="editSaleUnitPrice" class="form-control" value="${Number(sale.unitPrice) || 0}">
+                  <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
+                </div>
+              </div>
+              <div class="small text-muted">
+                <i class="bi bi-info-circle"></i>
+                Saving returns the original stock and takes the corrected amount.
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" id="editSaleSaveBtn"><i class="bi bi-check-lg"></i> Save Changes</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML("beforeend", html);
+  const modalEl = document.getElementById("editSaleModal");
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+  modalEl.addEventListener("hidden.bs.modal", () => modalEl.remove());
+
+  const productSelect = document.getElementById("editSaleProductSelect");
+  const variantSelect = document.getElementById("editSaleVariantSelect");
+  const priceInput = document.getElementById("editSaleUnitPrice");
+
+  //* Preselect exactly what was sold
+  productSelect.value = String(sale.productId ?? "");
+  populateEditVariantSelect(variantSelect, sale.variantIndex);
+  if (!priceInput.value) priceInput.value = String(Number(sale.unitPrice) || 0);
+
+  const applyRatingPrice = () => {
+    const product = products.find((item) => String(item.id) === productSelect.value);
+    const variants = getProductVariants(product);
+    if (variants.length) {
+      const picked = variants[Number(variantSelect.value) || 0];
+      priceInput.value = String(Number(picked?.price) || 0);
+    } else {
+      priceInput.value = String(Number(product?.price) || 0);
+    }
+  };
+  productSelect.addEventListener("change", () => {
+    populateEditVariantSelect(variantSelect, null);
+    applyRatingPrice();
+  });
+  variantSelect.addEventListener("change", applyRatingPrice);
+
+
+  document.getElementById("editSaleSaveBtn").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const productId = productSelect.value;
+    const quantity = Number(document.getElementById("editSaleQuantity").value);
+    const unitPrice = Number(priceInput.value);
+    const product = products.find((item) => String(item.id) === productId);
+    const hasVariants = getProductVariants(product).length > 0;
+    const variantIndex = hasVariants ? String(variantSelect.value ?? "") : "";
+
+    document.querySelectorAll("#editSaleModal .errorMes").forEach((item) => { item.textContent = ""; });
+    let valid = true;
+    if (!productId) { setEditError("productId", "Product is required"); valid = false; }
+    if (hasVariants && variantIndex === "") { setEditError("variantIndex", "Select the rating being sold"); valid = false; }
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setEditError("quantity", "Quantity must be a whole number greater than 0");
+      valid = false;
+    }
+    const priceRaw = String(priceInput.value).trim();
+    if (priceRaw === "" || !Number.isFinite(unitPrice) || unitPrice < 0) {
+      setEditError("unitPrice", "Selling price must be 0 or more");
+      valid = false;
+    }
+    if (!valid) return;
+
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...';
+
+    const result = await updateData(`sales/${sale.id}`, sale.id, {
+      productId,
+      variantIndex: hasVariants ? Number(variantIndex) : null,
+      quantity,
+      unitPrice,
+    });
+
+    if (!result || result.error) {
+      button.disabled = false;
+      button.innerHTML = '<i class="bi bi-check-lg"></i> Save Changes';
+      showEditSaleMessage(result?.error || "Unable to update this sale.", "danger");
+      return;
+    }
+
+//* Editing must be able to re-pick the original rating even when it is now sold
+//* out, otherwise a sale could never be corrected back to what it was.
+function populateEditVariantSelect(variantSelect, preferredIndex) {
+  const wrapper = document.getElementById("editSaleVariantWrapper");
+  const product = products.find(
+    (item) => String(item.id) === document.getElementById("editSaleProductSelect")?.value,
+  );
+  const variants = getProductVariants(product);
+
+  if (!product || !variants.length) {
+    wrapper?.classList.add("d-none");
+    variantSelect.innerHTML = "";
+    return;
+  }
+
+  wrapper?.classList.remove("d-none");
+  variantSelect.innerHTML = variants
+    .map((variant, index) => {
+      const bits = [variant.label || `Row ${index + 1}`, variant.colour || ""].filter(Boolean).join(" - ");
+      const stock = Number(variant.quantity) || 0;
+      const out = stock <= 0 ? " (out of stock)" : ` - ${stock} in stock`;
+      return `<option value="${index}">${escapeHtml(bits)}${out}</option>`;
+    })
+    .join("");
+
+  const wanted = Number.parseInt(String(preferredIndex ?? ""), 10);
+  variantSelect.value = Number.isNaN(wanted) ? "" : String(wanted);
+  if (variantSelect.value === "" && variants.length) variantSelect.value = "0";
+}
+
+function setEditError(field, message) {
+  const target = document.querySelector(`#editSaleModal .errorMes-${field}`);
+  if (target) target.textContent = message;
+}
+
+function showEditSaleMessage(message, tone) {
+  const alert = document.getElementById("editSaleAlert");
+  if (!alert) return;
+  const icon = tone === "success" ? "check-circle-fill" : "exclamation-triangle-fill";
+  alert.className = `alert alert-${tone} sale-form-alert`;
+  alert.innerHTML = `<i class="bi bi-${icon} me-2"></i>${escapeHtml(message)}`;
+}
+
+
+    modal.hide();
+    //* Re-fetch so history, KSh totals and stock all reflect the edit
+    await loadData();
+    lastFiltered = [...sales];
+    renderSalesPage();
+  });
 }
 
 function filterSales() {
