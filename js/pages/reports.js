@@ -1,6 +1,7 @@
 import { fetchData } from "../services/api.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import {
+  escapeHtml,
   formatEGP,
   getLowStockProducts,
   getInventoryValueRowsSorted,
@@ -239,7 +240,7 @@ function renderLowStockTable(lowStockSlice) {
 
     rowsHtml += `
       <tr>
-        <td class="fw-semibold">${p.name}</td>
+        <td class="fw-semibold">${escapeHtml(p.name)}</td>
         <td>
           <span class="status-badge ${qtyClass}">${qty}</span>
         </td>
@@ -274,7 +275,7 @@ function renderValueTable(valueRowsSlice) {
 
     rowsHtml += `
       <tr>
-        <td class="fw-semibold">${r.name}</td>
+        <td class="fw-semibold">${escapeHtml(r.name)}</td>
         <td class="fw-bold text-end">${formatEGP(r.value)}</td>
       </tr>
     `;

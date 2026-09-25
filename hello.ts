@@ -165,6 +165,22 @@ function normalizeBody(body: Record<string, unknown>) {
   if (normalized.price === "") normalized.price = 0;
   if (normalized.quantity === "") normalized.quantity = 0;
   if (normalized.reorder_level === "") normalized.reorder_level = 0;
+  //^ numeric columns become real numbers so garbage input can't reach the DB
+  const numericFields = [
+    "price",
+    "quantity",
+    "reorder_level",
+    "old_quantity",
+    "new_quantity",
+    "unit_price",
+    "total",
+  ];
+  for (const field of numericFields) {
+    const value = normalized[field];
+    if (value === undefined || value === null || value === "") continue;
+    const num = Number(value);
+    normalized[field] = Number.isFinite(num) ? Math.max(0, num) : 0;
+  }
   return normalized;
 }
 
@@ -185,6 +201,34 @@ async function readBody(request: Request) {
   return await request.json() as Record<string, unknown>;
 }
 
+//* Best-effort login throttling (per instance, in-memory)
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+
+function loginAttemptKey(request: Request) {
+  const forwarded = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+  return forwarded || request.headers.get("x-real-ip") || "unknown";
+}
+
+function registerLoginAttempt(request: Request) {
+  const key = loginAttemptKey(request);
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    if (loginAttempts.size > 1000) loginAttempts.clear();
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= LOGIN_MAX_ATTEMPTS) return false;
+  entry.count += 1;
+  return true;
+}
+
+function clearLoginAttempts(request: Request) {
+  loginAttempts.delete(loginAttemptKey(request));
+}
+
 export default async function api(request: Request): Promise<Response> {
   const origin = request.headers.get("Origin");
   const headers = getCorsHeaders(origin);
@@ -199,6 +243,10 @@ export default async function api(request: Request): Promise<Response> {
       const body = await readBody(request);
       const email = String(body.email || "").trim();
       const password = String(body.password || "");
+
+      if (!registerLoginAttempt(request)) {
+        return json({ error: "Too many login attempts. Try again in a few minutes." }, 429);
+      }
 
       const result = await pool.query(
         `SELECT id, name, email, role, password FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
@@ -217,6 +265,7 @@ export default async function api(request: Request): Promise<Response> {
         );
       }
 
+      clearLoginAttempts(request);
       const token = signToken(user.id);
       return json({
         id: user.id,
@@ -234,7 +283,7 @@ export default async function api(request: Request): Promise<Response> {
       return json({ error: "Authentication required" }, 401);
     }
 
-    if (!(resource in tableNames)) return json({ error: "Not found" }, 404);
+    if (!Object.prototype.hasOwnProperty.call(tableNames, resource)) return json({ error: "Not found" }, 404);
     const table = tableNames[resource as keyof typeof tableNames];
     const typedResource = resource as keyof typeof fieldMap;
 

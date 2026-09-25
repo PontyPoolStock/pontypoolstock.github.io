@@ -2,7 +2,7 @@ import renderTable from "../components/table.js";
 import { fetchData, deleteData, postData } from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { GetCurrentDate, sortData } from "../utils/helpers.js";
+import { escapeHtml, GetCurrentDate, sortData } from "../utils/helpers.js";
 
 let products = [];
 let categories = [];
@@ -50,8 +50,8 @@ function getTableHtml(filteredCategories = categories) {
   let tableData = paginated.map((c) => ({
     id: c.id,
     image: getCategoryThumbnail(c.imageUrl, c.name),
-    name: c.name,
-    description: c.description || "-",
+    name: escapeHtml(c.name),
+    description: c.description ? escapeHtml(c.description) : "-",
     products: getProductsNumber(c.id),
   }));
   let columns = ["image", "name", "products"];
@@ -176,13 +176,13 @@ function updateStats(count, searchTerm) {
   let statsDiv = document.getElementById("searchStats");
   if (!statsDiv) return;
   statsDiv.innerHTML = searchTerm
-    ? `Found ${count} categor${count !== 1 ? "ies" : "y"} matching "${searchTerm}"`
+    ? `Found ${count} categor${count !== 1 ? "ies" : "y"} matching "${escapeHtml(searchTerm)}"`
     : "";
 }
 
 function getCategoryThumbnail(imageUrl, name) {
   if (!imageUrl) return `<span class="entity-thumbnail entity-thumbnail-empty" aria-label="No category image"><i class="bi bi-tags"></i></span>`;
-  return `<img class="entity-thumbnail" src="${imageUrl}" alt="${name} image" onerror="this.remove();" />`;
+  return `<img class="entity-thumbnail" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} image" onerror="this.remove();" />`;
 }
 
 function getProductsNumber(id) {

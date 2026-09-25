@@ -12,6 +12,7 @@ import {
   isVaildStockAdjustmentData,
   GetCurrentDate,         
   buildStorableImageUrl,
+  escapeHtml,
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantPriceRange,
@@ -344,7 +345,7 @@ function updateStockAdjustmentCurrentDisplay() {
 
   box.classList.remove("d-none");
   let text = `Current stock: <strong>${qty}</strong>`;
-  if (unit) text += ` ${unit}`;
+  if (unit) text += ` ${escapeHtml(unit)}`;
   if (reorder !== "—") text += ` &nbsp;|&nbsp; Reorder level: <strong>${reorder}</strong>`;
   box.innerHTML = text;
 }

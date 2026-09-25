@@ -9,10 +9,12 @@ import {
 import { getModal } from "../components/modal.js";
 import {
   GetCurrentDate,
-  sortData,
-  getProductVariants,
+  escapeHtml,
   getProductStock,
+  getProductVariants,
+  getProductStatusCode,
   getVariantPriceRange,
+  sortData,
 } from "../utils/helpers.js";
 
 let products = [];
@@ -40,7 +42,7 @@ async function loadData() {
 //* render the whole html of Products page
 function renderProducts() {
   let categoryOptions = categories
-    .map((c) => `<option value="${c.id}">${c.name}</option>`)
+    .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
     .join("");
 
   let html = `
@@ -82,16 +84,16 @@ function getTableHtml(filteredProducts = products) {
     return {
       id: p.id,
       image: getProductThumbnail(p.imageUrl, p.name),
-      sku: p.sku ? `<span class="sku-badge">${p.sku}</span>` : "-",
-      name: p.name + getRatingsHtml(variants),
-      category: getCategoryName(p.categoryId),
+      sku: p.sku ? `<span class="sku-badge">${escapeHtml(p.sku)}</span>` : "-",
+      name: escapeHtml(p.name) + getRatingsHtml(variants),
+      category: escapeHtml(getCategoryName(p.categoryId)),
       price: priceRange
         ? (priceRange.min === priceRange.max
           ? priceRange.min
           : `${priceRange.min} - ${priceRange.max}`)
         : p.price,
       quantity: getProductStock(p),
-      unit: p.unit || "-",
+      unit: p.unit ? escapeHtml(p.unit) : "-",
       status: getProductStatus(p),
     };
   });
@@ -186,17 +188,8 @@ function filterProducts() {
     }
     //^ Filter by category
     if (categoryId && p.categoryId != categoryId) return false;
-    //^ Filter by status
-    if (statusFilter) {
-      if (statusFilter === "out" && p.quantity > 0) return false;
-      if (
-        statusFilter === "low"
-        && (p.quantity <= 0 || p.quantity > Number(p.reorderLevel))
-      )
-        return false;
-      if (statusFilter === "in" && p.quantity <= Number(p.reorderLevel))
-        return false;
-    }
+    //^ Filter by status — same variant-aware logic as the status badge
+    if (statusFilter && getProductStatusCode(p) !== statusFilter) return false;
     return true;
   });
 
@@ -264,7 +257,7 @@ function getCategoryName(id) {
 }
 function getProductThumbnail(imageUrl, name) {
   if (!imageUrl) return `<span class="entity-thumbnail entity-thumbnail-empty" aria-label="No product image"><i class="bi bi-box-seam"></i></span>`;
-  return `<img class="entity-thumbnail" src="${imageUrl}" alt="${name} image" onerror="this.remove();" />`;
+  return `<img class="entity-thumbnail" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} image" onerror="this.remove();" />`;
 }
 //* Shows every rating of a product inside its own row ("4W · White · 0.05A: 20")
 function getRatingsHtml(variants) {
@@ -276,8 +269,8 @@ function getRatingsHtml(variants) {
       const min = Number(variant.reorderLevel) || 0;
       const tone = qty <= 0 ? "status-out" : qty <= min ? "status-low" : "";
       const details = [];
-      if (variant.label) details.push(variant.label);
-      if (variant.colour) details.push(variant.colour);
+      if (variant.label) details.push(escapeHtml(variant.label));
+      if (variant.colour) details.push(escapeHtml(variant.colour));
       if (
         variant.amps !== "" &&
         variant.amps !== null &&
@@ -297,25 +290,11 @@ function getRatingsHtml(variants) {
   `;
 }
 
-//* A product is low/out when any of its ratings reaches its own minimum
+//* A product is low/out when any of its ratings reaches its own minimum —
+//* the badge and the status filter share getProductStatusCode so they agree
 function getProductStatus(product) {
-  const variants = getProductVariants(product);
-  if (!variants.length) return getStatus(product.quantity, product.reorderLevel);
-
-  const total = getProductStock(product);
-  if (total <= 0) return `<span class="status-badge status-out">Out of stock</span>`;
-
-  const anyRatingLow = variants.some(
-    (variant) => (Number(variant.quantity) || 0) <= (Number(variant.reorderLevel) || 0),
-  );
-  if (anyRatingLow) return `<span class="status-badge status-low">Low stock</span>`;
+  const code = getProductStatusCode(product);
+  if (code === "out") return `<span class="status-badge status-out">Out of stock</span>`;
+  if (code === "low") return `<span class="status-badge status-low">Low stock</span>`;
   return `<span class="status-badge status-in">In stock</span>`;
-}
-
-function getStatus(quantity, reorderLevel) {
-  if (quantity <= 0)
-    return `<span class="status-badge status-out">Out of stock</span>`;
-  else if (quantity <= Number(reorderLevel))
-    return `<span class="status-badge status-low">Low stock</span>`;
-  else return `<span class="status-badge status-in">In stock</span>`;
 }

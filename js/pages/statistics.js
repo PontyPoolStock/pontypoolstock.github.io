@@ -1,6 +1,9 @@
 import { fetchData } from "../services/api.js";
 import {
+  escapeHtml,
   formatEGP,
+  getProductStock,
+  getProductStockValue,
   getLowStockProducts,
   getTotalInventoryValue,
 } from "../utils/helpers.js";
@@ -38,23 +41,26 @@ function renderStatistics() {
   const dailySales = groupSalesByDay(periodSales);
   const lowStock = getLowStockProducts(products);
   const totalUnits = products.reduce(
-    (sum, product) => sum + (Number(product.quantity) || 0),
+    (sum, product) => sum + getProductStock(product),
     0,
   );
-  const increaseCount = periodAdjustments.filter((item) => item.type === "increase").length;
-  const decreaseCount = periodAdjustments.filter((item) => item.type === "decrease").length;
+  const increaseUnits = periodAdjustments
+    .filter((item) => item.type === "increase")
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const decreaseUnits = periodAdjustments
+    .filter((item) => item.type === "decrease")
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const categoryRows = categories
     .map((category) => {
       const categoryProducts = products.filter(
         (product) => product.categoryId == category.id,
       );
       const units = categoryProducts.reduce(
-        (sum, product) => sum + (Number(product.quantity) || 0),
+        (sum, product) => sum + getProductStock(product),
         0,
       );
       const value = categoryProducts.reduce(
-        (sum, product) =>
-          sum + (Number(product.price) || 0) * (Number(product.quantity) || 0),
+        (sum, product) => sum + getProductStockValue(product),
         0,
       );
       return { name: category.name, products: categoryProducts.length, units, value };
@@ -156,12 +162,12 @@ function renderStatistics() {
             </div>
             <div class="movement-summary">
               <div class="movement-row">
-                <span><i class="bi bi-plus-circle"></i> Added stock</span>
-                <strong>${increaseCount}</strong>
+                <span><i class="bi bi-plus-circle"></i> Units added</span>
+                <strong>${increaseUnits}</strong>
               </div>
               <div class="movement-row">
-                <span><i class="bi bi-dash-circle"></i> Removed stock</span>
-                <strong>${decreaseCount}</strong>
+                <span><i class="bi bi-dash-circle"></i> Units removed</span>
+                <strong>${decreaseUnits}</strong>
               </div>
               <div class="movement-total">
                 <span>Total adjustments</span>
@@ -200,8 +206,16 @@ function renderStatistics() {
 function filterByPeriod(items, period, dateField = "date") {
   if (period === "all") return items;
 
-  const days = { day: 1, week: 7, month: 30, quarter: 90, year: 365 }[period] || 30;
-  const start = Date.now() - days * 24 * 60 * 60 * 1000;
+  //* "Today" means the local calendar day (matching the Dashboard daily card);
+  //* the other windows roll over the last N days from now.
+  let start;
+  if (period === "day") {
+    const now = new Date();
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  } else {
+    const days = { week: 7, month: 30, quarter: 90, year: 365 }[period] || 30;
+    start = Date.now() - days * 24 * 60 * 60 * 1000;
+  }
   return items.filter((item) => {
     const date = new Date(item[dateField] || item.createdAt).getTime();
     return !Number.isNaN(date) && date >= start;
@@ -217,7 +231,12 @@ function groupSalesByDay(sales) {
   sales.forEach((sale) => {
     const date = new Date(sale.soldAt || sale.createdAt);
     if (Number.isNaN(date.getTime())) return;
-    const day = date.toISOString().slice(0, 10);
+    //* Local calendar day — toISOString() is UTC and would mis-bucket evenings
+    const day = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
     const current = grouped.get(day) || { day, transactions: 0, total: 0 };
     current.transactions += 1;
     current.total += Number(sale.total) || 0;
@@ -287,7 +306,7 @@ function renderCategoryTable(rows) {
         <tbody>
           ${rows.map((row) => `
             <tr>
-              <td><span class="category-mark"></span><strong>${row.name}</strong></td>
+              <td><span class="category-mark"></span><strong>${escapeHtml(row.name)}</strong></td>
               <td>${row.products}</td>
               <td>${row.units.toLocaleString("en-US")}</td>
               <td class="text-end fw-semibold">${formatEGP(row.value)}</td>

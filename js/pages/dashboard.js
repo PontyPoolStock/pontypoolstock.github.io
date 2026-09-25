@@ -1,5 +1,6 @@
 import { fetchData } from "../services/api.js";
 import {
+  escapeHtml,
   formatEGP,
   getLowStockProducts,
   getTotalInventoryValue,
@@ -20,8 +21,8 @@ export async function loadDashboard() {
       fetchData("sales"),
       fetchData("activityLog"),
     ]);
-  products = productData;
-  categories = categoryData;
+  products = Array.isArray(productData) ? productData : [];
+  categories = Array.isArray(categoryData) ? categoryData : [];
   const adjustments = Array.isArray(adjustmentData) ? adjustmentData : [];
   const sales = Array.isArray(salesData) ? salesData : [];
   activities = Array.isArray(activityData)
@@ -43,7 +44,7 @@ function renderDashboard(adjustments, sales) {
     ? `
     <div class="alert alert-warning d-flex align-items-start gap-2 mb-4 dashboard-alert" role="alert">
       <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
-      <span>${lowStock.length} product${lowStock.length === 1 ? "" : "s"} are low on stock: ${lowStock.map((p) => p.name).join(", ")}</span>
+      <span>${lowStock.length} product${lowStock.length === 1 ? "" : "s"} are low on stock: ${lowStock.map((p) => escapeHtml(p.name)).join(", ")}</span>
     </div>`
     : "";
 
@@ -157,8 +158,12 @@ function renderDashboardPeriodSummary(adjustments, sales) {
 }
 
 function renderPeriodSummaryCard(label, adjustments, sales, icon, period) {
-  const added = adjustments.filter((item) => item.type === "increase").length;
-  const removed = adjustments.filter((item) => item.type === "decrease").length;
+  const added = adjustments
+    .filter((item) => item.type === "increase")
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const removed = adjustments
+    .filter((item) => item.type === "decrease")
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const salesTotal = sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
   const averageSale = sales.length ? salesTotal / sales.length : 0;
   return `
@@ -168,8 +173,8 @@ function renderPeriodSummaryCard(label, adjustments, sales, icon, period) {
       <strong>${formatEGP(salesTotal)}</strong>
       <small>${sales.length} sale${sales.length === 1 ? "" : "s"} <b>·</b> avg ${formatEGP(averageSale)}</small>
       <div class="dashboard-period-breakdown">
-        <span><i class="bi bi-arrow-up-right"></i> ${added} added</span>
-        <span><i class="bi bi-arrow-down-right"></i> ${removed} removed</span>
+        <span><i class="bi bi-arrow-up-right"></i> ${added} units added</span>
+        <span><i class="bi bi-arrow-down-right"></i> ${removed} units removed</span>
       </div>
     </article>
   `;
@@ -211,11 +216,11 @@ function renderDashboardLowStockList(lowStock) {
     rows += `
       <div class="d-flex align-items-center justify-content-between py-3 border-bottom dashboard-stock-row">
         <div class="dashboard-stock-info">
-          <div class="fw-medium">${p.name}</div>
-          <small class="text-muted">SKU: ${p.sku}</small>
+          <div class="fw-medium">${escapeHtml(p.name)}</div>
+          <small class="text-muted">SKU: ${escapeHtml(p.sku)}</small>
         </div>
         <div class="text-end dashboard-stock-meta">
-          <span class="status-badge ${qtyClass}">${qty} ${p.unit}</span>
+          <span class="status-badge ${qtyClass}">${qty} ${escapeHtml(p.unit)}</span>
           <div class="small text-muted mt-1">Min: ${p.reorderLevel}</div>
         </div>
       </div>

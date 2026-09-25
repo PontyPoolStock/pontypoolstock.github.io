@@ -227,9 +227,32 @@ export function expandProductsToStockLines(products) {
 }
 
 //* Dashboard & Reports — shared inventory helpers
+export function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 export function formatEGP(amount) {
-  let num = Number(amount || 0);
-  return `KSh ${num.toLocaleString("en-US")}`;
+  const num = Math.round((Number(amount) || 0) * 100) / 100;
+  return `EGP ${num.toLocaleString("en-US")}`;
+}
+//* Shared by the Products status badge and the status filter so they always agree
+export function getProductStatusCode(product) {
+  const variants = getProductVariants(product);
+  if (!variants.length) {
+    const quantity = Number(product?.quantity) || 0;
+    const reorderLevel = Number(product?.reorderLevel) || 0;
+    if (quantity <= 0) return "out";
+    return quantity <= reorderLevel ? "low" : "in";
+  }
+  if (getVariantsTotalQuantity(variants) <= 0) return "out";
+  const anyRatingLow = variants.some(
+    (variant) => getVariantQuantity(variant) <= getVariantReorderLevel(variant),
+  );
+  return anyRatingLow ? "low" : "in";
 }
 export function getLowStockProducts(products) {
   return expandProductsToStockLines(products)
@@ -329,13 +352,13 @@ export function formatActivityTimestamp(timestamp) {
 export function activityRowHtml(activity) {
   const normalizedActivity = normalizeActivity(activity);
   const { color, label } = getActionStyle(normalizedActivity.action);
-  const date = formatActivityTimestamp(normalizedActivity.timestamp);
+  const date = escapeHtml(formatActivityTimestamp(normalizedActivity.timestamp));
   return `
     <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
       <div class="d-flex align-items-start gap-3">
         <span class="mt-1 rounded-circle bg-${color} activity-dot"></span>
         <div>
-          <div class="fw-medium">${normalizedActivity.details}</div>
+          <div class="fw-medium">${escapeHtml(normalizedActivity.details)}</div>
           <small class="text-muted">${date}</small>
         </div>
       </div>

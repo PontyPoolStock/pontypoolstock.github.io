@@ -221,7 +221,7 @@ body.sidebar-open .sidebar-backdrop {
 .nav-item i {
   font-size: 1rem;
   min-width: 18px;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s ease;
+  transition: color 0.25s ease;
 }
 
 .nav-item:hover {
@@ -1777,11 +1777,10 @@ body.sidebar-open .sidebar-backdrop {
   transition:
     background 0.25s ease,
     color 0.25s ease,
-    box-shadow 0.25s ease,
-    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow 0.25s ease;
 }
 
-/* Left accent bar grows in on hover/active — the row itself never moves, so
+/* Left accent bar marks the active row — hover never moves anything, so
    sweeping the mouse across the nav can't jitter. */
 .nav-item::before {
   content: "";
@@ -1797,7 +1796,6 @@ body.sidebar-open .sidebar-backdrop {
   pointer-events: none;
 }
 
-.nav-item:hover::before,
 .nav-item.active-content::before {
   height: 55%;
 }
@@ -1806,18 +1804,13 @@ body.sidebar-open .sidebar-backdrop {
   background: #000000;
 }
 
-/* Icon eases into a yellow glow instead of wiggling on every hover. */
+/* Icon warms to yellow on hover — colour only, never movement. */
 .nav-item:hover i {
-  transform: scale(1.18);
   color: var(--pontypool-yellow);
 }
 
 .nav-item.active-content:hover i {
   color: #000000;
-}
-
-.nav-item:active {
-  transform: scale(0.98);
 }
 
 .nav-item.active-content {
@@ -1944,10 +1937,6 @@ body.sidebar-open .sidebar-backdrop {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.logout-btn:hover {
-  transform: rotate(-8deg) scale(1.1);
-}
-
 /* ===== Pontypool flash layer: drawer hints, staggers, drag feedback ===== */
 
 /* Hamburger "come tap me" hint until the drawer has been used once. */
@@ -1973,16 +1962,8 @@ body.drawer-used .sidebar-toggle::after {
   opacity: 0;
 }
 
-/* Sidebar micro-interactions: logo tilt, profile glow, dark scrollbar. */
-.sidebar-logo-image {
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
-}
-
-.sidebar-logo-image:hover {
-  transform: translateY(-2px) rotate(-1deg) scale(1.03);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
-}
-
+/* Sidebar micro-interactions: profile glow and dark scrollbar only — colour
+   changes, never movement, so sweeping the pointer can't cause jitter. */
 .user-info {
   transition: border-color 0.25s ease, background 0.25s ease;
 }
@@ -1992,13 +1973,11 @@ body.drawer-used .sidebar-toggle::after {
 }
 
 .user-info i:first-child {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease, box-shadow 0.3s ease;
+  transition: background 0.3s ease;
 }
 
 .user-info i:first-child:hover {
-  transform: scale(1.08);
   background: rgba(250, 204, 21, 0.22);
-  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.28);
 }
 
 .sidebar::-webkit-scrollbar-thumb,
@@ -2012,23 +1991,8 @@ body.drawer-used .sidebar-toggle::after {
   background: rgba(250, 204, 21, 0.85);
 }
 
-/* Nav rows cascade in on desktop page loads too (the sidebar-open rules below
-   take over while the mobile drawer is open). */
-.sidebar-nav > * {
-  animation: drawerItemIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.sidebar-nav > *:nth-child(1) { animation-delay: 0.04s; }
-.sidebar-nav > *:nth-child(2) { animation-delay: 0.08s; }
-.sidebar-nav > *:nth-child(3) { animation-delay: 0.12s; }
-.sidebar-nav > *:nth-child(4) { animation-delay: 0.16s; }
-.sidebar-nav > *:nth-child(5) { animation-delay: 0.2s; }
-.sidebar-nav > *:nth-child(6) { animation-delay: 0.24s; }
-.sidebar-nav > *:nth-child(7) { animation-delay: 0.28s; }
-.sidebar-nav > *:nth-child(8) { animation-delay: 0.32s; }
-.sidebar-nav > *:nth-child(9) { animation-delay: 0.36s; }
-.sidebar-nav > *:nth-child(n+10) { animation-delay: 0.4s; }
-
+/* Nav rows stay completely still on desktop page loads and page switches; only
+   the mobile drawer below animates its rows in. */
 /* Drawer navigation: each row slides in with a stagger when the drawer opens. */
 body.sidebar-open .sidebar-nav > * {
   animation: drawerItemIn 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;

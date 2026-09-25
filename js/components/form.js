@@ -19,12 +19,12 @@ export async function makeProductForm(id, categoryId = "") {
     <div class="row mb-3">
       <div class="col-6">
         <label class="text-secondary" class="form-label" for="name">Product Name *</label>
-        <input type="text" class="form-control" name="name" placeholder="e.g Laptop Pro" value= "${id ? product.name : ""}" >
+        <input type="text" class="form-control" name="name" placeholder="e.g Laptop Pro" value="${escAttr(id ? (product.name || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-name"></div>
       </div>
       <div class="col-6">
         <label class="text-secondary" class="form-label" for="sku">Code</label>
-        <input type="text" class="form-control" name='sku'  placeholder="Optional code, e.g. LP-001" value="${id ? (product.sku || "") : ""}">
+        <input type="text" class="form-control" name='sku'  placeholder="Optional code, e.g. LP-001" value="${escAttr(id ? (product.sku || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-sku"></div>
       </div>
     </div>
@@ -38,7 +38,7 @@ export async function makeProductForm(id, categoryId = "") {
       </div>
       <div class="col-6">
         <label class="text-secondary" class="form-label" for="price">Price</label>
-        <input type="number" class="form-control" name="price" placeholder="0.00" value= "${id ? product.price : ""}" >
+        <input type="number" class="form-control" name="price" placeholder="0.00" value="${escAttr(id ? product.price : "")}">
         <div class="text-danger fw-bold errorMes errorMes-price"></div>
 
       </div>
@@ -48,13 +48,13 @@ export async function makeProductForm(id, categoryId = "") {
     <div class="row mb-3">
       <div class="col-6">
         <label class="text-secondary" class="form-label" for="quantity">Quantity</label>
-        <input type="number" class="form-control" name='quantity'  placeholder="0" value="${id ? product.quantity : ""}">
+        <input type="number" class="form-control" name='quantity'  placeholder="0" value="${escAttr(id ? product.quantity : "")}">
         <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
 
       </div>
       <div class="col-6">
         <label class="text-secondary" class="form-label" for="unit">Unit</label>
-        <input type="text" class="form-control" name='unit'  placeholder="Pcs / kg / box" value="${id ? product.unit : ""}">
+        <input type="text" class="form-control" name='unit'  placeholder="Pcs / kg / box" value="${escAttr(id ? (product.unit || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-unit"></div>
 
       </div>
@@ -82,14 +82,14 @@ export async function makeProductForm(id, categoryId = "") {
         <label class="text-secondary form-label" for="productImageFile">Product Image</label>
         <div class="product-image-dropzone" id="productImageDropzone" tabindex="0" role="button" aria-label="Choose a product image">
           <input type="file" id="productImageFile" accept="image/*" hidden>
-          <img id="productImagePreview" class="product-image-preview${id && product.imageUrl ? "" : " d-none"}" src="${id ? (product.imageUrl || "") : ""}" alt="Product preview">
+          <img id="productImagePreview" class="product-image-preview${id && product.imageUrl ? "" : " d-none"}" src="${escAttr(id ? (product.imageUrl || "") : "")}" alt="Product preview">
           <div id="productImagePrompt" class="product-image-prompt${id && product.imageUrl ? " d-none" : ""}">
             <i class="bi bi-cloud-arrow-up"></i>
             <strong>Drop an image here</strong>
             <span>or click to browse from your device</span>
           </div>
         </div>
-        <input type="hidden" name="imageUrl" id="productImageValue" value="${id ? (product.imageUrl || "") : ""}">
+        <input type="hidden" name="imageUrl" id="productImageValue" value="${escAttr(id ? (product.imageUrl || "") : "")}">
         <div class="text-muted small mt-1">PNG, JPG, or WEBP up to 2 MB.</div>
       </div>
     </div>
@@ -107,7 +107,7 @@ function displayProductsOptions(type, id, data, allCategories, locked = false) {
   data.forEach(function (item) {
     let selected = "";
     if (Number(item.id) === Number(id)) selected = "selected";
-    selectInput += `<option value="${item.id}" ${selected}>${getCategoryPath(item, allCategories)}</option>`;
+    selectInput += `<option value="${item.id}" ${selected}>${escAttr(getCategoryPath(item, allCategories))}</option>`;
   });
   selectInput += `</select>`;
   return selectInput;
@@ -246,7 +246,7 @@ export async function makeCategoryForm(id, parentCategoryId = "") {
     .filter((item) => String(item.id) !== String(id || ""))
     .map((item) => {
       const isSelected = String(item.id) === String(selectedParentId);
-      return `<option value="${item.id}" ${isSelected ? "selected" : ""}>${getCategoryPath(item, categories)}</option>`;
+      return `<option value="${item.id}" ${isSelected ? "selected" : ""}>${escAttr(getCategoryPath(item, categories))}</option>`;
     })
     .join("");
 
@@ -255,7 +255,7 @@ export async function makeCategoryForm(id, parentCategoryId = "") {
     <div class="row mb-3">
       <div class="col-12">
         <label class="text-secondary" class="form-label" for="name">Category Name *</label>
-        <input type="text" class="form-control" name="name" placeholder="e.g Electronics" value= "${id ? category.name : ""}" >
+        <input type="text" class="form-control" name="name" placeholder="e.g Electronics" value="${escAttr(id ? (category.name || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-name"></div>
       </div>
     </div>
@@ -276,14 +276,14 @@ export async function makeCategoryForm(id, parentCategoryId = "") {
         <label class="text-secondary form-label" for="categoryImageFile">Category Image</label>
         <div class="product-image-dropzone" id="categoryImageDropzone" tabindex="0" role="button" aria-label="Choose a category image">
           <input type="file" id="categoryImageFile" accept="image/*" hidden>
-          <img id="categoryImagePreview" class="product-image-preview${id && category.imageUrl ? "" : " d-none"}" src="${id ? (category.imageUrl || "") : ""}" alt="Category preview">
+          <img id="categoryImagePreview" class="product-image-preview${id && category.imageUrl ? "" : " d-none"}" src="${escAttr(id ? (category.imageUrl || "") : "")}" alt="Category preview">
           <div id="categoryImagePrompt" class="product-image-prompt${id && category.imageUrl ? " d-none" : ""}">
             <i class="bi bi-cloud-arrow-up"></i>
             <strong>Drop an image here</strong>
             <span>or click to browse from your device</span>
           </div>
         </div>
-        <input type="hidden" name="imageUrl" id="categoryImageValue" value="${id ? (category.imageUrl || "") : ""}">
+        <input type="hidden" name="imageUrl" id="categoryImageValue" value="${escAttr(id ? (category.imageUrl || "") : "")}">
         <div class="text-muted small mt-1">PNG, JPG, or WEBP up to 2 MB.</div>
       </div>
     </div>
