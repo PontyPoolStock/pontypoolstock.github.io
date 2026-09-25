@@ -1,6 +1,23 @@
-import { fetchData, postData } from "../services/api.js";
+import { postData } from "../services/api.js";
+import {
+  DEFAULT_API_URL,
+  USER_STORAGE_KEY,
+  clearSession,
+  getSavedApiUrl,
+  saveApiUrl,
+  saveAuthToken,
+} from "../config.js";
 
-const STORAGE_KEY = "currentUser";
+const STORAGE_KEY = USER_STORAGE_KEY;
+
+//* The URL the login page talks to: Neon unless a URL was saved from the login screen
+export function getConfiguredApiUrl() {
+  return getSavedApiUrl();
+}
+
+export function setConfiguredApiUrl(url) {
+  return saveApiUrl(url);
+}
 
 //* Initialize the login page and redirect already authenticated users
 export async function initLogin() {
@@ -13,6 +30,19 @@ export async function initLogin() {
   const loginForm = document.getElementById("loginForm");
   if (loginForm) {
     loginForm.addEventListener("submit", handleLogin);
+  }
+
+  const apiInput = document.getElementById("apiUrlInput");
+  const saveBtn = document.getElementById("saveApiUrlBtn");
+  if (apiInput) {
+    apiInput.value = getConfiguredApiUrl();
+  }
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      const url = apiInput?.value || "";
+      const nextUrl = setConfiguredApiUrl(url);
+      alert(`Database URL saved: ${nextUrl}`);
+    });
   }
 }
 
@@ -29,23 +59,18 @@ async function handleLogin(event) {
   }
 
   try {
-    const users = await fetchData("users");
+    let user = await postData("auth/login", { email, password });
 
-    if (!Array.isArray(users) || users.length === 0) {
-      showError(
-        "Unable to reach the login service. Start JSON Server on port 3000.",
-      );
-      return;
+    //* A stale saved URL must not lock the user out of the Neon database
+    if ((!user || user.error) && getConfiguredApiUrl() !== DEFAULT_API_URL) {
+      setConfiguredApiUrl(DEFAULT_API_URL);
+      user = await postData("auth/login", { email, password });
     }
 
-    const user = users.find(
-      (item) =>
-        item.email.toLowerCase() === email.toLowerCase()
-        && item.password === password,
-    );
-
-    if (!user) {
-      showError("Invalid email or password.");
+    if (!user || user.error) {
+      showError(
+        "Unable to reach the configured database. Check your Neon URL and try again.",
+      );
       return;
     }
 
@@ -56,19 +81,11 @@ async function handleLogin(event) {
       role: user.role,
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentUser));
-
-    try {
-      await postData("activityLog", {
-        action:'LOG_IN',
-        details: `${currentUser?.name || "Unknown"} logged in`,
-        user: currentUser?.name || "Unknown",
-        timestamp: new Date().toLocaleString(),
-        createdAt: new Date().toLocaleString(),
-      });
-    } catch (error) {
-      console.error("Activity log error:", error);
+    if (user.token) {
+      saveAuthToken(user.token);
     }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentUser));
 
     window.location.replace("./index.html");
   } catch (error) {
@@ -123,6 +140,16 @@ export function checkAuth() {
   if (!user) {
     const isLoginPage = window.location.pathname.endsWith("login.html");
     if (!isLoginPage) {
+      const pageContent = document.getElementById("pageContent");
+      if (pageContent) {
+        pageContent.innerHTML = `
+          <div class="alert alert-warning border d-flex align-items-center gap-2" role="alert">
+            <i class="bi bi-lock-fill"></i>
+            <span>Please sign in to view your inventory.</span>
+            <a class="btn btn-sm btn-dark ms-auto" href="./login.html">Sign in</a>
+          </div>
+        `;
+      }
       window.location.replace("./login.html");
     }
     return null;
@@ -142,21 +169,7 @@ export function initLogoutButton() {
 
 //* Log the user out, save the activity, and return to the login page
 export async function logout() {
-  const currentUser = getCurrentUser();
-
-  try {
-    await postData("activityLog", {
-      action:'LOG_OUT',
-      details: `${currentUser?.name || "Unknown"} logged out`,
-      user: currentUser?.name || "Unknown",
-      timestamp: new Date().toLocaleString(),
-      createdAt: new Date().toLocaleString(),
-    });
-  } catch (error) {
-    console.error("Logout activity log error:", error);
-  }
-
-  localStorage.removeItem(STORAGE_KEY);
+  clearSession();
   window.location.replace("./login.html");
 }
 

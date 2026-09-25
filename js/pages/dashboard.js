@@ -3,34 +3,40 @@ import {
   formatEGP,
   getLowStockProducts,
   getTotalInventoryValue,
-  getPendingOrdersCount,
   activityRowHtml,
   normalizeActivity,
 } from "../utils/helpers.js";
 
 let products = [];
 let categories = [];
-let orders = [];
 let activities = [];
 
 export async function loadDashboard() {
-  products = await fetchData("products");
-  categories = await fetchData("categories");
-  orders = await fetchData("orders");
-  const activityData = await fetchData("activityLog");
+  const [productData, categoryData, adjustmentData, salesData, activityData] =
+    await Promise.all([
+      fetchData("products"),
+      fetchData("categories"),
+      fetchData("stockAdjustments"),
+      fetchData("sales"),
+      fetchData("activityLog"),
+    ]);
+  products = productData;
+  categories = categoryData;
+  const adjustments = Array.isArray(adjustmentData) ? adjustmentData : [];
+  const sales = Array.isArray(salesData) ? salesData : [];
   activities = Array.isArray(activityData)
     ? activityData.map(normalizeActivity)
+      .filter((activity) => !["LOG_IN", "LOG_OUT"].includes(activity.action))
     : [];
   activities.sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
-  renderDashboard();
+  renderDashboard(adjustments, sales);
 }
 
-function renderDashboard() {
+function renderDashboard(adjustments, sales) {
   const lowStock = getLowStockProducts(products);
   const totalValue = getTotalInventoryValue(products);
-  const pendingCount = getPendingOrdersCount(orders);
   const recentActivities = activities.slice(0, 5);
 
   const alertHtml = lowStock.length
@@ -71,11 +77,11 @@ function renderDashboard() {
         <div class="card border-warning shadow-sm h-100 dashboard-stat-card">
           <div class="card-body">
             <div class="d-flex align-items-center gap-2 text-muted small">
-              <i class="bi bi-cart-check text-warning"></i>
-              <span>Pending Orders</span>
+              <i class="bi bi-tags text-warning"></i>
+              <span>Categories</span>
             </div>
-            <div class="fs-4 fw-bold mt-2 text-warning">${pendingCount}</div>
-            <div class="small text-muted mt-1">Awaiting receipt</div>
+            <div class="fs-4 fw-bold mt-2 text-warning">${categories.length}</div>
+            <div class="small text-muted mt-1">Active groups</div>
           </div>
         </div>
       </div>
@@ -106,6 +112,7 @@ function renderDashboard() {
   const html = `
     ${alertHtml}
     ${statsHtml}
+    ${renderDashboardPeriodSummary(adjustments, sales)}
     <div class="row g-3 dashboard-panels">
       <div class="col-12 col-xl-6">
         <div class="bg-white rounded border p-4 h-100 dashboard-panel page-panel">
@@ -125,6 +132,74 @@ function renderDashboard() {
   `;
 
   document.getElementById("pageContent").innerHTML = html;
+}
+
+function renderDashboardPeriodSummary(adjustments, sales) {
+  const today = getTodayItems(adjustments, "date");
+  const week = getRecentAdjustments(adjustments, 7);
+  const todaySales = getTodayItems(sales, "soldAt");
+  const weekSales = getRecentSales(sales, 7);
+  return `
+    <section class="dashboard-period-summary mb-4">
+      <div class="dashboard-period-heading">
+        <div>
+          <span class="statistics-kicker">Performance snapshot</span>
+          <h3>Daily and weekly performance</h3>
+        </div>
+        <a class="dashboard-stat-link" href="#" data-page="Statistics">Full statistics <i class="bi bi-arrow-up-right"></i></a>
+      </div>
+      <div class="dashboard-period-grid">
+        ${renderPeriodSummaryCard("Daily", today, todaySales, "bi-sun", "daily")}
+        ${renderPeriodSummaryCard("Weekly", week, weekSales, "bi-calendar-week", "weekly")}
+      </div>
+    </section>
+  `;
+}
+
+function renderPeriodSummaryCard(label, adjustments, sales, icon, period) {
+  const added = adjustments.filter((item) => item.type === "increase").length;
+  const removed = adjustments.filter((item) => item.type === "decrease").length;
+  const salesTotal = sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+  const averageSale = sales.length ? salesTotal / sales.length : 0;
+  return `
+    <article class="dashboard-period-card dashboard-period-card-${period}">
+      <div class="dashboard-period-card-title"><span>${label}</span><i class="bi ${icon}"></i></div>
+      <span class="dashboard-period-card-kicker">Sales revenue</span>
+      <strong>${formatEGP(salesTotal)}</strong>
+      <small>${sales.length} sale${sales.length === 1 ? "" : "s"} <b>·</b> avg ${formatEGP(averageSale)}</small>
+      <div class="dashboard-period-breakdown">
+        <span><i class="bi bi-arrow-up-right"></i> ${added} added</span>
+        <span><i class="bi bi-arrow-down-right"></i> ${removed} removed</span>
+      </div>
+    </article>
+  `;
+}
+
+function getRecentAdjustments(adjustments, days) {
+  const start = Date.now() - days * 24 * 60 * 60 * 1000;
+  return adjustments.filter((item) => {
+    const date = new Date(item.date || item.createdAt).getTime();
+    return !Number.isNaN(date) && date >= start;
+  });
+}
+
+function getRecentSales(sales, days) {
+  const start = Date.now() - days * 24 * 60 * 60 * 1000;
+  return sales.filter((item) => {
+    const date = new Date(item.soldAt || item.createdAt).getTime();
+    return !Number.isNaN(date) && date >= start;
+  });
+}
+
+function getTodayItems(items, dateField) {
+  const today = new Date();
+  return items.filter((item) => {
+    const date = new Date(item[dateField] || item.createdAt);
+    return !Number.isNaN(date.getTime())
+      && date.getFullYear() === today.getFullYear()
+      && date.getMonth() === today.getMonth()
+      && date.getDate() === today.getDate();
+  });
 }
 
 function renderDashboardLowStockList(lowStock) {

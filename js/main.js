@@ -1,14 +1,13 @@
-//* using fake server
-//^ run `npm run server` in the terminal before using the app
+//* Reads and writes go to the Neon database by default (see js/config.js)
+//^ `npm run server` is only needed if you want to test offline against data/db.json
 
 import { loadProducts } from "./pages/products.js";
 import { loadCategories } from "./pages/categories.js";
-import { loadSuppliers } from "./pages/suppliers.js";
 import { loadReports } from "./pages/reports.js";
-import { loadOrders } from "./pages/orders.js";
 import { loadActivityLog } from "./pages/activity.js";
 import { loadDashboard } from "./pages/dashboard.js";
 import { loadStockAdjustments } from "./pages/stockadjustment.js";
+import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 
 $(document).ready(function () {
@@ -25,12 +24,18 @@ $(document).ready(function () {
     if (!text) return;
     navigateTo(text);
   });
+
+  $("#pageContent").on("click", ".dashboard-stat-link", function (event) {
+    event.preventDefault();
+    navigateTo($(this).data("page"));
+  });
 });
 
 function navigateTo(text) {
   $("#pageTitle").text(text);
   $(".nav-item").removeClass("active-content");
   $(`.nav-item[data-page="${text}"]`).addClass("active-content");
+  $("#pageContent").html('<div class="p-4 text-muted">Loading...</div>');
 
   localStorage.setItem("currentPage", text);
 
@@ -44,14 +49,11 @@ function navigateTo(text) {
     case "Categories":
       loadCategories();
       break;
-    case "Suppliers":
-      loadSuppliers();
+    case "Statistics":
+      loadStatistics();
       break;
     case "Reports":
       loadReports();
-      break;
-    case "Purchase Orders":
-      loadOrders();
       break;
     case "Stock Adjustments":
       loadStockAdjustments();

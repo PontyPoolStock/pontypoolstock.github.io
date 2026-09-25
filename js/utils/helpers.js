@@ -1,15 +1,55 @@
 //* Validation Functions for Products
-export function isVaildProductData(data, id) {
+export function isVaildProductData(data, id, variants = []) {
   document
     .querySelectorAll(".errorMes")
     .forEach((item) => (item.innerHTML = ""));
+  normalizeProductUnit(data);
+
+  const ratingRows = Array.isArray(variants) ? variants : [];
+  const hasRatings = ratingRows.length > 0;
+
+  //^ price and quantity are derived from the ratings when the product has any
   const v1 = isVaildName(data.name);
   const v2 = isVaildSku(data.sku, id);
-  const v3 = isVaildNumber(data.price, "price");
-  const v4 = isVaildNumber(data.quantity, "quantity");
-  const v5 = isVaildNumber(data.reorderLevel, "reorderLevel");
-  const v6 = isVaildUnit(data.unit);
-  return v1 && v2 && v3 && v4 && v5 && v6;
+  const v3 = hasRatings || isVaildNumber(data.price, "price");
+  const v4 = hasRatings || isVaildNumber(data.quantity, "quantity");
+  const v5 = isVaildUnit(data.unit);
+  const v6 = isVaildCategoryId(data.categoryId);
+  const v7 = isVaildVariantRows(ratingRows);
+  return v1 && v2 && v3 && v4 && v5 && v6 && v7;
+}
+
+//* Every rating needs its own name and price, and a quantity of 0 or more
+function isVaildVariantRows(variants) {
+  if (!variants.length) return true;
+
+  const errorBox = document.querySelector(".errorMes-variants");
+  const seen = new Set();
+
+  for (const variant of variants) {
+    const label = String(variant.label || "").trim();
+    const price = Number(variant.price);
+    const quantity = Number(variant.quantity);
+    let message = "";
+
+    if (!label) message = "Every rating needs a name (e.g. 4W).";
+    else if (seen.has(label.toLowerCase())) message = `Rating "${label}" is used twice.`;
+    else if (!Number.isFinite(price) || price <= 0) message = `Rating "${label}" needs a price above 0.`;
+    else if (!Number.isFinite(quantity) || quantity < 0) message = `Rating "${label}" needs a quantity of 0 or more.`;
+
+    if (message) {
+      if (errorBox) errorBox.innerHTML = message;
+      return false;
+    }
+    seen.add(label.toLowerCase());
+  }
+  return true;
+}
+function isVaildCategoryId(categoryId) {
+  if (categoryId) return true;
+  document.querySelector(".errorMes-categoryId").innerHTML =
+    "Please select a category for this product.";
+  return false;
 }
 function isVaildName(name) {
   if (name.length === 0) {
@@ -19,21 +59,17 @@ function isVaildName(name) {
   }
   if (name.length <= 3 || name.length > 25) {
     document.querySelector(".errorMes-name").innerHTML =
-      `Product Name should be bigger than 3 charchter and less than 25`;
+      `Product Name should be bigger than 3 characters and less than 25`;
     return false;
   }
   return true;
 }
 function isVaildSku(sku) {
-  if (sku.length === 0) {
-    document.querySelector(".errorMes-sku").innerHTML =
-      `Product SKU is required`;
-    return false;
-  }
+  if (!sku || sku.trim().length === 0) return true;
   const skuRegex = /^[A-Z]+-\d{3}$/;
   if (!skuRegex.test(sku)) {
     document.querySelector(".errorMes-sku").innerHTML =
-      "Invalid SKU format. Please use 'LETTERS-000'.";
+      "Invalid code format. Please use 'LETTERS-000'.";
     return false;
   }
   return true;
@@ -59,139 +95,39 @@ function isVaildUnit(unit) {
     return false;
   }
   let units = ["pcs", "kg", "box"];
-  unit = unit.toLowerCase();
+  unit = unit.toLowerCase().trim();
   if (!units.includes(unit)) {
     document.querySelector(`.errorMes-unit`).innerHTML =
-      `Product unit should be pcs or kg or box`;
+      `Product unit should be pcs, kg, or box`;
     return false;
   }
   return true;
 }
 
-//* Validation Functions for categories
+function normalizeProductUnit(data) {
+  const value = String(data.unit || "").trim().toLowerCase();
+  const combined = value.match(/^(\d+(?:\.\d+)?)\s*(boxes?|pieces?|pcs?|kgs?)$/);
+  if (combined) {
+    if (!data.quantity) data.quantity = combined[1];
+    data.unit = combined[2];
+  }
+
+  const aliases = { boxes: "box", box: "box", pieces: "pcs", piece: "pcs", pcs: "pcs", kg: "kg", kgs: "kg" };
+  data.unit = aliases[String(data.unit || "").trim().toLowerCase()] || data.unit;
+}
+
 export function isVaildCategoryData(data) {
   document
     .querySelectorAll(".errorMes")
     .forEach((item) => (item.innerHTML = ""));
-  const v1 = isVaildName(data.name);
-  const v2 = isVaildDescription(data.description);
-  return v1 && v2;
-}
-function isVaildDescription(description) {
-  if (description.length === 0) {
-    document.querySelector(".errorMes-description").innerHTML =
-      `Product description is required`;
-    return false;
-  }
-  if (description.length <= 10 || description.length > 40) {
-    document.querySelector(".errorMes-description").innerHTML =
-      `Product description should be bigger than 10 charchter and less than 40`;
-    return false;
-  }
-  return true;
-}
 
-//* Validation Functions for suppliers
-export function isVaildSupplierData(data) {
-  document
-    .querySelectorAll(".errorMes")
-    .forEach((item) => (item.innerHTML = ""));
-  const v1 = isVaildName(data.name);
-  const v2 = isVaildContact(data.contact, data);
-  const v3 = isValidEmail(data.email);
-  const v4 = isValidPhone(data.phone);
-  const v5 = isVaildAddress(data.address);
-  return v1 && v2 && v3 && v4 && v5;
-}
-function isVaildContact(fullName, data) {
-  if (fullName.length === 0) {
-    document.querySelector(".errorMes-contact").innerHTML =
-      `Contact Person is required`;
+  const parentId = data.parentId ?? data.parent_id ?? "";
+  if (parentId && String(parentId) === String(data.id || "")) {
+    document.querySelector(".errorMes-name").innerHTML = "A category cannot be its own parent.";
     return false;
   }
-  fullName = fullName.toLowerCase().trim().split(" ");
-  if (fullName.length !== 2) {
-    document.querySelector(".errorMes-contact").innerHTML =
-      `Contact Person is full name with only two word`;
-    return false;
-  }
-  const regex = /^[a-z]+$/;
-  if (!regex.test(fullName[0]) || !regex.test(fullName[1])) {
-    document.querySelector(".errorMes-contact").innerHTML =
-      `each word in full name must include only letters`;
-    return false;
-  }
-  fullName[0] = fullName[0][0].toUpperCase() + fullName[0].slice(1);
-  fullName[1] = fullName[1][0].toUpperCase() + fullName[1].slice(1);
-  data.contact = fullName.join(" ");
-  return true;
-}
-function isValidEmail(email) {
-  if (email.length === 0) {
-    document.querySelector(".errorMes-email").innerHTML = `Email is required`;
-    return false;
-  }
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    document.querySelector(".errorMes-contact").innerHTML =
-      `Email must be like this vaild format  something@domain.com`;
-    return false;
-  }
-  return true;
-}
-function isValidPhone(phone) {
-  phone = phone.trim();
-  if (phone.length === 0) {
-    document.querySelector(".errorMes-phone").innerHTML = `phone is required`;
-    return false;
-  }
-  const phoneRegex = /^\+?[0-9\s]{10,20}$/;
-  if (!phoneRegex.test(phone)) {
-    document.querySelector(".errorMes-phone").innerHTML =
-      `phone must be with valid format like this +201234567890 or 01234567890`;
-    return false;
-  }
-  return true;
-}
-function isVaildAddress(address) {
-  address = address.trim();
-  if (address.length === 0) {
-    document.querySelector(".errorMes-address").innerHTML =
-      `Address is required`;
-    return false;
-  }
-  if (address.length < 3 || address.length > 20) {
-    document.querySelector(".errorMes-address").innerHTML =
-      `Address should have between 3 to 20 characters`;
-    return false;
-  }
-  return true;
-}
 
-//* Validation Functions for orders
-export function isVaildOrderData(data) {
-  document
-    .querySelectorAll(".errorMes")
-    .forEach((item) => (item.innerHTML = ""));
-  const v1 = isVaildSupplier(data.supplierId);
-  const v2 = isVaildItems(data.items);
-  return v1 && v2;
-}
-function isVaildSupplier(supplierId) {
-  if (!supplierId || supplierId === "") {
-    document.querySelector(".errorMes-supplierId").innerHTML =
-      `Supplier is required`;
-    return false;
-  }
-  return true;
-}
-function isVaildItems(items) {
-  if (!items || items.length === 0) {
-    document.querySelector(".errorMes-items").innerHTML =
-      `Please add at least one item`;
-    return false;
-  }
-  return true;
+  return isVaildName(data.name);
 }
 
 //* Validation — stock adjustments
@@ -201,14 +137,14 @@ export function isVaildStockAdjustmentData(data, products) {
     .forEach((item) => (item.innerHTML = ""));
   const v1 = isVaildAdjustmentProductId(data.productId);
   const v2 = isVaildAdjustmentType(data.type);
-  const v3 = isVaildAdjustmentReason(data.reason);
-  const v4 = isVaildAdjustmentQuantity(
+  const v3 = isVaildAdjustmentQuantity(
     data.quantity,
     data.type,
     data.productId,
     products,
+    data.variantLabel,
   );
-  return v1 && v2 && v3 && v4;
+  return v1 && v2 && v3;
 }
 function isVaildAdjustmentProductId(productId) {
   if (!productId || String(productId).trim() === "") {
@@ -226,14 +162,7 @@ function isVaildAdjustmentType(type) {
   }
   return true;
 }
-function isVaildAdjustmentReason(reason) {
-  if (!reason || String(reason).trim() === "") {
-    document.querySelector(".errorMes-reason").innerHTML = "Reason is required";
-    return false;
-  }
-  return true;
-}
-function isVaildAdjustmentQuantity(quantityStr, type, productId, products) {
+function isVaildAdjustmentQuantity(quantityStr, type, productId, products, variantLabel = "") {
   if (
     quantityStr === undefined
     || quantityStr === null
@@ -256,7 +185,12 @@ function isVaildAdjustmentQuantity(quantityStr, type, productId, products) {
         "Product not found";
       return false;
     }
-    const oldQty = Number(product.quantity) || 0;
+    const variant = getProductVariants(product).find(
+      (item) => String(item.label) === String(variantLabel || ""),
+    );
+    const oldQty = variant
+      ? getVariantQuantity(variant)
+      : Number(product.quantity) || 0;
     if (oldQty - num < 0) {
       document.querySelector(".errorMes-quantity").innerHTML =
         "Cannot reduce below 0. Current stock: " + oldQty + ".";
@@ -266,50 +200,109 @@ function isVaildAdjustmentQuantity(quantityStr, type, productId, products) {
   return true;
 }
 
+//* Product ratings (variants) — e.g. St64 sold in 4W / 8W / 12W
+export function getProductVariants(product) {
+  return Array.isArray(product?.variants) ? product.variants : [];
+}
+export function getVariantQuantity(variant) {
+  return Number(variant?.quantity) || 0;
+}
+export function getVariantReorderLevel(variant) {
+  return Number(variant?.reorderLevel) || 0;
+}
+export function getVariantPrice(variant) {
+  return Number(variant?.price) || 0;
+}
+export function getVariantsTotalQuantity(variants) {
+  return (Array.isArray(variants) ? variants : []).reduce(
+    (sum, variant) => sum + getVariantQuantity(variant),
+    0,
+  );
+}
+//* Lowest / highest rating price — null when there are no ratings
+export function getVariantPriceRange(variants) {
+  const prices = (Array.isArray(variants) ? variants : [])
+    .map(getVariantPrice)
+    .filter((price) => price > 0);
+  if (!prices.length) return null;
+  return { min: Math.min(...prices), max: Math.max(...prices) };
+}
+//* "St64 12W" — used by alerts, reports, adjustments and the activity log
+export function getVariantName(product, variant) {
+  const name = String(product?.name || "");
+  return variant?.label ? `${name} ${variant.label}`.trim() : name;
+}
+//* Total stock of one product (sum of its ratings, or its own quantity)
+export function getProductStock(product) {
+  const variants = getProductVariants(product);
+  if (!variants.length) return Number(product?.quantity) || 0;
+  return getVariantsTotalQuantity(variants);
+}
+//* Stock value of one product (sum over its ratings, or quantity * price)
+export function getProductStockValue(product) {
+  const variants = getProductVariants(product);
+  if (!variants.length) {
+    return (Number(product?.price) || 0) * (Number(product?.quantity) || 0);
+  }
+  return variants.reduce(
+    (sum, variant) => sum + getVariantPrice(variant) * getVariantQuantity(variant),
+    0,
+  );
+}
+//* One stock line per rating ("St64 12W") so alerts and reports stay exact
+export function expandProductsToStockLines(products) {
+  if (!Array.isArray(products)) return [];
+  const lines = [];
+  for (const product of products) {
+    const variants = getProductVariants(product);
+    if (!variants.length) {
+      lines.push({ ...product, variantLabel: "" });
+      continue;
+    }
+    for (const variant of variants) {
+      lines.push({
+        ...product,
+        variantLabel: variant.label || "",
+        name: getVariantName(product, variant),
+        sku: variant.sku || product.sku || "",
+        price: getVariantPrice(variant),
+        quantity: getVariantQuantity(variant),
+        reorderLevel: getVariantReorderLevel(variant),
+      });
+    }
+  }
+  return lines;
+}
+
 //* Dashboard & Reports — shared inventory helpers
 export function formatEGP(amount) {
   let num = Number(amount || 0);
-  return `${num.toLocaleString("en-US")} EGP`;
+  return `KSh ${num.toLocaleString("en-US")}`;
 }
 export function getLowStockProducts(products) {
-  if (!Array.isArray(products)) return [];
-  return products
+  return expandProductsToStockLines(products)
     .filter((p) => Number(p.quantity) <= Number(p.reorderLevel))
     .sort((a, b) => Number(a.quantity) - Number(b.quantity));
 }
 export function getInventoryValueRowsSorted(products, limit) {
-  const rows = [];
-  if (!Array.isArray(products)) return rows;
-  for (let i = 0; i < products.length; i++) {
-    let p = products[i];
-    let value = Number(p.price) * Number(p.quantity);
-    rows.push({ id: p.id, name: p.name, value: value });
-  }
+  const rows = expandProductsToStockLines(products).map((p) => ({
+    id: p.id,
+    name: p.name,
+    value: (Number(p.price) || 0) * (Number(p.quantity) || 0),
+  }));
   rows.sort((a, b) => b.value - a.value);
   if (typeof limit === "number") return rows.slice(0, limit);
   return rows;
 }
 export function getTotalInventoryValue(products) {
-  let total = 0;
-  if (!Array.isArray(products)) return total;
-  for (let i = 0; i < products.length; i++) {
-    let p = products[i];
-    total += Number(p.price) * Number(p.quantity);
-  }
-  return total;
+  if (!Array.isArray(products)) return 0;
+  return products.reduce((total, product) => total + getProductStockValue(product), 0);
 }
-export function getPendingOrdersCount(orders) {
-  let n = 0;
-  for (let i = 0; i < orders.length; i++) {
-    if (String(orders[i].status).toLowerCase() === "pending") n++;
-  }
-  return n;
-}
-
 //* Activity log — shared with Activity page and Dashboard
 export function normalizeActivity(activity = {}) {
+  const details = cleanActivityDetails(activity.details || activity.message || "Activity recorded");
   const fallbackText = String(
-    activity.details || activity.message || "Activity recorded",
+    details,
   );
   const lowerFallback = fallbackText.toLowerCase();
 
@@ -322,7 +315,7 @@ export function normalizeActivity(activity = {}) {
   return {
     ...activity,
     action,
-    details: activity.details || activity.message || "Activity recorded",
+    details,
     timestamp:
       activity.timestamp
       || activity.createdAt
@@ -330,6 +323,13 @@ export function normalizeActivity(activity = {}) {
       || activity.time
       || new Date().toISOString(),
   };
+}
+
+function cleanActivityDetails(value) {
+  return String(value)
+    .replace(/\s*\((?:null|undefined)?\)\s*$/i, "")
+    .replace(/\s+(?:null|undefined)\s*$/i, "")
+    .trim();
 }
 
 export function getActionStyle(action = "") {
@@ -405,4 +405,69 @@ export function sortData(data) {
     const dateB = new Date(b.updatedAt || b.createdAt);
     return dateB - dateA; // الأحدث أولاً
   });
+}
+
+//* Image helpers
+//! JSON Server (v1) parses request bodies with a 100 KiB limit, so image data
+//! URLs must stay small or POST/PUT requests fail with HTTP 500.
+const MAX_IMAGE_DATA_URL_LENGTH = 90000;
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () =>
+      reject(new Error("Unable to read that image.")),
+    );
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", () =>
+      reject(new Error("Unable to read that image.")),
+    );
+    image.src = dataUrl;
+  });
+}
+
+//* Downscale and re-encode the image until it fits the allowed data URL length
+function shrinkImage(image, maxLength) {
+  const maxSides = [1024, 768, 512, 384, 256];
+  const qualities = [0.85, 0.7, 0.55, 0.4, 0.3];
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  if (!sourceWidth || !sourceHeight) return "";
+
+  let smallest = "";
+  for (const maxSide of maxSides) {
+    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    for (const quality of qualities) {
+      const candidate = canvas.toDataURL("image/jpeg", quality);
+      if (!smallest || candidate.length < smallest.length) smallest = candidate;
+      if (candidate.length <= maxLength) return candidate;
+    }
+  }
+
+  return smallest.length <= maxLength ? smallest : "";
+}
+
+//* Read a picked image and return a data URL small enough to be stored
+export async function buildStorableImageUrl(file, maxLength = MAX_IMAGE_DATA_URL_LENGTH) {
+  const original = await readFileAsDataUrl(file);
+  if (original.length <= maxLength) return original;
+
+  const image = await loadImageElement(original);
+  return shrinkImage(image, maxLength);
 }

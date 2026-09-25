@@ -1,12 +1,17 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>TrackMaster | Login</title>
+        <title>Sign In | Pontypool Stock Management System</title>
+        <meta name="description"
+            content="Sign in to the Pontypool stock management system to manage products, categories, stock levels, and activity reports." />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical"
+            href="https://abdulrahmanSiraj.github.io/inventory-management-system/login.html" />
         <link rel="icon" type="image/svg+xml"
-            href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230d6efd'/%3E%3Cpath d='M16 22l16-8 16 8-16 8-16-8zm0 8l16 8 16-8v12L32 50 16 42V30z' fill='white'/%3E%3C/svg%3E" />
+            href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23facc15'/%3E%3Cpath d='M16 22l16-8 16 8-16 8-16-8zm0 8l16 8 16-8v12L32 50 16 42V30z' fill='black'/%3E%3C/svg%3E" />
         <link rel="stylesheet"
             href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
         <link rel="stylesheet"
@@ -17,9 +22,9 @@
     <body class="login-page">
         <div class="login-card">
             <div class="login-logo">
-                <i class="bi bi-box-seam"></i>
-                <h2>TrackMaster</h2>
-                <p>Sign in to manage products, suppliers, and stock.</p>
+                <img class="login-logo-image" src="./pontylogo.jpeg"
+                    alt="Pontypool Electricals and Lighting" />
+                <p>Sign in to manage products and stock.</p>
             </div>
 
             <div id="loginError" class="alert alert-danger d-none"
@@ -33,7 +38,7 @@
                         type="email"
                         id="loginEmail"
                         class="form-control"
-                        placeholder="admin@trackmaster.com"
+                        placeholder="admin@pontypool.com"
                         required />
                 </div>
 
@@ -53,21 +58,20 @@
             </form>
 
             <div class="alert alert-light border mt-4 mb-0">
-                <strong>Demo accounts</strong>
+                <strong>Database setup</strong>
                 <div class="small mt-2 d-grid gap-1">
-                    <span><code>admin@trackmaster.com</code> /
-                        <code>admin123</code></span>
-                    <span><code>abdulrahman@trackmaster.com</code> /
-                        <code>abdulrahman123</code></span>
+                    <label for="apiUrlInput" class="form-label mb-1">Neon API URL</label>
+                    <input id="apiUrlInput" type="url" class="form-control form-control-sm" placeholder="https://your-project.neon.tech" />
+                    <button type="button" id="saveApiUrlBtn" class="btn btn-outline-dark btn-sm mt-2">Save database URL</button>
                 </div>
-                <div class="small text-muted mt-2">Run <code>npm run
-                        server</code> to enable login.</div>
+                <div class="small text-muted mt-2">The app already uses the Neon database and saves every change there. Only change this URL if you want to point this browser somewhere else.</div>
             </div>
         </div>
 
         <script
             src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <script src="./js/pages/login.js" type="module"></script>
+        <script src="./js/pages/login.js?v=20260925-1" type="module"></script>
     </body>
 
 </html>
+

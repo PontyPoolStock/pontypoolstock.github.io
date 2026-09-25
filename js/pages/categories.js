@@ -17,8 +17,10 @@ export async function loadCategories() {
 }
 
 async function loadData() {
-  products = await fetchData("products");
-  categories = await fetchData("categories");
+  [products, categories] = await Promise.all([
+    fetchData("products"),
+    fetchData("categories"),
+  ]);
   categories = sortData(categories);
   lastFiltered = [...categories];
 }
@@ -47,11 +49,12 @@ function getTableHtml(filteredCategories = categories) {
   const paginated = paginateData(filteredCategories, currentPage, PAGE_SIZE);
   let tableData = paginated.map((c) => ({
     id: c.id,
+    image: getCategoryThumbnail(c.imageUrl, c.name),
     name: c.name,
     description: c.description || "-",
     products: getProductsNumber(c.id),
   }));
-  let columns = ["name", "description", "products"];
+  let columns = ["image", "name", "products"];
   return (
     renderTable(tableData, columns)
     + renderPagination(filteredCategories.length, currentPage, PAGE_SIZE)
@@ -175,6 +178,11 @@ function updateStats(count, searchTerm) {
   statsDiv.innerHTML = searchTerm
     ? `Found ${count} categor${count !== 1 ? "ies" : "y"} matching "${searchTerm}"`
     : "";
+}
+
+function getCategoryThumbnail(imageUrl, name) {
+  if (!imageUrl) return `<span class="entity-thumbnail entity-thumbnail-empty" aria-label="No category image"><i class="bi bi-tags"></i></span>`;
+  return `<img class="entity-thumbnail" src="${imageUrl}" alt="${name} image" onerror="this.remove();" />`;
 }
 
 function getProductsNumber(id) {

@@ -17,6 +17,9 @@ export async function loadActivityLog() {
 async function loadData() {
   //^ get activity data
   activities = await fetchData("activityLog");
+  activities = activities.filter(
+    (activity) => !["LOG_IN", "LOG_OUT"].includes(activity.action),
+  );
   //^ sort them by newest first based on data to make it by default sorted
   activities = sortData(activities);
 }
@@ -48,11 +51,9 @@ function renderActivities() {
       <select id="typeFilter" class="form-select form-select-sm border-0 shadow-none form-select-activity-type">
         <option value="">All Types</option>
         <option value="STOCK_ADJUSTMENT">Adjustments</option>
-        <option value="RECEIVE_ORDER">Orders Received</option>
         <option value="CREATE_PRODUCT">Products Added</option>
         <option value="UPDATE_PRODUCT">Products Updated</option>
         <option value="LOW_STOCK_ALERT">Low Stock Alerts</option>
-        <option value="CREATE_PURCHASE_ORDER">Purchase Orders</option>
       </select>
     </div>
 

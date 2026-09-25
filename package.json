@@ -2,11 +2,15 @@
   "name": "inventory-system",
   "version": "1.0.0",
   "type": "module",
-  "description": "A responsive web application for managing products, suppliers, and inventory.",
+  "description": "A responsive stock management application for products, categories, and inventory.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "server": "json-server --watch data/db.json --port 3000"
+    "serve": "node scripts/static-server.mjs",
+    "share": "npx --yes localtunnel --port 5500 --subdomain pontypool",
+    "server": "json-server --watch data/db.json --port 3000",
+    "db:check": "node scripts/db-check.mjs",
+    "db:migrate": "node scripts/migrate-db-json-to-neon.mjs"
   },
   "repository": {
     "type": "git",
@@ -20,6 +24,14 @@
   "homepage": "https://github.com/AbdulrahmanSiraj/inventory-management-system#readme",
   "keywords": [],
   "dependencies": {
-    "json-server": "^1.0.0-beta.15"
+    "@neon/config": "^1.7.2",
+    "@neon/env": "^1.4.3",
+    "@neon/functions": "^0.11.0",
+    "json-server": "^1.0.0-beta.15",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1"
   }
 }

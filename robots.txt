@@ -1,0 +1,6 @@
+# Pontypool Stock Management System
+# Update the Sitemap line if the app moves to another host or domain.
+User-agent: *
+Allow: /
+
+Sitemap: https://abdulrahmanSiraj.github.io/inventory-management-system/sitemap.xml

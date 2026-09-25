@@ -7,11 +7,16 @@ import {
   deleteData,
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
-import { GetCurrentDate, sortData } from "../utils/helpers.js";
+import {
+  GetCurrentDate,
+  sortData,
+  getProductVariants,
+  getProductStock,
+  getVariantPriceRange,
+} from "../utils/helpers.js";
 
 let products = [];
 let categories = [];
-let suppliers = [];
 let lastFiltered = [];
 let currentPage = 1;
 let PAGE_SIZE = 5;
@@ -24,10 +29,12 @@ export async function loadProducts() {
 }
 
 async function loadData() {
-  products = await fetchData("products");
-  products = sortData(products);
-  categories = await fetchData("categories");
-  suppliers = await fetchData("suppliers");
+  const [productData, categoryData] = await Promise.all([
+    fetchData("products"),
+    fetchData("categories"),
+  ]);
+  products = sortData(productData);
+  categories = categoryData;
 }
 
 //* render the whole html of Products page
@@ -69,23 +76,33 @@ function renderProducts() {
 //* to bring the table whatever there is a filter/ search/ all products
 function getTableHtml(filteredProducts = products) {
   const paginated = paginateData(filteredProducts, currentPage, PAGE_SIZE);
-  let tableData = paginated.map((p) => ({
-    id: p.id,
-    sku: `<span class="sku-badge">${p.sku}</span>`,
-    name: p.name,
-    category: getCategoryName(p.categoryId),
-    supplier: getSupplierName(p.supplierId),
-    price: p.price,
-    quantity: p.quantity,
-    status: getStatus(p.quantity, p.reorderLevel),
-  }));
+  let tableData = paginated.map((p) => {
+    const variants = getProductVariants(p);
+    const priceRange = getVariantPriceRange(variants);
+    return {
+      id: p.id,
+      image: getProductThumbnail(p.imageUrl, p.name),
+      sku: p.sku ? `<span class="sku-badge">${p.sku}</span>` : "-",
+      name: p.name + getRatingsHtml(variants),
+      category: getCategoryName(p.categoryId),
+      price: priceRange
+        ? (priceRange.min === priceRange.max
+          ? priceRange.min
+          : `${priceRange.min} - ${priceRange.max}`)
+        : p.price,
+      quantity: getProductStock(p),
+      unit: p.unit || "-",
+      status: getProductStatus(p),
+    };
+  });
   let columns = [
+    "image",
     "sku",
     "name",
     "category",
-    "supplier",
     "price",
     "quantity",
+    "unit",
     "status",
   ];
   return (
@@ -154,13 +171,17 @@ function filterProducts() {
   let statusFilter = document.getElementById("statusFilter").value;
 
   let filtered = products.filter((p) => {
-    //^ Search by name, sku, category name or supplier name
+    //^ Search by name, sku, or category name
     if (searchTerm) {
+      const ratingsText = getProductVariants(p)
+        .map((variant) => `${variant.label || ""} ${variant.sku || ""}`)
+        .join(" ")
+        .toLowerCase();
       let matches =
         p.name.toLowerCase().includes(searchTerm)
-        || p.sku.toLowerCase().includes(searchTerm)
+        || String(p.sku || "").toLowerCase().includes(searchTerm)
         || getCategoryName(p.categoryId).toLowerCase().includes(searchTerm)
-        || getSupplierName(p.supplierId).toLowerCase().includes(searchTerm);
+        || ratingsText.includes(searchTerm);
       if (!matches) return false;
     }
     //^ Filter by category
@@ -216,7 +237,7 @@ async function handleDelete(id) {
 
   await postData("activityLog", {
     action: "DELETE_PRODUCT",
-    details: `Product deleted: ${p.name} (${p.sku})`,
+    details: `Product deleted: ${p.name}${p.sku ? ` (${p.sku})` : ""}`,
     user: "admin",
     timestamp: GetCurrentDate(),
   });
@@ -240,10 +261,44 @@ function getCategoryName(id) {
   let cat = categories.find((e) => e.id == id);
   return cat ? cat.name : "undefined";
 }
-function getSupplierName(id) {
-  let sup = suppliers.find((e) => e.id == id);
-  return sup ? sup.name : "undefined";
+function getProductThumbnail(imageUrl, name) {
+  if (!imageUrl) return `<span class="entity-thumbnail entity-thumbnail-empty" aria-label="No product image"><i class="bi bi-box-seam"></i></span>`;
+  return `<img class="entity-thumbnail" src="${imageUrl}" alt="${name} image" onerror="this.remove();" />`;
 }
+//* Shows every rating of a product inside its own row ("4W: 20 · 8W: 15")
+function getRatingsHtml(variants) {
+  if (!variants.length) return "";
+
+  const chips = variants
+    .map((variant) => {
+      const qty = Number(variant.quantity) || 0;
+      const min = Number(variant.reorderLevel) || 0;
+      const tone = qty <= 0 ? "status-out" : qty <= min ? "status-low" : "";
+      return `<span class="variant-chip ${tone}">${variant.label || "-"}: ${qty}</span>`;
+    })
+    .join("");
+
+  return `
+    <div class="d-flex flex-wrap gap-1 mt-1">${chips}</div>
+    <div class="small text-muted">${variants.length} rating${variants.length === 1 ? "" : "s"}</div>
+  `;
+}
+
+//* A product is low/out when any of its ratings reaches its own minimum
+function getProductStatus(product) {
+  const variants = getProductVariants(product);
+  if (!variants.length) return getStatus(product.quantity, product.reorderLevel);
+
+  const total = getProductStock(product);
+  if (total <= 0) return `<span class="status-badge status-out">Out of stock</span>`;
+
+  const anyRatingLow = variants.some(
+    (variant) => (Number(variant.quantity) || 0) <= (Number(variant.reorderLevel) || 0),
+  );
+  if (anyRatingLow) return `<span class="status-badge status-low">Low stock</span>`;
+  return `<span class="status-badge status-in">In stock</span>`;
+}
+
 function getStatus(quantity, reorderLevel) {
   if (quantity <= 0)
     return `<span class="status-badge status-out">Out of stock</span>`;

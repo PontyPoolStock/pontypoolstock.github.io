@@ -4,25 +4,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TrackMaster</title>
+    <title>Pontypool Stock Management System</title>
+    <meta name="description"
+      content="Pontypool stock management system for products, categories, stock adjustments, low-stock reports, and activity tracking." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://abdulrahmanSiraj.github.io/inventory-management-system/" />
     <link rel="icon" type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230d6efd'/%3E%3Cpath d='M16 22l16-8 16 8-16 8-16-8zm0 8l16 8 16-8v12L32 50 16 42V30z' fill='white'/%3E%3C/svg%3E" />
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23facc15'/%3E%3Cpath d='M16 22l16-8 16 8-16 8-16-8zm0 8l16 8 16-8v12L32 50 16 42V30z' fill='black'/%3E%3C/svg%3E" />
     <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
     <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
-    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/style.css?v=20260924-1">
   </head>
 
   <body class="d-flex">
 
     <aside class="sidebar">
       <div class="sidebar-logo">
-        <i class="bi bi-box-seam sidebar-logo-icon"></i>
-        <div class="sidebar-logo-text">
-          <h1>TrackMaster</h1>
-          <small>Inventory Manager</small>
-        </div>
+        <img class="sidebar-logo-image" src="./pontylogo.jpeg"
+          alt="Pontypool Electricals and Lighting" />
       </div>
 
       <div class="user-info">
@@ -47,11 +48,8 @@
         <div class="nav-item" data-page="Categories">
           <i class="bi bi-tags"></i><span>Categories</span>
         </div>
-        <div class="nav-item" data-page="Suppliers">
-          <i class="bi bi-truck"></i><span>Suppliers</span>
-        </div>
-        <div class="nav-item" data-page="Purchase Orders">
-          <i class="bi bi-cart-check"></i><span>Purchase Orders</span>
+        <div class="nav-item" data-page="Statistics">
+          <i class="bi bi-pie-chart"></i><span>Statistics</span>
         </div>
         <div class="nav-section">Operations</div>
         <div class="nav-item" data-page="Stock Adjustments">
@@ -77,18 +75,25 @@
       </div>
       <footer class="mt-auto py-3 px-4 border-top bg-white ">
         <div class="d-flex justify-content-between align-items-center">
-          <small class="text-muted">© 2026 TrackMaster. All rights
+          <small class="text-muted">© 2026 Pontypool. All rights
             reserved.</small>
-          <small class="text-muted">Inventory Management System v1.0</small>
+          <small class="text-muted">Stock Management System v1.0</small>
         </div>
       </footer>
     </main>
 
-    <script
+    <script type="module">
+    //* Every browser starts on the Neon database; a saved URL can still override it
+    import { getSavedApiUrl, saveApiUrl } from "./js/config.js";
+
+    window.__PONTYPOOL_CONFIG__ = window.__PONTYPOOL_CONFIG__ || {};
+    window.__PONTYPOOL_CONFIG__.apiUrl = saveApiUrl(getSavedApiUrl());
+  </script>
+  <script
       src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="./js/main.js" type="module"></script>
+    <script src="./js/main.js?v=20260925-1" type="module"></script>
   </body>
 
 </html>

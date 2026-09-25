@@ -1,18 +1,20 @@
 import {
   makeProductForm,
   makeCategoryForm,
-  makeSupplierForm,
-  makeOrderForm,
   makeStockAdjustmentForm,
+  setupProductVariants,
+  collectProductVariants,
 } from "./form.js";
 
 import {
   isVaildProductData,
   isVaildCategoryData,
-  isVaildSupplierData,
-  isVaildOrderData,
   isVaildStockAdjustmentData,
   GetCurrentDate,         
+  buildStorableImageUrl,
+  getProductVariants,
+  getVariantsTotalQuantity,
+  getVariantPriceRange,
 } from "../utils/helpers.js";
 
 import { postData, updateData, fetchData } from "../services/api.js";
@@ -35,8 +37,6 @@ export async function getModal(obj, action, id, onAfterSave) {
 
   if (obj === "products") html += await makeProductForm(id);
   else if (obj === "categories") html += await makeCategoryForm(id);
-  else if (obj === "suppliers") html += await makeSupplierForm(id);
-  else if (obj === "orders") html += await makeOrderForm();
   else if (obj === "stockAdjustments") html += await makeStockAdjustmentForm();
 
   html += `</div>
@@ -53,8 +53,12 @@ export async function getModal(obj, action, id, onAfterSave) {
   const modal = new bootstrap.Modal(modalElement);
   modal.show();
 
-  if (obj === "orders") setupOrderFormListeners();
   if (obj === "stockAdjustments") setupStockAdjustmentListeners();
+  if (obj === "products") {
+    setupImageUploader("product");
+    setupProductVariants();
+  }
+  if (obj === "categories") setupImageUploader("category");
 
   saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave);
   closeBtnEvent(modalElement, modal);
@@ -69,19 +73,25 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
       const form = document.querySelector("form");
       let data = Object.fromEntries(new FormData(form));
 
-      if (obj === "orders") {
-        data.items = JSON.parse(form.dataset.items || "[]");
-        data.status = "pending";
-        data.orderDate = new Date().toISOString().split("T")[0];
-      }
+      const ratings = obj === "products" ? collectProductVariants() : [];
 
       let productsForAdjustment = null;
       if (obj === "stockAdjustments") {
         productsForAdjustment = await fetchData("products");
       }
 
-      let isVaild = vaildData(obj, data, id, productsForAdjustment);
+      let isVaild = vaildData(obj, data, id, productsForAdjustment, ratings);
       if (!isVaild) return;
+
+      //^ the ratings drive price and stock, so the totals always stay in sync
+      if (obj === "products") {
+        data.variants = ratings;
+        if (ratings.length) {
+          const range = getVariantPriceRange(ratings);
+          data.price = range ? range.min : 0;
+          data.quantity = getVariantsTotalQuantity(ratings);
+        }
+      }
 
       if (obj === "stockAdjustments") {
         const product = productsForAdjustment.find((p) => p.id == data.productId);
@@ -89,28 +99,51 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
         const qty = parseInt(data.quantity, 10);
         const type = data.type;
-        const reason = data.reason;
-        const oldQty = Number(product.quantity) || 0;
+        const variants = getProductVariants(product);
+        const rating = variants.find(
+          (item) => String(item.label) === String(data.variantLabel || ""),
+        );
+        if (variants.length && !rating) {
+          document.querySelector(".errorMes-variantLabel").innerHTML =
+            "Select the rating you are adjusting.";
+          return;
+        }
+
+        const oldQty = rating
+          ? Number(rating.quantity) || 0
+          : Number(product.quantity) || 0;
         const newQty = type === "increase" ? oldQty + qty : oldQty - qty;
         const nowIso = GetCurrentDate(); 
 
         await postData("stockAdjustments", {
           productId: product.id,
-          productName: product.name,
+          productName: rating ? `${product.name} ${rating.label}` : product.name,
           type,
           quantity: qty,
-          reason,
           date: nowIso,
           oldQuantity: oldQty,
           newQuantity: newQty,
         });
 
-        await updateData("products", product.id, { ...product, quantity: newQty });
+        if (rating) {
+          const nextVariants = variants.map((item) => (
+            String(item.label) === String(rating.label)
+              ? { ...item, quantity: newQty }
+              : item
+          ));
+          await updateData("products", product.id, {
+            ...product,
+            variants: nextVariants,
+            quantity: getVariantsTotalQuantity(nextVariants),
+          });
+        } else {
+          await updateData("products", product.id, { ...product, quantity: newQty });
+        }
 
         const sign = type === "increase" ? "+" : "−";
         await postData("activityLog", {
           action: "STOCK_ADJUSTMENT",
-          details: `Stock adjustment: ${sign}${qty} ${product.name} (${reason})`,
+          details: `Stock adjustment: ${sign}${qty} ${rating ? `${product.name} ${rating.label}` : product.name}`,
           user: "admin",
           timestamp: nowIso,
         });
@@ -121,32 +154,32 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
       }
 
       if (action === "Edit") {
-        await updateData(`${obj}`, id, data);
+        const result = await updateData(`${obj}`, id, data);
+        if (!result || result.error) {
+          alert(result?.error || "Unable to update this item.");
+          return;
+        }
       } else if (action === "Add") {
-        await postData(`${obj}`, data);
+        const result = await postData(`${obj}`, data);
+        if (!result || result.error) {
+          alert(result?.error || "Unable to save this item.");
+          return;
+        }
       }
 
       if (obj === "products" && action === "Add") {
         await postData("activityLog", {
           action: "CREATE_PRODUCT",
-          details: `New product added: ${data.name} (${data.sku})`,
+          details: `New product added: ${data.name}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
           user: "admin",
           timestamp: GetCurrentDate(),
         });
       } else if (obj === "products" && action === "Edit") {
         await postData("activityLog", {                         
           action: "UPDATE_PRODUCT",
-          details: `Product updated: ${data.name} (${data.sku})`,
+          details: `Product updated: ${data.name}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
           user: "admin",
           timestamp: GetCurrentDate(),
-        });
-      } else if (obj === "orders") {
-        await postData("activityLog", {
-          action: "CREATE_PURCHASE_ORDER",
-          details: `Purchase Order created — ${data.items.length} item(s)`,
-          user: `${getCurrentUser()||'unKnown'}`,
-          timestamp: GetCurrentDate(),
-          createdAt: new Date().toLocaleString(),
         });
       }
 
@@ -158,12 +191,10 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
     });
 }
 
-function vaildData(obj, data, id, products) {
+function vaildData(obj, data, id, products, ratings = []) {
   let result = true;
-  if (obj === "products") result = isVaildProductData(data, id);
+  if (obj === "products") result = isVaildProductData(data, id, ratings);
   else if (obj === "categories") result = isVaildCategoryData(data);
-  else if (obj === "suppliers") result = isVaildSupplierData(data);
-  else if (obj === "orders") result = isVaildOrderData(data);
   else if (obj === "stockAdjustments") result = isVaildStockAdjustmentData(data, products);
   return result;
 }
@@ -184,81 +215,114 @@ function deleteModal(modalElement) {
   });
 }
 
-//* for orders
-function setupOrderFormListeners() {
-  let items = [];
-
-  document.getElementById("addItemBtn").addEventListener("click", function () {
-    const select = document.getElementById("productSelect");
-    const qty = Number(document.getElementById("productQty").value);
-    const productId = select.value;
-    const productName = select.options[select.selectedIndex].dataset.name;
-    if (!productId || qty <= 0) return;
-
-    const existing = items.find((i) => i.productId == productId);
-    if (existing) existing.quantity += qty;
-    else items.push({ productId, productName, quantity: qty });
-
-    renderItemsList(items);
-  });
-
-  document.querySelector(".save-btn").addEventListener(
-    "click",
-    function () {
-      document.querySelector("#appForm").dataset.items = JSON.stringify(items);
-    },
-    { capture: true },
-  );
-}
-
-function renderItemsList(items) {
-  const list = document.getElementById("itemsList");
-  if (items.length === 0) {
-    list.innerHTML = `<p class="text-muted small mb-0">No items added yet</p>`;
-    return;
-  }
-  list.innerHTML = items
-    .map(
-      (item, i) => `
-    <div class="d-flex justify-content-between align-items-center mb-1">
-      <span>${item.quantity}x ${item.productName}</span>
-      <button type="button" class="btn btn-sm btn-link text-danger p-0 remove-item" data-index="${i}">
-        <i class="bi bi-x-lg"></i>
-      </button>
-    </div>
-  `,
-    )
-    .join("");
-
-  list.querySelectorAll(".remove-item").forEach((btn) => {
-    btn.addEventListener("click", function () {
-      items.splice(Number(this.dataset.index), 1);
-      renderItemsList(items);
-    });
-  });
-}
-
 function setupStockAdjustmentListeners() {
   const select = document.getElementById("stockAdjProductSelect");
   if (!select) return;
   select.addEventListener("change", updateStockAdjustmentCurrentDisplay);
+  document
+    .getElementById("stockAdjVariantSelect")
+    ?.addEventListener("change", updateStockAdjustmentCurrentDisplay);
   updateStockAdjustmentCurrentDisplay();
+}
+
+function setupImageUploader(prefix) {
+  const dropzone = document.getElementById(`${prefix}ImageDropzone`);
+  const input = document.getElementById(`${prefix}ImageFile`);
+  const preview = document.getElementById(`${prefix}ImagePreview`);
+  const prompt = document.getElementById(`${prefix}ImagePrompt`);
+  const value = document.getElementById(`${prefix}ImageValue`);
+  if (!dropzone || !input || !preview || !prompt || !value) return;
+
+  const showImage = async (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Please choose an image smaller than 2 MB.");
+      return;
+    }
+
+    try {
+      const dataUrl = await buildStorableImageUrl(file);
+      if (!dataUrl) {
+        alert("That image is too large to store. Please choose a smaller image.");
+        return;
+      }
+      value.value = dataUrl;
+      preview.src = dataUrl;
+      preview.classList.remove("d-none");
+      prompt.classList.add("d-none");
+      dropzone.classList.add("has-image");
+    } catch (error) {
+      alert(error.message || "Unable to read that image.");
+    }
+  };
+
+  dropzone.addEventListener("click", () => input.click());
+  dropzone.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") input.click();
+  });
+  input.addEventListener("change", () => showImage(input.files[0]));
+  dropzone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    dropzone.classList.add("is-dragging");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("is-dragging"));
+  dropzone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    dropzone.classList.remove("is-dragging");
+    showImage(event.dataTransfer.files[0]);
+  });
 }
 
 function updateStockAdjustmentCurrentDisplay() {
   const box = document.getElementById("adjCurrentStock");
   const select = document.getElementById("stockAdjProductSelect");
+  const variantWrapper = document.getElementById("adjVariantWrapper");
+  const variantSelect = document.getElementById("stockAdjVariantSelect");
+  const variantError = document.querySelector(".errorMes-variantLabel");
   if (!box || !select) return;
+
   const opt = select.options[select.selectedIndex];
   if (!select.value || !opt) {
     box.classList.add("d-none");
     box.innerHTML = "";
+    variantWrapper?.classList.add("d-none");
+    if (variantSelect) variantSelect.innerHTML = "";
     return;
   }
-  const qty = opt.dataset.qty !== undefined ? Number(opt.dataset.qty) : 0;
+
+  let variants = [];
+  try {
+    const parsed = JSON.parse(opt.dataset.variants || "[]");
+    if (Array.isArray(parsed)) variants = parsed;
+  } catch (error) {
+    variants = [];
+  }
+
+  //^ ratings of the chosen product become the second dropdown
+  if (variantSelect) {
+    variantSelect.innerHTML = "";
+    for (const variant of variants) {
+      const option = document.createElement("option");
+      option.value = variant.label || "";
+      option.textContent = `${variant.label} (Qty: ${Number(variant.quantity) || 0})`;
+      variantSelect.appendChild(option);
+    }
+  }
+  variantWrapper?.classList.toggle("d-none", !variants.length);
+  if (variantError) variantError.innerHTML = "";
+
+  const chosen = variants.find(
+    (variant) => String(variant.label) === String(variantSelect?.value || ""),
+  );
+  const qty = chosen
+    ? Number(chosen.quantity) || 0
+    : opt.dataset.qty !== undefined
+      ? Number(opt.dataset.qty)
+      : 0;
   const unit = opt.dataset.unit || "";
-  const reorderRaw = opt.dataset.reorder;
+  const reorderRaw = chosen ? chosen.reorderLevel : opt.dataset.reorder;
   const reorder = reorderRaw !== undefined && reorderRaw !== "" ? Number(reorderRaw) : "—";
+
   box.classList.remove("d-none");
   let text = `Current stock: <strong>${qty}</strong>`;
   if (unit) text += ` ${unit}`;

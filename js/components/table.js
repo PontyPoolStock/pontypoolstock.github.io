@@ -12,7 +12,7 @@ export default function renderTable(data, cols, actions = true) {
   `;
 
   cols.forEach((col) => {
-    table += `<th>${col.toUpperCase()}</th>`;
+    table += `<th>${getColumnLabel(col)}</th>`;
   });
   if (actions) table += `<th>ACTIONS</th>`;
 
@@ -22,7 +22,7 @@ export default function renderTable(data, cols, actions = true) {
     table += `<tr>`;
     cols.forEach((col) => {
       let value = item[col];
-      if (col === "price") value = `${value} EGP`;
+      if (col === "price" && value !== null && value !== undefined && value !== "") value = `KSh ${value}`;
       table += `<td>${value || "-"}</td>`;
     });
     if (actions) {
@@ -55,13 +55,13 @@ export default function renderTable(data, cols, actions = true) {
 
     cols.forEach((col, index) => {
       let value = item[col];
-      if (col === "price") value = `${value} EGP`;
+      if (col === "price" && value !== null && value !== undefined && value !== "") value = `KSh ${value}`;
       if (index === 0) {
         cards += `<div class="fw-bold mb-2">${value || "-"}</div>`;
       } else {
         cards += `
           <div class="d-flex gap-2 small mb-1">
-            <span class="fw-medium text-secondary" style="min-width:80px">${col.toUpperCase()}:</span>
+            <span class="fw-medium text-secondary" style="min-width:80px">${getColumnLabel(col)}:</span>
             <span>${value || "-"}</span>
           </div>
         `;
@@ -89,4 +89,9 @@ export default function renderTable(data, cols, actions = true) {
   cards += `</div>`;
 
   return table + cards;
+}
+
+function getColumnLabel(column) {
+  if (column === "sku") return "CODE";
+  return column.toUpperCase();
 }
