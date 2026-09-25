@@ -70,8 +70,6 @@ export async function makeProductForm(id, categoryId = "") {
           </button>
         </div>
         <div class="text-muted small mt-1">
-          Optional — add as many rows as you like, freely combining watts, colour and amperes (e.g. 4W · White · 0.05A).
-          Price and stock are tracked per row, and Quantity holds the total.
           Everything except the product name can be left empty.
         </div>
         <div id="variantsList" class="d-flex flex-column gap-2 mt-2">${ratingRows}</div>
@@ -123,17 +121,12 @@ function variantRowHtml(variant = {}) {
   return `
     <div class="variant-row border rounded p-2" data-variant-row>
       <div class="row g-2 align-items-end">
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-4">
           <label class="form-label small text-secondary mb-1">Watts</label>
           <input type="text" class="form-control form-control-sm" data-field="label"
             value="${escAttr(variant.label || "")}" placeholder="e.g. 4W">
         </div>
-        <div class="col-6 col-md-2">
-          <label class="form-label small text-secondary mb-1">Code</label>
-          <input type="text" class="form-control form-control-sm" data-field="sku"
-            value="${escAttr(variant.sku || "")}" placeholder="ST64-4W">
-        </div>
-        <div class="col-6 col-md-2">
+        <div class="col-6 col-md-3">
           <label class="form-label small text-secondary mb-1">Price</label>
           <input type="number" class="form-control form-control-sm" data-field="price"
             value="${escAttr(variant.price ?? "")}" placeholder="0">
@@ -224,7 +217,6 @@ export function collectProductVariants() {
       const ampsRaw = valueOf("amps");
       return {
         label: valueOf("label"),
-        sku: valueOf("sku"),
         price: Number(valueOf("price")) || 0,
         quantity: Number(valueOf("quantity")) || 0,
         reorderLevel: Number(valueOf("reorderLevel")) || 0,
@@ -235,7 +227,6 @@ export function collectProductVariants() {
     .filter(
       (variant) =>
         variant.label
-        || variant.sku
         || variant.colour
         || variant.amps !== ""
         || variant.price
