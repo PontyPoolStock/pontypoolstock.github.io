@@ -1,4 +1,9 @@
-import { fetchData } from "../services/api.js";
+import {
+  fetchData,
+  PRODUCT_LIST_FIELDS,
+  CATEGORY_LIST_FIELDS,
+} from "../services/api.js";
+import { registerLowStockData } from "../components/lowstock.js";
 import {
   escapeHtml,
   formatCurrency,
@@ -18,8 +23,8 @@ let selectedPeriod = "month";
 
 export async function loadStatistics() {
   const [products, categories, adjustments, sales] = await Promise.all([
-    fetchData("products"),
-    fetchData("categories"),
+    fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
+    fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
     fetchData("stockAdjustments"),
     fetchData("sales"),
   ]);
@@ -109,8 +114,12 @@ function renderStatistics() {
       detail: lowStock.length ? "Needs attention" : "Everything is stocked",
       icon: "bi-exclamation-triangle",
       tone: lowStock.length ? "red" : "green",
+      //* Marked cards are buttons that open the shared low-stock list
+      action: "lowStock",
     },
   ];
+
+  registerLowStockData(lowStock, categories);
 
   document.getElementById("pageContent").innerHTML = `
     <section class="statistics-page">
@@ -278,16 +287,24 @@ function formatSalesDay(day) {
 }
 
 function renderStatCard(card) {
+  const cardHtml = `
+    <div class="statistics-card-top">
+      <span>${card.label}</span>
+      <i class="bi ${card.icon}"></i>
+    </div>
+    <strong>${card.value}</strong>
+    <small>${card.detail}</small>
+    ${card.action
+      ? `<span class="statistics-card-hint">View list <i class="bi bi-chevron-right"></i></span>`
+      : ""}
+  `;
+
   return `
     <div class="col-12 col-sm-6 col-xl-4">
-      <article class="statistics-card statistics-card-${card.tone}">
-        <div class="statistics-card-top">
-          <span>${card.label}</span>
-          <i class="bi ${card.icon}"></i>
-        </div>
-        <strong>${card.value}</strong>
-        <small>${card.detail}</small>
-      </article>
+      ${card.action
+        ? `<div class="statistics-card statistics-card-${card.tone} statistics-card-action" role="button"
+            tabindex="0" data-low-stock-open aria-label="View low stock products">${cardHtml}</div>`
+        : `<article class="statistics-card statistics-card-${card.tone}">${cardHtml}</article>`}
     </div>
   `;
 }

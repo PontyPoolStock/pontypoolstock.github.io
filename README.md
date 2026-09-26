@@ -36,7 +36,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 - 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking (no sales revenue)
 - 📈 **Reports** — Low stock and inventory value reports
 - 📋 **Activity Log** — Track all important actions
-- 🚨 **Low Stock Alerts** — Visual warnings based on reorder level
+- 🚨 **Low Stock Alerts** — Visual warnings based on reorder level; click any Low Stock card or link to list every item that needs a reorder (picture, code, name, category, quantity, minimum)
 - 📄 **Pagination** — Dynamic rows-per-page control across all tables
 - 📱 **Responsive UI** — Full sidebar on desktop, icon-only on mobile
 
@@ -83,6 +83,7 @@ inventory-management-system/
     │   ├── table.js            # Dynamic table generator
     │   ├── pagination.js       # Pagination + rows-per-page component
     │   ├── modal.js            # Generic modal handler
+    │   ├── lowstock.js         # Shared Low Stock list (opened by every Low Stock card)
     │   └── form.js             # Form builders for each entity
     │
     └── 📁 pages/
@@ -264,6 +265,25 @@ getModal(obj, action, id, onSuccess)
 
 The dialog is scrollable and both its close buttons ask before discarding, so a
 half-filled form is never lost to a stray tap.
+
+### `lowstock.js`
+One shared Low Stock list for the whole app. The Dashboard card and alert, the
+Statistics card and the Reports summary each open the same modal, so the figure
+on screen and the list behind it always describe the same stock. Each row shows
+the picture, code, name, category, quantity left and reorder level.
+
+```javascript
+registerLowStockData(lines, categories)
+// lines      — the low-stock rows behind the number just rendered
+// categories — every category, so rows can name where they belong
+
+openLowStockList()
+// Opens the list; also triggered by any element carrying data-low-stock-open
+```
+
+Pages register their snapshot as they render, and one delegated listener per
+event type handles every `[data-low-stock-open]` trigger — so re-rendering a page
+(Statistics period change, reports pagination) never stacks duplicate handlers.
 
 ### `form.js`
 Builds form HTML for each entity.

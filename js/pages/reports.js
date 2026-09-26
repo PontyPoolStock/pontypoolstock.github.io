@@ -1,14 +1,23 @@
-import { fetchData } from "../services/api.js";
+import {
+  fetchData,
+  hydrateEntityImages,
+  PRODUCT_LIST_FIELDS,
+  CATEGORY_LIST_FIELDS,
+} from "../services/api.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
+import { registerLowStockData } from "../components/lowstock.js";
 import {
   escapeHtml,
   formatCurrency,
+  getCategoryLabel,
   getLowStockProducts,
   getInventoryValueRowsSorted,
   getTotalInventoryValue,
+  productThumbnailHtml,
 } from "../utils/helpers.js";
 
 let products = [];
+let categories = [];
 
 let lastLowStock = [];
 let lowCurrentPage = 1;
@@ -19,18 +28,25 @@ let valueCurrentPage = 1;
 let valuePAGE_SIZE = 5;
 
 export async function loadReports() {
-  const raw = await fetchData("products");
+  //* Categories come along so every low-stock row can name where it belongs
+  const [raw, categoryData] = await Promise.all([
+    fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
+    fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
+  ]);
   products = Array.isArray(raw) ? raw : [];
+  categories = Array.isArray(categoryData) ? categoryData : [];
   lowCurrentPage = 1;
   valueCurrentPage = 1;
   renderReports();
   setupEventListeners();
+  hydrateEntityImages(document.getElementById("pageContent"));
 }
 
 function renderReports() {
   lastLowStock = getLowStockProducts(products);
   lastValueRows = getInventoryValueRowsSorted(products);
   const totalValue = getTotalInventoryValue(products);
+  registerLowStockData(lastLowStock, categories);
 
   const summaryHtml = `
     <div class="row g-3">
@@ -47,13 +63,17 @@ function renderReports() {
       </div>
 
       <div class="col-md-4">
-        <div class="card border-warning shadow-sm h-100">
+        <div class="card border-warning shadow-sm h-100 report-card-action" role="button" tabindex="0"
+          data-low-stock-open aria-label="View low stock products">
           <div class="card-body">
             <div class="d-flex align-items-center gap-2">
               <i class="bi bi-exclamation-triangle text-warning"></i>
               <div class="fw-semibold">Low Stock Items</div>
             </div>
             <div class="fs-4 fw-bold mt-2">${lastLowStock.length}</div>
+            <div class="small dashboard-stat-hint mt-1">
+              View list <i class="bi bi-chevron-right"></i>
+            </div>
           </div>
         </div>
       </div>
@@ -78,9 +98,14 @@ function renderReports() {
       <div class="col-lg-6">
         <div class="card shadow-sm h-100">
           <div class="card-body">
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <i class="bi bi-exclamation-circle text-warning"></i>
-              <div class="fw-semibold">Low Stock Report</div>
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-circle text-warning"></i>
+                <div class="fw-semibold">Low Stock Report</div>
+              </div>
+              <button type="button" class="panel-view-all" data-low-stock-open>
+                View list <i class="bi bi-chevron-right"></i>
+              </button>
             </div>
             <div class="text-muted small mb-3">Products at or below reorder level</div>
             <div id="reportsLowStockContainer">
@@ -238,9 +263,21 @@ function renderLowStockTable(lowStockSlice) {
 
     let qtyClass = qty <= 0 ? "status-out" : "status-low";
 
+    //* Picture, code, name and category, so a reorder never needs another page
     rowsHtml += `
       <tr>
-        <td class="fw-semibold">${escapeHtml(p.name)}</td>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            ${productThumbnailHtml(p.imageUrl, p.name, { sizeClass: "entity-thumbnail-sm", productId: p.id })}
+            <div>
+              <div class="fw-semibold">${escapeHtml(p.name)}</div>
+              <div class="small text-muted">
+                ${p.sku ? `<span class="sku-badge">${escapeHtml(p.sku)}</span>` : "-"}
+              </div>
+            </div>
+          </div>
+        </td>
+        <td class="text-muted">${escapeHtml(getCategoryLabel(categories, p.categoryId))}</td>
         <td>
           <span class="status-badge ${qtyClass}">${qty}</span>
         </td>
@@ -255,6 +292,7 @@ function renderLowStockTable(lowStockSlice) {
         <thead>
           <tr>
             <th>Product</th>
+            <th>Category</th>
             <th>Qty</th>
             <th>Min</th>
           </tr>

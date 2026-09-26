@@ -378,6 +378,14 @@ body.sidebar-open .sidebar-backdrop {
   font-size: 1.35rem;
 }
 
+/* Compact thumbnail for list rows (low-stock list, reports, dashboard) */
+.entity-thumbnail-sm {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
 .dashboard-stock-row:last-child {
   border-bottom: 0 !important;
 }
@@ -1942,6 +1950,88 @@ body.sidebar-open .sidebar-nav > *:nth-child(2) { animation-delay: 0.06s; }
 body.sidebar-open .sidebar-nav > *:nth-child(3) { animation-delay: 0.09s; }
 body.sidebar-open .sidebar-nav > *:nth-child(4) { animation-delay: 0.12s; }
 body.sidebar-open .sidebar-nav > *:nth-child(5) { animation-delay: 0.15s; }
+
+/* Low Stock list — the Dashboard card and alert, the Statistics card and the
+   Reports summary all open the same modal, so every trigger shares one look and
+   one cursor affordance. */
+[data-low-stock-open] {
+  cursor: pointer;
+}
+
+.dashboard-stat-card-action:focus-visible,
+.statistics-card-action:focus-visible,
+.panel-view-all:focus-visible,
+[data-low-stock-open]:focus-visible {
+  outline: 3px solid rgba(250, 204, 21, 0.65);
+  outline-offset: 2px;
+}
+
+/* The hint line that turns a plain figure into an obvious "tap me": chevron on
+   the end of the text, in the accent yellow the rest of the app links with. */
+.dashboard-stat-hint,
+.statistics-card-hint {
+  display: block;
+  color: #ca8a04;
+  font-weight: 600;
+}
+
+.statistics-card-hint {
+  margin-top: 0.35rem;
+}
+
+/* The clickable Statistics card is a div acting as a button (like the Dashboard
+   and Reports cards), so it only needs to line up with the <article> version */
+.statistics-card-action {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+/* Small "View all" / "View list" link used on card and panel headers */
+.panel-view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 4px;
+  color: #ca8a04;
+  background: transparent;
+  border: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.panel-view-all:hover {
+  color: #a16207;
+}
+
+.panel-view-all i {
+  font-size: 0.95rem;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.panel-view-all:hover i {
+  transform: translateX(2px);
+}
+
+/* Image, code, name and category need the extra width the default dialog
+   withholds (#lowStockModal outranks the shared .modal-dialog rule). */
+#lowStockModal .modal-dialog {
+  max-width: 900px;
+}
+
+#lowStockModal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#lowStockModal .table td,
+#lowStockModal .table th {
+  vertical-align: middle;
+}
+
 body.sidebar-open .sidebar-nav > *:nth-child(6) { animation-delay: 0.18s; }
 body.sidebar-open .sidebar-nav > *:nth-child(7) { animation-delay: 0.21s; }
 body.sidebar-open .sidebar-nav > *:nth-child(8) { animation-delay: 0.24s; }

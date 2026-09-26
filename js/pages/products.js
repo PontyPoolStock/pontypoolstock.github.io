@@ -5,17 +5,24 @@ import {
   updateData,
   postData,
   deleteData,
+  hydrateEntityImages,
+  PRODUCT_LIST_FIELDS,
+  PRODUCT_EDIT_FIELDS,
+  CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import {
   GetCurrentDate,
   escapeHtml,
+  getCategoryLabel,
   getProductStock,
   getProductVariants,
   getProductStatusCode,
   getVariantPriceRange,
+  productThumbnailHtml,
   sortData,
   getProductDisplayName,
+  debounce,
 } from "../utils/helpers.js";
 
 let products = [];
@@ -29,12 +36,13 @@ export async function loadProducts() {
   lastFiltered = [...products];
   renderProducts();
   setupEventListeners();
+  hydrateEntityImages(document.getElementById("productsTableContainer"));
 }
 
 async function loadData() {
   const [productData, categoryData] = await Promise.all([
-    fetchData("products"),
-    fetchData("categories"),
+    fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
+    fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
   ]);
   products = sortData(productData);
   categories = categoryData;
@@ -84,10 +92,12 @@ function getTableHtml(filteredProducts = products) {
     const priceRange = getVariantPriceRange(variants);
     return {
       id: p.id,
-      image: getProductThumbnail(p.imageUrl, getProductDisplayName(p)),
+      image: productThumbnailHtml(p.imageUrl, getProductDisplayName(p), {
+        productId: p.id,
+      }),
       sku: p.sku ? `<span class="sku-badge">${escapeHtml(p.sku)}</span>` : "-",
       name: escapeHtml(getProductDisplayName(p)) + getRatingsHtml(variants),
-      category: escapeHtml(getCategoryName(p.categoryId)),
+      category: escapeHtml(getCategoryLabel(categories, p.categoryId)),
       price: priceRange
         ? (priceRange.min === priceRange.max
           ? priceRange.min
@@ -116,10 +126,10 @@ function getTableHtml(filteredProducts = products) {
 
 //* Handles All event listeners of page
 function setupEventListeners() {
-  //& Search
+  //& Search (debounced for buttery smooth typing)
   document
     .getElementById("searchProd")
-    ?.addEventListener("input", filterProducts);
+    ?.addEventListener("input", debounce(filterProducts, 120));
   //& Category Filter
   document
     .getElementById("categoryFilter")
@@ -139,8 +149,9 @@ function setupEventListeners() {
         const totalPages = Math.ceil(lastFiltered.length / PAGE_SIZE);
         if (page < 1 || page > totalPages) return;
         currentPage = page;
-        document.getElementById("productsTableContainer").innerHTML =
-          getTableHtml(lastFiltered);
+        const container = document.getElementById("productsTableContainer");
+        container.innerHTML = getTableHtml(lastFiltered);
+        hydrateEntityImages(container);
         return;
       }
       const editBtn = e.target.closest(".edit-btn");
@@ -157,8 +168,9 @@ function setupEventListeners() {
       if (pageSizeSelect) {
         PAGE_SIZE = Number(pageSizeSelect.value);
         currentPage = 1;
-        document.getElementById("productsTableContainer").innerHTML =
-          getTableHtml(lastFiltered);
+        const container = document.getElementById("productsTableContainer");
+        container.innerHTML = getTableHtml(lastFiltered);
+        hydrateEntityImages(container);
       }
     });
   //& Add product
@@ -183,7 +195,7 @@ function filterProducts() {
       let matches =
         String(p.name || "").toLowerCase().includes(searchTerm)
         || String(p.sku || "").toLowerCase().includes(searchTerm)
-        || getCategoryName(p.categoryId).toLowerCase().includes(searchTerm)
+        || getCategoryLabel(categories, p.categoryId).toLowerCase().includes(searchTerm)
         || ratingsText.includes(searchTerm);
       if (!matches) return false;
     }
@@ -196,8 +208,9 @@ function filterProducts() {
 
   lastFiltered = filtered;
   currentPage = 1;
-  document.getElementById("productsTableContainer").innerHTML =
-    getTableHtml(filtered);
+  const container = document.getElementById("productsTableContainer");
+  container.innerHTML = getTableHtml(filtered);
+  hydrateEntityImages(container);
   updateStats(filtered.length, searchTerm, categoryId, statusFilter);
 }
 
@@ -207,16 +220,18 @@ function handleAdd() {
     await loadData();
     lastFiltered = [...products];
     filterProducts();
-  });
+  }, { categories });
 }
 
-//* UPDATE
+//* UPDATE — reuse the cached row for an instant modal; then refresh just
+//* this product's full record (with image) in the background so Save keeps it.
 function handleEdit(id) {
+  const cached = products.find((e) => String(e.id) === String(id));
   getModal("products", "Edit", id, async () => {
     await loadData();
     lastFiltered = [...products];
     filterProducts();
-  });
+  }, { initialProduct: cached, categories, refreshFields: PRODUCT_EDIT_FIELDS });
 }
 
 //* DELETE
@@ -251,15 +266,6 @@ function updateStats(count, searchTerm, categoryId, statusFilter) {
       : "";
 }
 
-function getCategoryName(id) {
-  if (id === "" || id === null || id === undefined) return "-";
-  let cat = categories.find((e) => e.id == id);
-  return cat ? cat.name : "-";
-}
-function getProductThumbnail(imageUrl, name) {
-  if (!imageUrl) return `<span class="entity-thumbnail entity-thumbnail-empty" aria-label="No product image"><i class="bi bi-box-seam"></i></span>`;
-  return `<img class="entity-thumbnail" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} image" onerror="this.remove();" />`;
-}
 //* Shows every rating of a product inside its own row ("4W · White · 0.05A: 20")
 function getRatingsHtml(variants) {
   if (!variants.length) return "";

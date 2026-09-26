@@ -7,12 +7,22 @@ import {
   getProductDisplayName,
   UNIT_SUGGESTIONS,
 } from "../utils/helpers.js";
-export async function makeProductForm(id, categoryId = "") {
-  let product = "";
-  if (id) {
-    product = await fetchData(`products/${id}`);
-  }
-  const categories = await fetchData("categories");
+export async function makeProductForm(id, categoryId = "", opts = {}) {
+  //^ Edit reuses the row you already have so opening the modal is instant —
+  //^ no extra product fetch, and categories come from the slim cached list
+  //^ (id,name,parentId) instead of the full payload with base64 images.
+  const [fetchedProduct, fetchedCategories] = await Promise.all([
+    id
+      ? opts.initialProduct
+        ? Promise.resolve(opts.initialProduct)
+        : fetchData(`products/${id}`)
+      : Promise.resolve(""),
+    opts.categories
+      ? Promise.resolve(opts.categories)
+      : fetchData("categories?fields=id,name,parentId"),
+  ]);
+  let product = fetchedProduct;
+  const categories = fetchedCategories || [];
   const selectedCategoryId = id ? product.categoryId : categoryId;
   const ratingRows = getProductVariants(id ? product : "").map(variantRowHtml).join("");
   const categoryIsLocked = !id && categoryId !== "" && categoryId !== null && categoryId !== undefined;
@@ -237,13 +247,20 @@ export function collectProductVariants() {
     );
 }
 
-export async function makeCategoryForm(id, parentCategoryId = "") {
-  let category = "";
-  const categories = await fetchData("categories");
-
-  if (id) {
-    category = await fetchData(`categories/${id}`);
-  }
+export async function makeCategoryForm(id, parentCategoryId = "", opts = {}) {
+  //^ Same instant-edit trick as products: reuse the cached row + slim list.
+  const [fetchedCategory, fetchedCategories] = await Promise.all([
+    id
+      ? opts.initialCategory
+        ? Promise.resolve(opts.initialCategory)
+        : fetchData(`categories/${id}`)
+      : Promise.resolve(""),
+    opts.categories
+      ? Promise.resolve(opts.categories)
+      : fetchData("categories?fields=id,name,parentId"),
+  ]);
+  let category = fetchedCategory;
+  const categories = fetchedCategories || [];
 
   const selectedParentId = id ? (category.parentId ?? category.parent_id ?? "") : parentCategoryId;
   const parentIsLocked = !id && parentCategoryId !== "" && parentCategoryId !== null && parentCategoryId !== undefined;
@@ -311,8 +328,9 @@ function escAttr(s) {
     .replace(/</g, "&lt;");
 }
 
-export async function makeStockAdjustmentForm() {
-  const products = await fetchData("products");
+export async function makeStockAdjustmentForm(opts = {}) {
+  //^ Slim list keeps the modal fast; images are never needed in the dropdown.
+  const products = opts.products || await fetchData(`products?fields=id,name,quantity,unit,variants`);
   const productOptions = products
     .map((p) => {
       const variants = getProductVariants(p);

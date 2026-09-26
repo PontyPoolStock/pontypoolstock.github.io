@@ -14,12 +14,16 @@ import { loadStockAdjustments } from "./pages/stockadjustment.js";
 import { loadSales } from "./pages/sales.js";
 import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
+import { prewarmAppCache, peekCachedData, PRODUCT_LIST_FIELDS } from "./services/api.js";
 
 $(document).ready(function () {
   const currentUser = checkAuth();
   if (!currentUser) return;
 
   initLogoutButton();
+
+  // Pre-warm API cache in the background right after boot
+  prewarmAppCache();
 
   const savedPage = localStorage.getItem("currentPage") || "Dashboard";
   navigateTo(savedPage);
@@ -49,19 +53,24 @@ function navigateTo(text) {
   renderedPage = text;
 
   // A genuine page switch: return to the top instantly and deliberately.
-  // Otherwise the browser force-clamps the scroll position while the old
-  // content is torn down, which throws the view around as the new page loads.
   window.scrollTo(0, 0);
 
   $("#pageTitle").text(text);
   $(".nav-item").removeClass("active-content");
   $(`.nav-item[data-page="${text}"]`).addClass("active-content");
-  $("#pageContent").html(
-    '<div class="page-loading" role="status">' +
-      '<div class="spinner-border spinner-border-sm text-warning" aria-hidden="true"></div>' +
-      "<span>Loading...</span>" +
-      "</div>"
-  );
+
+  // Only blank the screen with a spinner if we don't have hot in-memory cache ready
+  const hasCachedData = Boolean(peekCachedData(`products?fields=${PRODUCT_LIST_FIELDS}`));
+  const isFirstRender = $("#pageContent").children().length === 0;
+
+  if (!hasCachedData && isFirstRender) {
+    $("#pageContent").html(
+      '<div class="page-loading" role="status">' +
+        '<div class="spinner-border spinner-border-sm text-warning" aria-hidden="true"></div>' +
+        "<span>Loading...</span>" +
+        "</div>"
+    );
+  }
 
   localStorage.setItem("currentPage", text);
 

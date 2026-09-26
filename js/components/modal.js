@@ -23,14 +23,44 @@ import {
 import { postData, updateData, fetchData } from "../services/api.js";
 import {getCurrentUser} from "../pages/login.js";
 
-export async function getModal(obj, action, id, onAfterSave) {
+//* Background refill for Edit modals opened from the slim cached row: pull the
+//* single full record (fields=…imageUrl) and patch the hidden image value +
+//* preview only if the user hasn't already picked a new image. Fire-and-forget
+//* so the modal stays instant; Save before it lands still keeps the old image
+//* because the PUT only sends imageUrl when it changed (see saveBtnEvent).
+function refreshEditImage(obj, id, opts, modalElement) {
+  if (!id || !opts?.refreshFields) return;
+  const resource = obj === "categories" ? "categories" : "products";
+  const initial = obj === "categories" ? opts.initialCategory : opts.initialProduct;
+  if (initial?.imageUrl) return; // already has bytes, nothing to refill
+  fetchData(`${resource}/${id}?fields=${opts.refreshFields}`, { fresh: true })
+    .then((full) => {
+      if (!modalElement.isConnected || !full?.imageUrl) return;
+      const value = modalElement.querySelector('input[type="hidden"][name="imageUrl"]');
+      //^ user already chose a replacement — never overwrite their pick
+      if (!value || value.value) return;
+      value.value = full.imageUrl;
+      const preview = modalElement.querySelector("img.product-image-preview");
+      const prompt = modalElement.querySelector(".product-image-prompt");
+      if (preview) {
+        preview.src = full.imageUrl;
+        preview.classList.remove("d-none");
+      }
+      prompt?.classList.add("d-none");
+    })
+    .catch(() => {});
+}
+
+export async function getModal(obj, action, id, onAfterSave, opts = {}) {
   const objModalName = `${obj}Modal`;
   document.querySelector(`#${objModalName}`)?.remove();
   //^ Friendly titles — the raw entity names would read "Add products" / "Edit categories"
   const entityLabel = { products: "Product", categories: "Category" }[obj] || "Stock Adjustment";
   const modalTitle = `${action} ${entityLabel}`;
 
-  let html = `
+  //^ Show the shell INSTANTLY so the click feels immediate, then fill the
+  //^ body when the (now parallel + cached) form data lands.
+  let shellHtml = `
   <div class="modal fade" id="${objModalName}" tabindex="-1" aria-labelledby="${objModalName}Title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
@@ -38,36 +68,61 @@ export async function getModal(obj, action, id, onAfterSave) {
           <h4 class="modal-title fs-5" id="${objModalName}Title">${modalTitle}</h4>
           <button type="button" class="btn-close" aria-label="Close"></button>
         </div>
-        <div class="modal-body">`;
-
-  if (obj === "products") html += await makeProductForm(id);
-  else if (obj === "categories") html += await makeCategoryForm(id);
-  else if (obj === "stockAdjustments") html += await makeStockAdjustmentForm();
-
-  html += `</div>
+        <div class="modal-body">
+          <div class="d-flex align-items-center gap-2 py-4 justify-content-center text-muted">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span>Loading…</span>
+          </div>
+        </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-primary save-btn">Save</button>
+          <button type="button" class="btn btn-primary save-btn" disabled>Save</button>
           <button type="button" class="btn btn-secondary close-btn">Close</button>
         </div>
       </div>
     </div>
   </div>`;
 
-  document.body.insertAdjacentHTML("beforeend", html);
+  document.body.insertAdjacentHTML("beforeend", shellHtml);
   const modalElement = document.querySelector(`#${objModalName}`);
   const modal = new bootstrap.Modal(modalElement);
   modal.show();
+
+  //^ Wire close immediately so even a slow fetch can be dismissed.
+  closeBtnEvent(modalElement, modal);
+  deleteModal(modalElement);
+
+  try {
+    let bodyHtml = "";
+    if (obj === "products") bodyHtml = await makeProductForm(id, opts.categoryId || "", opts);
+    else if (obj === "categories") bodyHtml = await makeCategoryForm(id, opts.parentCategoryId || "", opts);
+    else if (obj === "stockAdjustments") bodyHtml = await makeStockAdjustmentForm(opts);
+    if (!modalElement.isConnected) return;
+    const bodyEl = modalElement.querySelector(".modal-body");
+    if (bodyEl) bodyEl.innerHTML = bodyHtml;
+    modalElement.querySelector(".save-btn")?.removeAttribute("disabled");
+  } catch (error) {
+    console.error("Failed to load form:", error);
+    if (!modalElement.isConnected) return;
+    const bodyEl = modalElement.querySelector(".modal-body");
+    if (bodyEl) bodyEl.innerHTML = `<div class="alert alert-danger mb-0">Could not load the form. Check your connection and try again.</div>`;
+    return;
+  }
 
   if (obj === "stockAdjustments") setupStockAdjustmentListeners();
   if (obj === "products") {
     setupImageUploader("product");
     setupProductVariants();
+    //^ The cached list row has no image bytes (that's what makes it fast).
+    //^ Rehydrate just this product's full record in the background so an
+    //^ untouched image preview + Save keeps the original instead of wiping it.
+    refreshEditImage(obj, id, opts, modalElement);
   }
-  if (obj === "categories") setupImageUploader("category");
+  if (obj === "categories") {
+    setupImageUploader("category");
+    refreshEditImage(obj, id, opts, modalElement);
+  }
 
   saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave);
-  closeBtnEvent(modalElement, modal);
-  deleteModal(modalElement);
 }
 
 
@@ -82,7 +137,7 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
       let productsForAdjustment = null;
       if (obj === "stockAdjustments") {
-        productsForAdjustment = await fetchData("products");
+        productsForAdjustment = await fetchData(`products?fields=id,name,quantity,variants`);
       }
 
       let isValid = validateData(obj, data, id, productsForAdjustment, ratings);
@@ -104,10 +159,21 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         data.categoryId = String(data.categoryId ?? "").trim() || null;
         data.price = Math.max(0, Number(data.price) || 0);
         data.quantity = Math.max(0, Number(data.quantity) || 0);
+        //^ Edit opened from the slim cached row has no image bytes yet. If the
+        //^ background refill hasn't landed and the user didn't touch the image,
+        //^ OMIT imageUrl from the PUT so the server keeps the stored original
+        //^ instead of wiping it to "" — this is what made Save feel "slow then
+        //^ lossy" before. A newly picked image still sends normally.
+        if (action === "Edit" && !String(data.imageUrl || "").trim()) {
+          delete data.imageUrl;
+        }
         //^ a blank name stays blank — tables and lists show "-" for it, like an empty Code
       } else if (obj === "categories") {
         data.name = String(data.name ?? "").trim();
         data.parentId = String(data.parentId ?? "").trim() || null;
+        if (action === "Edit" && !String(data.imageUrl || "").trim()) {
+          delete data.imageUrl;
+        }
       }
 
       if (obj === "stockAdjustments") {

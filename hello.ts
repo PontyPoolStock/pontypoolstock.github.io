@@ -695,9 +695,43 @@ export default async function api(request: Request): Promise<Response> {
     const typedResource = resource as keyof typeof fieldMap;
 
     if (request.method === "GET") {
+      // Optional ?fields=id,name,price projection to avoid transferring megabytes of inline images on list views
+      const requestedFields = new URL(request.url).searchParams.get("fields");
+      let selectClause = "*";
+      if (requestedFields) {
+        // Map camelCase to snake_case and sanitize against allowable resource columns
+        const allowedCols = new Set([...fieldMap[typedResource], "id", "created_at", "updated_at"]);
+        const camelToSnake: Record<string, string> = {
+          categoryId: "category_id",
+          parentId: "parent_id",
+          reorderLevel: "reorder_level",
+          imageUrl: "image_url",
+          productId: "product_id",
+          productName: "product_name",
+          oldQuantity: "old_quantity",
+          newQuantity: "new_quantity",
+          unitPrice: "unit_price",
+          soldAt: "sold_at",
+          createdAt: "created_at",
+          updatedAt: "updated_at",
+        };
+        const validCols = requestedFields
+          .split(",")
+          .map((f) => f.trim())
+          .map((f) => camelToSnake[f] || f)
+          .filter((col) => allowedCols.has(col))
+          .map(sqlColumn);
+
+        // Always ensure 'id' is included in the projection
+        if (validCols.length > 0) {
+          if (!validCols.includes("id")) validCols.unshift("id");
+          selectClause = validCols.join(", ");
+        }
+      }
+
       const result = id
-        ? await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id])
-        : await pool.query(`SELECT * FROM ${table} ORDER BY updated_at DESC, id DESC`);
+        ? await pool.query(`SELECT ${selectClause} FROM ${table} WHERE id = $1`, [id])
+        : await pool.query(`SELECT ${selectClause} FROM ${table} ORDER BY updated_at DESC, id DESC`);
       if (id && !result.rows[0]) return json({ error: "Not found" }, 404);
       return json(id ? toCamel(result.rows[0]) : result.rows.map(toCamel));
     }

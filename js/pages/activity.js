@@ -1,6 +1,6 @@
 import { fetchData } from "../services/api.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { activityRowHtml, sortData } from "../utils/helpers.js";
+import { activityRowHtml, sortData, debounce } from "../utils/helpers.js";
 
 let activities = [];
 let lastFiltered = [];
@@ -111,10 +111,10 @@ function updateStats() {
 }
 
 function setupEventListeners() {
-  //* 1. search
+  //* 1. search (debounced)
   document
     .getElementById("searchActivity")
-    ?.addEventListener("input", filterActivities);
+    ?.addEventListener("input", debounce(filterActivities, 120));
 
   //* 2. filter
   document

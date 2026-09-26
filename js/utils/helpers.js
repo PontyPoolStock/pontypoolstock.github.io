@@ -44,6 +44,19 @@ export function isValidProductIdentity(data) {
   return false;
 }
 
+//* Debounce helper to keep real-time search typing silky smooth without dropped frames
+export function debounce(fn, wait = 150) {
+  let timeoutId = null;
+  return function debounced(...args) {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      timeoutId = null;
+      fn.apply(this, args);
+    }, wait);
+  };
+}
+
+
 //* Categories need a real name — a product may leave every
 //* other field empty as long as it keeps a name or a category.
 function isValidName(name) {
@@ -262,6 +275,31 @@ export function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+//* Category name of a stock line — a product may sit outside every category
+export function getCategoryLabel(categories, id) {
+  if (id === "" || id === null || id === undefined) return "-";
+  const list = Array.isArray(categories) ? categories : [];
+  const category = list.find((item) => item.id == id);
+  return category ? category.name : "-";
+}
+//* Product thumbnail — shared by the Products table, the low-stock list and reports
+//* Supports lazy hydration when imageUrl is deferred: supply productId to enable background load
+export function productThumbnailHtml(
+  imageUrl,
+  name,
+  { icon = "bi-box-seam", sizeClass = "", productId = "", categoryId = "" } = {},
+) {
+  const classes = ["entity-thumbnail", String(sizeClass).trim()].filter(Boolean).join(" ");
+  if (imageUrl) {
+    return `<img class="${classes}" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} image" loading="lazy" decoding="async" onerror="this.remove();" />`;
+  }
+  const entityAttr = productId
+    ? ` data-product-img-id="${escapeHtml(String(productId))}"`
+    : categoryId
+    ? ` data-category-img-id="${escapeHtml(String(categoryId))}"`
+    : "";
+  return `<span class="${classes} entity-thumbnail-empty"${entityAttr} aria-label="No image"><i class="bi ${icon}"></i></span>`;
 }
 export function formatCurrency(amount) {
   const num = Math.round((Number(amount) || 0) * 100) / 100;

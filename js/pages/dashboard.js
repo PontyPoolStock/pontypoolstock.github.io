@@ -1,9 +1,17 @@
-import { fetchData } from "../services/api.js";
+import {
+  fetchData,
+  hydrateEntityImages,
+  PRODUCT_LIST_FIELDS,
+  CATEGORY_LIST_FIELDS,
+} from "../services/api.js";
+import { registerLowStockData } from "../components/lowstock.js";
 import {
   escapeHtml,
   formatCurrency,
+  getCategoryLabel,
   getLowStockProducts,
   getTotalInventoryValue,
+  productThumbnailHtml,
   activityRowHtml,
   normalizeActivity,
 } from "../utils/helpers.js";
@@ -15,8 +23,8 @@ let activities = [];
 export async function loadDashboard() {
   const [productData, categoryData, adjustmentData, salesData, activityData] =
     await Promise.all([
-      fetchData("products"),
-      fetchData("categories"),
+      fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
+      fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
       fetchData("stockAdjustments"),
       fetchData("sales"),
       fetchData("activityLog"),
@@ -33,6 +41,7 @@ export async function loadDashboard() {
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
   renderDashboard(adjustments, sales);
+  hydrateEntityImages(document.getElementById("pageContent"));
 }
 
 function renderDashboard(adjustments, sales) {
@@ -40,11 +49,17 @@ function renderDashboard(adjustments, sales) {
   const totalValue = getTotalInventoryValue(products);
   const recentActivities = activities.slice(0, 5);
 
+  //* The Low Stock card, the alert and the panel all open the same list
+  registerLowStockData(lowStock, categories);
+
   const alertHtml = lowStock.length
     ? `
     <div class="alert alert-warning d-flex align-items-start gap-2 mb-4 dashboard-alert" role="alert">
       <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
       <span>${lowStock.length} product${lowStock.length === 1 ? "" : "s"} are low on stock: ${lowStock.map((p) => escapeHtml(p.name)).join(", ")}</span>
+      <button type="button" class="btn btn-sm btn-outline-dark ms-auto text-nowrap" data-low-stock-open>
+        View list
+      </button>
     </div>`
     : "";
 
@@ -63,14 +78,17 @@ function renderDashboard(adjustments, sales) {
         </div>
       </div>
       <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card ${lowStock.length ? "border-danger" : "border-success"} shadow-sm h-100 dashboard-stat-card">
+        <div class="card ${lowStock.length ? "border-danger" : "border-success"} shadow-sm h-100 dashboard-stat-card dashboard-stat-card-action"
+          role="button" tabindex="0" data-low-stock-open aria-label="View low stock products">
           <div class="card-body">
             <div class="d-flex align-items-center gap-2 text-muted small">
               <i class="bi bi-exclamation-triangle ${lowStock.length ? "text-danger" : "text-success"}"></i>
               <span>Low Stock</span>
             </div>
             <div class="fs-4 fw-bold mt-2 ${lowStock.length ? "text-danger" : "text-success"}">${lowStock.length}</div>
-            <div class="small text-muted mt-1">${lowStock.length ? "Needs reorder" : "All good"}</div>
+            <div class="small dashboard-stat-hint mt-1">
+              ${lowStock.length ? "Needs reorder" : "All good"} <i class="bi bi-chevron-right"></i>
+            </div>
           </div>
         </div>
       </div>
@@ -117,7 +135,12 @@ function renderDashboard(adjustments, sales) {
     <div class="row g-3 dashboard-panels">
       <div class="col-12 col-xl-6">
         <div class="bg-white rounded border p-4 h-100 dashboard-panel page-panel">
-          <h6 class="fw-bold mb-3">Low Stock Products</h6>
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+            <h6 class="fw-bold mb-0">Low Stock Products</h6>
+            <button type="button" class="panel-view-all" data-low-stock-open>
+              View all <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
           ${lowStockCardHtml}
         </div>
       </div>
@@ -214,13 +237,17 @@ function renderDashboardLowStockList(lowStock) {
     let qty = Number(p.quantity);
     let qtyClass = qty <= 0 ? "status-out" : "status-low";
     rows += `
-      <div class="d-flex align-items-center justify-content-between py-3 border-bottom dashboard-stock-row">
-        <div class="dashboard-stock-info">
+      <div class="d-flex align-items-center gap-3 py-3 border-bottom dashboard-stock-row">
+        ${productThumbnailHtml(p.imageUrl, p.name, { sizeClass: "entity-thumbnail-sm", productId: p.id })}
+        <div class="dashboard-stock-info flex-grow-1">
           <div class="fw-medium">${escapeHtml(p.name)}</div>
-          <small class="text-muted">SKU: ${escapeHtml(p.sku)}</small>
+          <small class="text-muted d-block">Code: ${p.sku ? escapeHtml(p.sku) : "-"}</small>
+          <small class="text-muted d-block">
+            <i class="bi bi-tags"></i> ${escapeHtml(getCategoryLabel(categories, p.categoryId))}
+          </small>
         </div>
         <div class="text-end dashboard-stock-meta">
-          <span class="status-badge ${qtyClass}">${qty} ${escapeHtml(p.unit)}</span>
+          <span class="status-badge ${qtyClass}">${qty}${p.unit ? ` ${escapeHtml(p.unit)}` : ""}</span>
           <div class="small text-muted mt-1">Min: ${p.reorderLevel}</div>
         </div>
       </div>

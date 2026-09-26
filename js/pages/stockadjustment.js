@@ -2,7 +2,7 @@ import renderTable from "../components/table.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { fetchData } from "../services/api.js";
 import { getModal } from "../components/modal.js";
-import { escapeHtml, getProductDisplayName } from "../utils/helpers.js";
+import { escapeHtml, getProductDisplayName, debounce } from "../utils/helpers.js";
 
 let adjustments = [];
 let lastFiltered = [];
@@ -84,7 +84,7 @@ function typeBadgeHtml(type) {
 function setupEventListeners() {
   document
     .getElementById("searchAdj")
-    ?.addEventListener("input", filterAdjustments);
+    ?.addEventListener("input", debounce(filterAdjustments, 120));
 
   document
     .getElementById("typeFilter")

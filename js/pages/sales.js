@@ -1,5 +1,11 @@
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { fetchData, postData, updateData, deleteData } from "../services/api.js";
+import {
+  fetchData,
+  postData,
+  updateData,
+  deleteData,
+  PRODUCT_LIST_FIELDS,
+} from "../services/api.js";
 import {
   escapeHtml,
   formatCurrency,
@@ -7,6 +13,7 @@ import {
   getVariantsTotalQuantity,
   getVariantPrice,
   getProductDisplayName,
+  debounce,
 } from "../utils/helpers.js";
 
 let sales = [];
@@ -27,7 +34,7 @@ export async function loadSales() {
 async function loadData() {
   const [saleData, productData] = await Promise.all([
     fetchData("sales"),
-    fetchData("products"),
+    fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
   ]);
   sales = (Array.isArray(saleData) ? saleData : [])
     .sort((a, b) => new Date(b.soldAt || b.createdAt) - new Date(a.soldAt || a.createdAt));
@@ -219,7 +226,7 @@ function setupEventListeners() {
   priceInput?.addEventListener("input", updateSalePreview);
 
   document.getElementById("recordSaleForm")?.addEventListener("submit", handleRecordSale);
-  document.getElementById("searchSales")?.addEventListener("input", filterSales);
+  document.getElementById("searchSales")?.addEventListener("input", debounce(filterSales, 120));
   document.getElementById("salePeriodFilter")?.addEventListener("change", filterSales);
 
   const container = document.getElementById("salesTableContainer");

@@ -1,8 +1,15 @@
 import renderTable from "../components/table.js";
-import { fetchData, deleteData, postData } from "../services/api.js";
+import {
+  fetchData,
+  deleteData,
+  postData,
+  hydrateEntityImages,
+  PRODUCT_LIST_FIELDS,
+  CATEGORY_LIST_FIELDS,
+} from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { escapeHtml, GetCurrentDate, sortData } from "../utils/helpers.js";
+import { escapeHtml, GetCurrentDate, sortData, debounce } from "../utils/helpers.js";
 
 let products = [];
 let categories = [];
@@ -14,12 +21,13 @@ export async function loadCategories() {
   await loadData();
   renderCategories();
   setupEventListeners();
+  hydrateEntityImages(document.getElementById("categoriesTableContainer"));
 }
 
 async function loadData() {
   [products, categories] = await Promise.all([
-    fetchData("products"),
-    fetchData("categories"),
+    fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
+    fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
   ]);
   categories = sortData(categories);
   lastFiltered = [...categories];
@@ -49,7 +57,10 @@ function getTableHtml(filteredCategories = categories) {
   const paginated = paginateData(filteredCategories, currentPage, PAGE_SIZE);
   let tableData = paginated.map((c) => ({
     id: c.id,
-    image: getCategoryThumbnail(c.imageUrl, c.name),
+    image: productThumbnailHtml(c.imageUrl, c.name, {
+      icon: "bi-tags",
+      categoryId: c.id,
+    }),
     name: escapeHtml(c.name),
     description: c.description ? escapeHtml(c.description) : "-",
     products: getProductsNumber(c.id),
@@ -63,10 +74,10 @@ function getTableHtml(filteredCategories = categories) {
 
 //* Handles All event listeners of page
 function setupEventListeners() {
-  //& Search
+  //& Search (debounced)
   document
     .getElementById("searchCat")
-    ?.addEventListener("input", filterCategories);
+    ?.addEventListener("input", debounce(filterCategories, 120));
 
   document
     .querySelector("#categoriesTableContainer")
@@ -86,8 +97,9 @@ function setupEventListeners() {
         const totalPages = Math.ceil(lastFiltered.length / PAGE_SIZE);
         if (page < 1 || page > totalPages) return;
         currentPage = page;
-        document.getElementById("categoriesTableContainer").innerHTML =
-          getTableHtml(lastFiltered);
+        const container = document.getElementById("categoriesTableContainer");
+        container.innerHTML = getTableHtml(lastFiltered);
+        hydrateEntityImages(container);
       }
     });
 
@@ -99,8 +111,9 @@ function setupEventListeners() {
       if (pageSizeSelect) {
         PAGE_SIZE = Number(pageSizeSelect.value);
         currentPage = 1;
-        document.getElementById("categoriesTableContainer").innerHTML =
-          getTableHtml(lastFiltered);
+        const container = document.getElementById("categoriesTableContainer");
+        container.innerHTML = getTableHtml(lastFiltered);
+        hydrateEntityImages(container);
       }
     });
 
@@ -122,8 +135,9 @@ function filterCategories() {
   });
   lastFiltered = filtered;
   currentPage = 1;
-  document.getElementById("categoriesTableContainer").innerHTML =
-    getTableHtml(filtered);
+  const container = document.getElementById("categoriesTableContainer");
+  container.innerHTML = getTableHtml(filtered);
+  hydrateEntityImages(container);
   updateStats(filtered.length, searchTerm);
 }
 
@@ -132,15 +146,16 @@ function handleAdd() {
   getModal("categories", "Add", "", async () => {
     await loadData();
     filterCategories();
-  });
+  }, { categories });
 }
 
-//* UPDATE
+//* UPDATE — same instant trick: reuse the cached row + slim list.
 function handleEdit(id) {
+  const cached = categories.find((e) => String(e.id) === String(id));
   getModal("categories", "Edit", id, async () => {
     await loadData();
     filterCategories();
-  });
+  }, { initialCategory: cached, categories });
 }
 
 //* DELETE
