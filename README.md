@@ -132,6 +132,7 @@ The Neon API URL lives in `js/config.js`, so every page — locally or hosted �
 | `npm run serve` | Serves the app on `http://localhost:5500` (opens to other devices on your network too) |
 | `npm run share` | Opens a public `https://pontypool.loca.lt` tunnel to the running server (temporary) |
 | `npm run db:check` | Prints the row counts of the linked Neon branch to confirm the connection |
+| `npm run db:schema` | Re-applies `schema.sql` to Neon: creates missing tables and adds columns the live database is missing |
 | `npm run db:migrate` | Copies `data/db.json` into Neon (prints a dry run; add `--apply` to write) |
 | `npm run server` | Offline-only JSON Server on `http://localhost:3000` using `data/db.json` |
 | `npm test` | Placeholder — the project has no automated test suite yet |

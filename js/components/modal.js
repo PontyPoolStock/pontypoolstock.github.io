@@ -96,13 +96,18 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
           data.quantity = getVariantsTotalQuantity(ratings);
         }
 
-        //^ nothing is required but the name — empty optional fields become defaults
+        //^ only a name or a category is needed — empty optional fields become defaults
         data.name = String(data.name ?? "").trim();
         data.sku = String(data.sku ?? "").trim() || null;
         data.unit = String(data.unit ?? "").trim();
         data.categoryId = String(data.categoryId ?? "").trim() || null;
         data.price = Math.max(0, Number(data.price) || 0);
         data.quantity = Math.max(0, Number(data.quantity) || 0);
+        //^ an unnamed product takes its category's name so every table, sale and
+        //^ stock record still has something readable to show
+        if (!data.name && data.categoryId) {
+          data.name = await getCategoryName(data.categoryId);
+        }
       } else if (obj === "categories") {
         data.name = String(data.name ?? "").trim();
         data.parentId = String(data.parentId ?? "").trim() || null;
@@ -204,6 +209,13 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         await onAfterSave();
       }
     });
+}
+
+//* The fallback name for an unnamed product, so it never shows as a blank row
+async function getCategoryName(categoryId) {
+  const categories = await fetchData("categories");
+  const category = categories.find((item) => String(item.id) === String(categoryId));
+  return String(category?.name ?? "").trim() || "Unnamed item";
 }
 
 function validateData(obj, data, id, products, ratings = []) {

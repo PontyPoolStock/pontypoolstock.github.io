@@ -1,6 +1,6 @@
 //* Validation Functions for Products
-//* Only the product name is required — price, quantity, unit, category, code
-//* and the rating rows may all be left empty; safe defaults are applied on save.
+//* A product needs a name *or* a category — an unnamed item only makes sense
+//* when it is filed under a category, and it is saved under that category's name.
 export function isValidProductData(data, id, variants = []) {
   document
     .querySelectorAll(".errorMes")
@@ -8,7 +8,7 @@ export function isValidProductData(data, id, variants = []) {
   normalizeProductUnit(data);
 
   const ratingRows = Array.isArray(variants) ? variants : [];
-  return isValidName(data.name) && isValidVariantRows(ratingRows);
+  return isValidProductIdentity(data) && isValidVariantRows(ratingRows);
 }
 
 //* Suggested colours for a rating — the field also accepts any colour typed in
@@ -34,8 +34,18 @@ function isValidVariantRows(variants) {
   }
   return true;
 }
-//* Only a non-empty name is required — a product or category may leave every
-//* other field (code, price, quantity, unit, category, parent) empty.
+//* A product's identity: a real name, or a category to fall back on.
+export function isValidProductIdentity(data) {
+  if (String(data?.name ?? "").trim().length > 0) return true;
+  if (String(data?.categoryId ?? "").trim().length > 0) return true;
+
+  const nameError = document.querySelector(".errorMes-name");
+  if (nameError) nameError.innerHTML = "Add a product name, or choose a category.";
+  return false;
+}
+
+//* Categories need a real name — a product may leave every
+//* other field empty as long as it keeps a name or a category.
 function isValidName(name) {
   if (String(name ?? "").trim().length === 0) {
     document.querySelector(".errorMes-name").innerHTML = `Name is required`;

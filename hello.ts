@@ -30,6 +30,7 @@ const fieldMap = {
 const toCamel = (row: Record<string, unknown>) => ({
   ...row,
   categoryId: row.category_id,
+  parentId: row.parent_id,
   reorderLevel: row.reorder_level,
   imageUrl: row.image_url,
   productId: row.product_id,
@@ -764,6 +765,9 @@ export default async function api(request: Request): Promise<Response> {
     return json({ error: "Method not allowed" }, 405);
   } catch (error) {
     console.error("API error", error);
-    return json({ error: "Database request failed" }, 500);
+    //^ the raw database reason rides along in `detail` so a 500 can be fixed
+    //^ from the message instead of guesswork
+    const detail = error instanceof Error ? error.message : String(error);
+    return json({ error: "Database request failed", detail }, 500);
   }
 }

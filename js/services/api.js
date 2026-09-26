@@ -46,7 +46,12 @@ async function responseErrorMessage(response) {
     try {
       const parsed = JSON.parse(body);
       const detail = parsed?.error || parsed?.message;
-      return detail ? `: ${String(detail).slice(0, 200)}` : "";
+      if (!detail) return "";
+
+      //^ the server sends the raw database reason in `detail` — that is what turns
+      //^ an opaque 500 into something you can act on
+      const reason = parsed?.detail ? ` (${String(parsed.detail).slice(0, 200)})` : "";
+      return `: ${String(detail).slice(0, 200)}${reason}`;
     } catch (error) {
       return `: ${body.slice(0, 200)}`;
     }

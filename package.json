@@ -10,6 +10,7 @@
     "share": "npx --yes localtunnel --port 5500 --subdomain pontypool",
     "server": "json-server --watch data/db.json --port 3000",
     "db:check": "node scripts/db-check.mjs",
+    "db:schema": "node scripts/migrate-schema.mjs",
     "db:migrate": "node scripts/migrate-db-json-to-neon.mjs"
   },
   "repository": {

@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS sales (
 CREATE INDEX IF NOT EXISTS products_category_id_idx ON products(category_id);
 CREATE INDEX IF NOT EXISTS products_updated_at_idx ON products(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS categories_updated_at_idx ON categories(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS categories_parent_id_idx ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS stock_adjustments_product_id_idx ON stock_adjustments(product_id);
 CREATE INDEX IF NOT EXISTS activity_log_timestamp_idx ON activity_log(timestamp DESC);
 CREATE INDEX IF NOT EXISTS sales_sold_at_idx ON sales(sold_at DESC);
