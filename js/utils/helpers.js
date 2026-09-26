@@ -179,9 +179,15 @@ export function getVariantPriceRange(variants) {
   if (!prices.length) return null;
   return { min: Math.min(...prices), max: Math.max(...prices) };
 }
+//* Products may be saved with no name when they sit in a category, so every list
+//* shows a dash for a blank name — exactly like an empty Code (SKU) does.
+export function getProductDisplayName(productOrName) {
+  const name = typeof productOrName === "string" ? productOrName : productOrName?.name;
+  return String(name ?? "").trim() || "-";
+}
 //* "St64 4W · White · 0.05A" — used by alerts, reports, adjustments and the log
 export function getVariantName(product, variant) {
-  const name = String(product?.name || "");
+  const name = String(product?.name || "").trim();
   if (!variant) return name;
   const ampsRaw = variant.amps;
   const amps =
@@ -192,7 +198,9 @@ export function getVariantName(product, variant) {
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(" · ");
-  return suffix ? `${name} ${suffix}` : name;
+  if (!suffix) return name;
+  //^ a nameless product keeps just its rating text ("4W") instead of " 4W"
+  return name ? `${name} ${suffix}` : suffix;
 }
 //* Total stock of one product (sum of its ratings, or its own quantity)
 export function getProductStock(product) {
@@ -267,12 +275,14 @@ export function getProductStatusCode(product) {
 export function getLowStockProducts(products) {
   return expandProductsToStockLines(products)
     .filter((p) => Number(p.quantity) <= Number(p.reorderLevel))
-    .sort((a, b) => Number(a.quantity) - Number(b.quantity));
+    .sort((a, b) => Number(a.quantity) - Number(b.quantity))
+    //^ display-ready names, so a nameless product reads "-" like an empty SKU
+    .map((p) => ({ ...p, name: getProductDisplayName(p.name) }));
 }
 export function getInventoryValueRowsSorted(products, limit) {
   const rows = expandProductsToStockLines(products).map((p) => ({
     id: p.id,
-    name: p.name,
+    name: getProductDisplayName(p.name),
     value: (Number(p.price) || 0) * (Number(p.quantity) || 0),
   }));
   rows.sort((a, b) => b.value - a.value);

@@ -15,6 +15,7 @@ import {
   getProductStatusCode,
   getVariantPriceRange,
   sortData,
+  getProductDisplayName,
 } from "../utils/helpers.js";
 
 let products = [];
@@ -83,9 +84,9 @@ function getTableHtml(filteredProducts = products) {
     const priceRange = getVariantPriceRange(variants);
     return {
       id: p.id,
-      image: getProductThumbnail(p.imageUrl, p.name),
+      image: getProductThumbnail(p.imageUrl, getProductDisplayName(p)),
       sku: p.sku ? `<span class="sku-badge">${escapeHtml(p.sku)}</span>` : "-",
-      name: escapeHtml(p.name) + getRatingsHtml(variants),
+      name: escapeHtml(getProductDisplayName(p)) + getRatingsHtml(variants),
       category: escapeHtml(getCategoryName(p.categoryId)),
       price: priceRange
         ? (priceRange.min === priceRange.max
@@ -180,7 +181,7 @@ function filterProducts() {
         .join(" ")
         .toLowerCase();
       let matches =
-        p.name.toLowerCase().includes(searchTerm)
+        String(p.name || "").toLowerCase().includes(searchTerm)
         || String(p.sku || "").toLowerCase().includes(searchTerm)
         || getCategoryName(p.categoryId).toLowerCase().includes(searchTerm)
         || ratingsText.includes(searchTerm);
@@ -223,14 +224,14 @@ async function handleDelete(id) {
   let p = products.find((e) => e.id == id);
   if (!p) return;
 
-  let ok = confirm(`Delete product "${p.name}"?`);
+  let ok = confirm(`Delete product "${getProductDisplayName(p)}"?`);
   if (!ok) return;
 
   await deleteData("products", id);
 
   await postData("activityLog", {
     action: "DELETE_PRODUCT",
-    details: `Product deleted: ${p.name}${p.sku ? ` (${p.sku})` : ""}`,
+    details: `Product deleted: ${getProductDisplayName(p)}${p.sku ? ` (${p.sku})` : ""}`,
     user: "admin",
     timestamp: GetCurrentDate(),
   });

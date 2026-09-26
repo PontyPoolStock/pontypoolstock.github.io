@@ -2,7 +2,7 @@ import renderTable from "../components/table.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { fetchData } from "../services/api.js";
 import { getModal } from "../components/modal.js";
-import { escapeHtml } from "../utils/helpers.js";
+import { escapeHtml, getProductDisplayName } from "../utils/helpers.js";
 
 let adjustments = [];
 let lastFiltered = [];
@@ -53,7 +53,7 @@ function getTableHtml(filteredList = adjustments) {
   const tableData = paginated.map((a) => ({
     id: a.id,
     date: formatAdjustmentDate(a.date),
-    product: escapeHtml(a.productName || ""),
+    product: escapeHtml(getProductDisplayName(a.productName)),
     type: typeBadgeHtml(a.type),
     quantity: a.quantity,
     reason: escapeHtml(a.reason || ""),

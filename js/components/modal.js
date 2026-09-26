@@ -17,6 +17,7 @@ import {
   getVariantsTotalQuantity,
   getVariantPriceRange,
   getVariantName,
+  getProductDisplayName,
 } from "../utils/helpers.js";
 
 import { postData, updateData, fetchData } from "../services/api.js";
@@ -103,11 +104,7 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         data.categoryId = String(data.categoryId ?? "").trim() || null;
         data.price = Math.max(0, Number(data.price) || 0);
         data.quantity = Math.max(0, Number(data.quantity) || 0);
-        //^ an unnamed product takes its category's name so every table, sale and
-        //^ stock record still has something readable to show
-        if (!data.name && data.categoryId) {
-          data.name = await getCategoryName(data.categoryId);
-        }
+        //^ a blank name stays blank — tables and lists show "-" for it, like an empty Code
       } else if (obj === "categories") {
         data.name = String(data.name ?? "").trim();
         data.parentId = String(data.parentId ?? "").trim() || null;
@@ -190,14 +187,14 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
       if (obj === "products" && action === "Add") {
         await postData("activityLog", {
           action: "CREATE_PRODUCT",
-          details: `New product added: ${data.name}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
+          details: `New product added: ${getProductDisplayName(data.name)}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
           user: "admin",
           timestamp: GetCurrentDate(),
         });
       } else if (obj === "products" && action === "Edit") {
         await postData("activityLog", {                         
           action: "UPDATE_PRODUCT",
-          details: `Product updated: ${data.name}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
+          details: `Product updated: ${getProductDisplayName(data.name)}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
           user: "admin",
           timestamp: GetCurrentDate(),
         });
@@ -209,13 +206,6 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         await onAfterSave();
       }
     });
-}
-
-//* The fallback name for an unnamed product, so it never shows as a blank row
-async function getCategoryName(categoryId) {
-  const categories = await fetchData("categories");
-  const category = categories.find((item) => String(item.id) === String(categoryId));
-  return String(category?.name ?? "").trim() || "Unnamed item";
 }
 
 function validateData(obj, data, id, products, ratings = []) {

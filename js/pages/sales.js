@@ -6,6 +6,7 @@ import {
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantPrice,
+  getProductDisplayName,
 } from "../utils/helpers.js";
 
 let sales = [];
@@ -42,7 +43,7 @@ function renderSalesPage() {
       const stock = variants.length
         ? getVariantsTotalQuantity(variants)
         : Number(product.quantity) || 0;
-      const name = escapeHtml(product.name || "");
+      const name = escapeHtml(getProductDisplayName(product));
       return `<option value="${product.id}" ${stock <= 0 ? "disabled" : ""}>${name} — ${stock} in stock</option>`;
     })
     .join("");
@@ -148,7 +149,7 @@ function getTableHtml(filteredList = lastFiltered) {
     .map((sale) => `
       <tr>
         <td class="text-nowrap">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</td>
-        <td>${escapeHtml(sale.productName || "")}</td>
+        <td>${escapeHtml(getProductDisplayName(sale.productName))}</td>
         <td class="text-end">${Number(sale.quantity) || 0}</td>
         <td class="text-end">${formatCurrency(sale.unitPrice)}</td>
         <td class="text-end fw-semibold">${formatCurrency(sale.total)}</td>
@@ -166,7 +167,7 @@ function getTableHtml(filteredList = lastFiltered) {
     .map((sale) => `
       <div class="bg-white border rounded p-3 shadow-sm sale-history-card">
         <div class="d-flex justify-content-between align-items-start gap-2">
-          <div class="fw-semibold">${escapeHtml(sale.productName || "")}</div>
+          <div class="fw-semibold">${escapeHtml(getProductDisplayName(sale.productName))}</div>
           <span class="badge rounded-pill sale-total-badge">${formatCurrency(sale.total)}</span>
         </div>
         <small class="text-muted">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</small>
@@ -533,7 +534,7 @@ function openEditSaleModal(sale) {
         ? getVariantsTotalQuantity(variants)
         : Number(product.quantity) || 0;
       const sold = String(product.id) === String(sale.productId);
-      return `<option value="${product.id}" ${stock <= 0 && !sold ? "disabled" : ""}>${escapeHtml(product.name || "")} - ${stock} in stock</option>`;
+      return `<option value="${product.id}" ${stock <= 0 && !sold ? "disabled" : ""}>${escapeHtml(getProductDisplayName(product))} - ${stock} in stock</option>`;
     })
     .join("");
 
