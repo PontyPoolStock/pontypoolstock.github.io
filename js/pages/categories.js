@@ -172,19 +172,28 @@ async function handleDelete(id) {
   let ok = confirm(`Delete category "${c.name}"?`);
   if (!ok) return;
 
-  await deleteData("categories", id);
+  //* Repaint first, verify in the background — a rejected delete restores.
+  categories = categories.filter((e) => e.id != id);
+  lastFiltered = [...categories];
+  currentPage = 1;
+  filterCategories();
 
-  await postData("activityLog", {
+  const result = await deleteData("categories", id);
+  if (!result.ok) {
+    console.warn("Category delete was rejected:", result.error);
+    await loadData();
+    lastFiltered = [...categories];
+    filterCategories();
+    return;
+  }
+
+  //* The audit trail is cosmetic — never hold the UI open for it.
+  void postData("activityLog", {
     action: "DELETE_CATEGORY",
     details: `Category deleted: ${c.name}`,
     user: "admin",
     timestamp: GetCurrentDate(),
   });
-
-  await loadData();
-  lastFiltered = [...categories];
-  currentPage = 1;
-  filterCategories();
 }
 
 function updateStats(count, searchTerm) {

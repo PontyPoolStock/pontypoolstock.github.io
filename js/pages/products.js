@@ -234,7 +234,8 @@ function handleEdit(id) {
   }, { initialProduct: cached, categories, refreshFields: PRODUCT_EDIT_FIELDS });
 }
 
-//* DELETE
+//* DELETE — repaint first so the row vanishes on the click, then verify in
+//* the background; a rejected delete quietly restores the list, as before.
 async function handleDelete(id) {
   let p = products.find((e) => e.id == id);
   if (!p) return;
@@ -242,19 +243,27 @@ async function handleDelete(id) {
   let ok = confirm(`Delete product "${getProductDisplayName(p)}"?`);
   if (!ok) return;
 
-  await deleteData("products", id);
+  products = products.filter((e) => e.id != id);
+  lastFiltered = [...products];
+  currentPage = 1;
+  filterProducts();
 
-  await postData("activityLog", {
+  const result = await deleteData("products", id);
+  if (!result.ok) {
+    console.warn("Product delete was rejected:", result.error);
+    await loadData();
+    lastFiltered = [...products];
+    filterProducts();
+    return;
+  }
+
+  //* The audit trail is cosmetic — never hold the UI open for it.
+  void postData("activityLog", {
     action: "DELETE_PRODUCT",
     details: `Product deleted: ${getProductDisplayName(p)}${p.sku ? ` (${p.sku})` : ""}`,
     user: "admin",
     timestamp: GetCurrentDate(),
   });
-
-  await loadData();
-  lastFiltered = [...products];
-  currentPage = 1;
-  filterProducts();
 }
 
 function updateStats(count, searchTerm, categoryId, statusFilter) {

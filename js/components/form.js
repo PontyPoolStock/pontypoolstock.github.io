@@ -1,4 +1,4 @@
-import { fetchData } from "../services/api.js";
+import { fetchData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
 import {
   getProductVariants,
   getVariantsTotalQuantity,
@@ -330,7 +330,8 @@ function escAttr(s) {
 
 export async function makeStockAdjustmentForm(opts = {}) {
   //^ Slim list keeps the modal fast; images are never needed in the dropdown.
-  const products = opts.products || await fetchData(`products?fields=id,name,quantity,unit,variants`);
+  //^ Shared projection = shared cache key, warmed by the Stock Adjustments page.
+  const products = opts.products || await fetchData(`products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`);
   const productOptions = products
     .map((p) => {
       const variants = getProductVariants(p);

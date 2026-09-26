@@ -6,6 +6,10 @@ export const PRODUCT_LIST_FIELDS = "id,name,sku,categoryId,price,quantity,reorde
 export const PRODUCT_EDIT_FIELDS = `${PRODUCT_LIST_FIELDS},imageUrl`;
 export const CATEGORY_LIST_FIELDS = "id,name,description,parentId,createdAt,updatedAt";
 export const CATEGORY_EDIT_FIELDS = `${CATEGORY_LIST_FIELDS},imageUrl`;
+// One canonical projection for the stock-adjustment form dropdown, its save-time
+// validation lookup and the page-level prewarm — same string = same cache key,
+// so the modal always hits a warm cache.
+export const PRODUCT_ADJUSTMENT_FIELDS = "id,name,quantity,unit,variants";
 
 const dataCache = new Map();
 const pendingRequests = new Map();
@@ -105,6 +109,9 @@ function collectionEndpoint(endpoint) {
 }
 
 export function clearDataCache(endpoint) {
+  // Invalidate any in-flight background refresh so it can't repopulate what we
+  // are about to clear when it lands.
+  mutationVersion += 1;
   if (!endpoint) {
     dataCache.clear();
     clearAllPersistentCache();
@@ -120,6 +127,138 @@ export function clearDataCache(endpoint) {
 // Synchronously check if cached data is already available in memory
 export function peekCachedData(endpoint) {
   return dataCache.has(endpoint) ? dataCache.get(endpoint) : null;
+}
+
+// Bumped on every completed write (or explicit clear) so a background refresh
+// that started before the write knows its response is already stale and skips
+// the overwrite — a fast double-save can never flash older data.
+let mutationVersion = 0;
+
+//* Drop a collection's persistent entries except the exact keys we already
+//* refreshed — an IndexedDB entry that was never mirrored into memory (a
+//* single-entity fetch from an earlier visit, say) could otherwise come back
+//* stale after a write.
+async function deletePersistentKeysExcept(collection, keepKeys) {
+  try {
+    const db = await openIdb();
+    if (!db) return;
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    const store = tx.objectStore(IDB_STORE);
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      for (const key of req.result || []) {
+        if (typeof key !== "string") continue;
+        if (collectionEndpoint(key) !== collection) continue;
+        if (keepKeys.has(key)) continue;
+        store.delete(key);
+      }
+    };
+  } catch {}
+}
+
+function mergeCachedRow(cachedRow, payload) {
+  // Merge only the fields the cached row already tracks so a slim ?fields=
+  // projection never bloats with full image bytes.
+  const merged = { ...cachedRow };
+  for (const field of Object.keys(merged)) {
+    if (payload[field] !== undefined) merged[field] = payload[field];
+  }
+  return merged;
+}
+
+function projectRowLike(payload, sampleRow) {
+  if (!sampleRow) return { ...payload };
+  const row = {};
+  for (const field of Object.keys(sampleRow)) {
+    if (payload[field] !== undefined) row[field] = payload[field];
+  }
+  if (row.id === undefined && payload.id !== undefined) row.id = payload.id;
+  return row;
+}
+
+//* Apply a completed write straight into the in-memory + persistent caches so
+//* the very next render (the onAfterSave re-fetch) paints instantly instead of
+//* waiting on a full collection refetch. The background refresh below then
+//* replaces the optimistic copy with server truth.
+function applyOptimisticMutation(collection, kind, payload) {
+  mutationVersion += 1;
+  const keepKeys = new Set();
+
+  for (const [key, value] of dataCache.entries()) {
+    if (collectionEndpoint(key) !== collection) continue;
+    keepKeys.add(key);
+
+    if (!Array.isArray(value)) {
+      // A cached single-entity record: patch it when it is the written row,
+      // otherwise it is untouched by this write and stays valid.
+      if (value && typeof value === "object") {
+        if (kind === "DELETE") {
+          if (String(value.id) === String(payload)) {
+            dataCache.delete(key);
+          }
+        } else if (payload && value.id !== undefined
+          && String(value.id) === String(payload.id)) {
+          const merged = mergeCachedRow(value, payload);
+          dataCache.set(key, merged);
+          writePersistentCache(key, merged);
+        }
+      }
+      continue;
+    }
+
+    let next = value;
+    if (kind === "DELETE") {
+      next = value.filter((row) => String(row?.id) !== String(payload));
+    } else if (payload && payload.id !== undefined && payload.id !== null) {
+      const idx = value.findIndex((row) => String(row?.id) === String(payload.id));
+      if (idx >= 0) {
+        next = [...value];
+        next[idx] = mergeCachedRow(value[idx], payload);
+      } else {
+        // Prepend: every list endpoint orders newest-first (updated_at DESC).
+        next = [projectRowLike(payload, value[0]), ...value];
+      }
+    }
+
+    if (next !== value) {
+      dataCache.set(key, next);
+      writePersistentCache(key, next);
+    }
+  }
+
+  // A freshly stored/changed image must win over the old cached thumbnail.
+  if (kind !== "DELETE" && payload && typeof payload.imageUrl === "string") {
+    const imageKey = `img:${collection}:${payload.id}`;
+    imageCache.set(imageKey, payload.imageUrl);
+    writePersistentCache(imageKey, payload.imageUrl);
+  }
+
+  deletePersistentKeysExcept(collection, keepKeys);
+  revalidateCollection(collection);
+  // Recording a sale moves stock on the server too — refresh products so the
+  // next visit shows the true quantities.
+  if (collection === "sales") revalidateCollection("products");
+}
+
+//* Pull server truth for a collection in the background after a write. Only
+//* overwrites the optimistic copy if no newer write landed meanwhile.
+function revalidateCollection(collection) {
+  const keys = [...dataCache.keys()].filter((k) => collectionEndpoint(k) === collection);
+  if (!keys.length) return;
+  const version = mutationVersion;
+  for (const key of keys) {
+    (async () => {
+      try {
+        const response = await fetchWithFallback(key);
+        const data = await response.json();
+        if (version !== mutationVersion) return; // a newer write won
+        dataCache.set(key, data);
+        writePersistentCache(key, data);
+      } catch {
+        // Keep the optimistically patched copy — closer to the truth than nothing.
+      }
+    })();
+  }
 }
 
 //* Resolve the API URL for this browser; it stays on the Neon API unless it was overridden
@@ -228,11 +367,17 @@ export async function fetchData(endpoint, { fresh = false } = {}) {
   }
 
   const request = (async () => {
+    // Capture the write counter so a response that was already in flight
+    // while a save landed can never overwrite the fresher optimistic patch.
+    const version = mutationVersion;
     const response = await fetchWithFallback(endpoint);
     const data = await response.json();
-    dataCache.set(endpoint, data);
-    writePersistentCache(endpoint, data);
-    return data;
+    if (version === mutationVersion) {
+      dataCache.set(endpoint, data);
+      writePersistentCache(endpoint, data);
+      return data;
+    }
+    return dataCache.get(endpoint) ?? data;
   })();
 
   pendingRequests.set(endpoint, request);
@@ -330,6 +475,7 @@ export function prewarmAppCache() {
   const prewarmEndpoints = [
     `products?fields=${PRODUCT_LIST_FIELDS}`,
     `categories?fields=${CATEGORY_LIST_FIELDS}`,
+    `products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`,
     "stockAdjustments",
     "sales",
     "activityLog",
@@ -349,7 +495,13 @@ export async function postData(endpoint, data) {
       }),
     });
     const result = await response.json();
-    clearDataCache(endpoint);
+    const collection = collectionEndpoint(endpoint);
+    if (collection !== "auth" && result && result.id !== undefined && !result.error) {
+      // Optimistic patch + background refresh — the next render is instant.
+      applyOptimisticMutation(collection, "POST", result);
+    } else {
+      clearDataCache(endpoint);
+    }
     return result;
   } catch (error) {
     console.error("Error posting data:", error);
@@ -365,7 +517,12 @@ export async function updateData(endpoint, id, data) {
       body: JSON.stringify({ ...data, updatedAt: new Date().toISOString() }),
     });
     const result = await response.json();
-    clearDataCache(endpoint);
+    const collection = collectionEndpoint(endpoint);
+    if (collection !== "auth" && result && result.id !== undefined && !result.error) {
+      applyOptimisticMutation(collection, "PUT", result);
+    } else {
+      clearDataCache(endpoint);
+    }
     return result;
   } catch (error) {
     console.error("Error updating data:", error);
@@ -382,7 +539,12 @@ export async function deleteData(endpoint, id) {
     const response = await fetchWithFallback(`${endpoint}/${id}`, {
       method: "DELETE",
     });
-    clearDataCache(endpoint);
+    if (response.ok) {
+      // Optimistic removal + background refresh — the row disappears at once.
+      applyOptimisticMutation(collectionEndpoint(endpoint), "DELETE", id);
+    } else {
+      clearDataCache(endpoint);
+    }
     if (response.status === 204) return { ok: true, error: "" };
     return { ok: response.ok, error: response.ok ? "" : "Delete failed" };
   } catch (error) {

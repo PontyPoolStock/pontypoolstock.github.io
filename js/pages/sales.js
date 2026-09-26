@@ -655,7 +655,7 @@ function openEditSaleModal(sale) {
     button.disabled = true;
     button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...';
 
-    const result = await updateData(`sales/${sale.id}`, sale.id, {
+    const result = await updateData("sales", sale.id, {
       productId,
       variantIndex: hasVariants ? Number(variantIndex) : null,
       quantity,

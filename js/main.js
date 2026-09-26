@@ -14,7 +14,7 @@ import { loadStockAdjustments } from "./pages/stockadjustment.js";
 import { loadSales } from "./pages/sales.js";
 import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
-import { prewarmAppCache, peekCachedData, PRODUCT_LIST_FIELDS } from "./services/api.js";
+import { prewarmAppCache } from "./services/api.js";
 
 $(document).ready(function () {
   const currentUser = checkAuth();
@@ -59,11 +59,13 @@ function navigateTo(text) {
   $(".nav-item").removeClass("active-content");
   $(`.nav-item[data-page="${text}"]`).addClass("active-content");
 
-  // Only blank the screen with a spinner if we don't have hot in-memory cache ready
-  const hasCachedData = Boolean(peekCachedData(`products?fields=${PRODUCT_LIST_FIELDS}`));
+  //^ Show the spinner whenever the container is empty: a warm cache resolves
+  //^ in a microtask so it never gets painted, while a cold collection (a
+  //^ first visit to Reports, Activity Log, …) gets instant feedback instead
+  //^ of a blank page.
   const isFirstRender = $("#pageContent").children().length === 0;
 
-  if (!hasCachedData && isFirstRender) {
+  if (isFirstRender) {
     $("#pageContent").html(
       '<div class="page-loading" role="status">' +
         '<div class="spinner-border spinner-border-sm text-warning" aria-hidden="true"></div>' +

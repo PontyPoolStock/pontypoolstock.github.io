@@ -20,7 +20,7 @@ import {
   getProductDisplayName,
 } from "../utils/helpers.js";
 
-import { postData, updateData, fetchData } from "../services/api.js";
+import { postData, updateData, fetchData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
 import {getCurrentUser} from "../pages/login.js";
 
 //* Background refill for Edit modals opened from the slim cached row: pull the
@@ -137,7 +137,8 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
       let productsForAdjustment = null;
       if (obj === "stockAdjustments") {
-        productsForAdjustment = await fetchData(`products?fields=id,name,quantity,variants`);
+        // Same projection the form dropdown uses — one warm cache key.
+        productsForAdjustment = await fetchData(`products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`);
       }
 
       let isValid = validateData(obj, data, id, productsForAdjustment, ratings);
@@ -198,33 +199,38 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         const newQty = type === "increase" ? oldQty + qty : oldQty - qty;
         const nowIso = GetCurrentDate(); 
 
-        await postData("stockAdjustments", {
-          productId: product.id,
-          productName: getVariantName(product, rating),
-          type,
-          quantity: qty,
-          date: nowIso,
-          oldQuantity: oldQty,
-          newQuantity: newQty,
-        });
-
-        if (rating) {
-          const nextVariants = variants.map((item, index) => (
+        const nextVariants = rating
+          ? variants.map((item, index) => (
             index === ratingIndex
               ? { ...item, quantity: newQty }
               : item
-          ));
-          await updateData("products", product.id, {
-            ...product,
-            variants: nextVariants,
-            quantity: getVariantsTotalQuantity(nextVariants),
-          });
-        } else {
-          await updateData("products", product.id, { ...product, quantity: newQty });
-        }
+          ))
+          : null;
+
+        //* The adjustment row and the stock write are independent — run them
+        //* together so the modal closes after ONE round trip instead of two.
+        await Promise.all([
+          postData("stockAdjustments", {
+            productId: product.id,
+            productName: getVariantName(product, rating),
+            type,
+            quantity: qty,
+            date: nowIso,
+            oldQuantity: oldQty,
+            newQuantity: newQty,
+          }),
+          updateData("products", product.id, nextVariants
+            ? {
+              ...product,
+              variants: nextVariants,
+              quantity: getVariantsTotalQuantity(nextVariants),
+            }
+            : { ...product, quantity: newQty }),
+        ]);
 
         const sign = type === "increase" ? "+" : "−";
-        await postData("activityLog", {
+        //* The log entry is cosmetic — never hold the modal open for it.
+        void postData("activityLog", {
           action: "STOCK_ADJUSTMENT",
           details: `Stock adjustment: ${sign}${qty} ${getVariantName(product, rating)}`,
           user: "admin",
@@ -251,14 +257,14 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
       }
 
       if (obj === "products" && action === "Add") {
-        await postData("activityLog", {
+        void postData("activityLog", {
           action: "CREATE_PRODUCT",
           details: `New product added: ${getProductDisplayName(data.name)}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
           user: "admin",
           timestamp: GetCurrentDate(),
         });
       } else if (obj === "products" && action === "Edit") {
-        await postData("activityLog", {                         
+        void postData("activityLog", {                         
           action: "UPDATE_PRODUCT",
           details: `Product updated: ${getProductDisplayName(data.name)}${data.sku ? ` (${data.sku})` : ""}${ratings.length ? ` - ${ratings.length} rating${ratings.length === 1 ? "" : "s"}` : ""}`,
           user: "admin",

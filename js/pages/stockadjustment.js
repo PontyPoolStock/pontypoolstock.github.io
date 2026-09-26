@@ -1,6 +1,6 @@
 import renderTable from "../components/table.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { fetchData } from "../services/api.js";
+import { fetchData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import { escapeHtml, getProductDisplayName, debounce } from "../utils/helpers.js";
 
@@ -17,7 +17,13 @@ export async function loadStockAdjustments() {
 }
 
 async function loadData() {
-  adjustments = await fetchData("stockAdjustments");
+  const [adjustmentData] = await Promise.all([
+    fetchData("stockAdjustments"),
+    // Warm the New Adjustment modal's product dropdown (same cache key the
+    // form and save-validation use) so the modal body fills instantly.
+    fetchData(`products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`),
+  ]);
+  adjustments = Array.isArray(adjustmentData) ? adjustmentData : [];
   adjustments.sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
