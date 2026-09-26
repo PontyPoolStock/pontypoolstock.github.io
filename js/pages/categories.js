@@ -9,7 +9,7 @@ import {
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { escapeHtml, GetCurrentDate, sortData, debounce } from "../utils/helpers.js";
+import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml } from "../utils/helpers.js";
 
 let products = [];
 let categories = [];
