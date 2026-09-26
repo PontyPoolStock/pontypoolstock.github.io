@@ -5,6 +5,7 @@ import {
   getVariantPriceRange,
   RATING_COLOURS,
   getProductDisplayName,
+  UNIT_SUGGESTIONS,
 } from "../utils/helpers.js";
 export async function makeProductForm(id, categoryId = "") {
   let product = "";
@@ -57,7 +58,10 @@ export async function makeProductForm(id, categoryId = "") {
       </div>
       <div class="col-6">
         <label class="text-secondary form-label" for="unit">Unit</label>
-        <input type="text" class="form-control" name='unit'  placeholder="Pcs / kg / box" value="${escAttr(id ? (product.unit || "") : "")}">
+        <input type="text" class="form-control" name='unit' list="unitSuggestions" placeholder="Pcs / box / bundle / kg" value="${escAttr(id ? (product.unit || "") : "")}">
+        <datalist id="unitSuggestions">
+          ${UNIT_SUGGESTIONS.map((option) => `<option value="${option}"></option>`).join("")}
+        </datalist>
         <div class="text-danger fw-bold errorMes errorMes-unit"></div>
 
       </div>
