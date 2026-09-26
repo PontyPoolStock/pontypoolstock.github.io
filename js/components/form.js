@@ -23,8 +23,6 @@ export async function makeProductForm(id, categoryId = "") {
         <label class="text-secondary form-label" for="name">Product Name</label>
         <input type="text" class="form-control" name="name" placeholder="e.g. Laptop Pro" value="${escAttr(id ? (product.name || "") : "")}">
         <div class="text-danger fw-bold errorMes errorMes-name"></div>
-        <div class="text-muted small mt-1">Optional when you pick a category — leave blank if it has no name, and lists show "-".</div>
-
       </div>
       <div class="col-6">
         <label class="text-secondary form-label" for="sku">Code</label>
