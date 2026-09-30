@@ -2498,3 +2498,41 @@ a:focus-visible,
     align-items: start;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Category summary card — opened by clicking any category row on Categories
+   --------------------------------------------------------------------------- */
+#categoryPreviewModal .modal-dialog {
+  max-width: 880px;
+}
+
+#categoryPreviewModal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* The product list reuses the shared table: the row tint stays, the left bar
+   would clash with the card frame (same call as the ratings list above). */
+#categoryPreviewModal .table tbody tr:hover {
+  box-shadow: none;
+}
+
+.preview-section-count {
+  margin-left: auto;
+  min-width: 1.6rem;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  color: #3b82f6;
+  background: #eff6ff;
+  border-radius: 999px;
+}
+
+.preview-category-note {
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+  color: var(--pontypool-muted);
+  overflow-wrap: anywhere;
+}

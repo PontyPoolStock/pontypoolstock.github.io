@@ -15,6 +15,7 @@ import { openProductPreview } from "../components/preview.js";
 import {
   GetCurrentDate,
   escapeHtml,
+  formatCurrency,
   getCategoryLabel,
   getProductStock,
   getProductVariants,
@@ -120,10 +121,12 @@ function getTableHtml(filteredProducts = products) {
       sku: p.sku ? `<span class="sku-badge">${escapeHtml(p.sku)}</span>` : "-",
       name: escapeHtml(getProductDisplayName(p)) + getRatingsHtml(variants),
       category: escapeHtml(getCategoryLabel(categories, p.categoryId)),
+      //^ A single price stays a number (renderTable formats it); a range is
+      //^ already formatted, like the price shown on the preview card
       price: priceRange
         ? (priceRange.min === priceRange.max
           ? priceRange.min
-          : `${priceRange.min} - ${priceRange.max}`)
+          : `${formatCurrency(priceRange.min)} – ${formatCurrency(priceRange.max)}`)
         : p.price,
       quantity: getProductStock(p),
       unit: p.unit ? escapeHtml(p.unit) : "-",

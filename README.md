@@ -85,7 +85,7 @@ inventory-management-system/
     │   ├── pagination.js       # Pagination + rows-per-page component
     │   ├── modal.js            # Generic modal handler
     │   ├── lowstock.js         # Shared Low Stock list (opened by every Low Stock card)
-    │   ├── preview.js          # Product preview card (opened by clicking a product row)
+    │   ├── preview.js          # Product & category preview cards (opened by clicking a row)
     │   └── form.js             # Form builders for each entity
     │
     └── 📁 pages/
@@ -307,20 +307,30 @@ event type handles every `[data-low-stock-open]` trigger — so re-rendering a p
 
 ### `preview.js`
 The product card behind a click on any product row: picture, category, unit, price,
-stock value, status, and one line per rating.
+stock value, status, and one line per rating. The category card behind a click on any
+category row: picture, parent category, total stock, stock value, average per product,
+and the products inside it.
 
 ```javascript
 openProductPreview(product, { categories, onEdit })
 // product    — the list row that was clicked
 // categories — every category, so the card can name where the product belongs
 // onEdit     — called with the product id once the card has closed
+
+openCategoryPreview(category, { categories, products, onEdit, onProductEdit })
+// category      — the list row that was clicked
+// products      — every product, so the card can summarise what sits inside
+// onEdit        — called with the category id once the card has closed
+// onProductEdit — called with a product id when Edit is pressed on a product
+//                 opened from the card's product list
 ```
 
 List rows carry no image bytes on purpose (that is what keeps them fast), so the
 picture is filled in from the shared on-demand image fetch after the card is open —
 a cached image is painted in the same frame. The Edit button waits for the card to
 finish closing before opening the product form, so two modals never fight over the
-backdrop.
+backdrop. Clicking a product row inside the category card swaps one card for the
+product's own card, never stacking two.
 
 ### `form.js`
 Builds form HTML for each entity.

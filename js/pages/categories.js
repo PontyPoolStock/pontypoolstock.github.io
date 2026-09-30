@@ -5,9 +5,11 @@ import {
   postData,
   hydrateEntityImages,
   PRODUCT_LIST_FIELDS,
+  PRODUCT_EDIT_FIELDS,
   CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
+import { openCategoryPreview } from "../components/preview.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml } from "../utils/helpers.js";
 
@@ -21,7 +23,7 @@ export async function loadCategories() {
   await loadData();
   renderCategories();
   setupEventListeners();
-  hydrateEntityImages(document.getElementById("categoriesTableContainer"));
+  paintRows();
 }
 
 async function loadData() {
@@ -72,6 +74,38 @@ function getTableHtml(filteredCategories = categories) {
   );
 }
 
+//* Hydrate the deferred thumbnails and mark every row/card as clickable — a
+//* click anywhere on a category opens its summary card.
+function paintRows(container = document.getElementById("categoriesTableContainer")) {
+  if (!container) return;
+  hydrateEntityImages(container);
+  container
+    .querySelectorAll("table tbody tr[data-id], .entity-card[data-id]")
+    .forEach((row) => {
+      const category = categories.find((c) => String(c.id) === row.dataset.id);
+      row.classList.add("preview-row");
+      //^ Keyboard users get the same card as a click: the row is focusable and
+      //^ Enter/Space opens it (see the keydown handler below)
+      row.setAttribute("tabindex", "0");
+      row.setAttribute("aria-label", `Preview ${category?.name || "category"}`);
+    });
+}
+
+//* PREVIEW — the card a click on a row opens. Edit inside the card hands over to
+//* the ordinary edit modal (it opens once the card has closed); a product picked
+//* from the card's list hands over to the product card, then to product editing.
+function previewRow(row) {
+  if (!row) return;
+  const category = categories.find((c) => String(c.id) === row.dataset.id);
+  if (!category) return;
+  openCategoryPreview(category, {
+    categories,
+    products,
+    onEdit: handleEdit,
+    onProductEdit: handleProductEdit,
+  });
+}
+
 //* Handles All event listeners of page
 function setupEventListeners() {
   //& Search (debounced)
@@ -86,9 +120,15 @@ function setupEventListeners() {
       const deleteBtn = e.target.closest(".delete-btn");
 
       //& handle Update
-      if (editBtn) handleEdit(editBtn.dataset.id);
+      if (editBtn) {
+        handleEdit(editBtn.dataset.id);
+        return;
+      }
       //& handle Deletion
-      else if (deleteBtn) handleDelete(deleteBtn.dataset.id);
+      if (deleteBtn) {
+        handleDelete(deleteBtn.dataset.id);
+        return;
+      }
 
       //& handle pagination
       const pageBtn = e.target.closest(".page-link");
@@ -99,8 +139,25 @@ function setupEventListeners() {
         currentPage = page;
         const container = document.getElementById("categoriesTableContainer");
         container.innerHTML = getTableHtml(lastFiltered);
-        hydrateEntityImages(container);
+        paintRows(container);
+        return;
       }
+
+      //& A click anywhere else on the row (picture, name, count) opens the card
+      if (e.target.closest(".action-btn")) return;
+      previewRow(e.target.closest("tr[data-id], .entity-card[data-id]"));
+    });
+
+  //& Enter/Space on a focused row opens the same summary card
+  document
+    .querySelector("#categoriesTableContainer")
+    .addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if (e.target.closest?.("button, a, input")) return;
+      const row = e.target.closest?.(".preview-row");
+      if (!row) return;
+      e.preventDefault();
+      previewRow(row);
     });
 
   //& Handle Limit
@@ -113,7 +170,7 @@ function setupEventListeners() {
         currentPage = 1;
         const container = document.getElementById("categoriesTableContainer");
         container.innerHTML = getTableHtml(lastFiltered);
-        hydrateEntityImages(container);
+        paintRows(container);
       }
     });
 
@@ -137,7 +194,7 @@ function filterCategories() {
   currentPage = 1;
   const container = document.getElementById("categoriesTableContainer");
   container.innerHTML = getTableHtml(filtered);
-  hydrateEntityImages(container);
+  paintRows(container);
   updateStats(filtered.length, searchTerm);
 }
 
@@ -156,6 +213,16 @@ function handleEdit(id) {
     await loadData();
     filterCategories();
   }, { initialCategory: cached, categories });
+}
+
+//* A product clicked inside a category card edits exactly like on Products:
+//* reuse the cached row for an instant modal, then refresh it in the background.
+function handleProductEdit(id) {
+  const cached = products.find((e) => String(e.id) === String(id));
+  getModal("products", "Edit", id, async () => {
+    await loadData();
+    filterCategories();
+  }, { initialProduct: cached, categories, refreshFields: PRODUCT_EDIT_FIELDS });
 }
 
 //* DELETE

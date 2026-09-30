@@ -10,7 +10,9 @@ export default function renderTable(data, cols, actions = true) {
   const cellValue = (item, col) => {
     const value = item[col];
     if (value === null || value === undefined || value === "") return "-";
-    if (col === "price") return formatCurrency(value);
+    //^ Money is formatted here, but a pre-formatted string (a "KSh … – KSh …"
+    //^ range) is already display-ready and must not be parsed back to a number
+    if (col === "price" && Number.isFinite(Number(value))) return formatCurrency(value);
     return value;
   };
 
