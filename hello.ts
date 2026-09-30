@@ -45,7 +45,10 @@ const toCamel = (row: Record<string, unknown>) => ({
 });
 
 const PASSWORD_PREFIX = "scrypt";
+//* Session-only sign-ins last 12 hours; "keep me signed in" lasts 30 days, so
+//* a remembered browser is never silently signed out the next morning.
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const REMEMBERED_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5500",
@@ -110,9 +113,9 @@ function passwordMatches(password: string, stored: string) {
   return expectedBuffer.length === derivedBuffer.length && timingSafeEqual(expectedBuffer, derivedBuffer);
 }
 
-function signToken(userId: string | number) {
+function signToken(userId: string | number, ttlMs: number = TOKEN_TTL_MS) {
   const payload = Buffer.from(
-    JSON.stringify({ u: String(userId), e: Date.now() + TOKEN_TTL_MS }),
+    JSON.stringify({ u: String(userId), e: Date.now() + ttlMs }),
   ).toString("base64url");
   const signature = createHmac("sha256", authSecret()).update(payload).digest("base64url");
   return `${payload}.${signature}`;
@@ -673,13 +676,19 @@ export default async function api(request: Request): Promise<Response> {
       }
 
       clearLoginAttempts(request);
-      const token = signToken(user.id);
+      //* "Keep me signed in" (checkbox on by default) gets the long token; an
+      //* unchecked box stays a working-day session.
+      const ttlMs = body.rememberMe === false ? TOKEN_TTL_MS : REMEMBERED_TOKEN_TTL_MS;
+      const token = signToken(user.id, ttlMs);
       return json({
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
         token,
+        //^ the exact moment this session dies, so the browser can tell a live
+        //^ session from a dead one without waiting for a 401
+        expiresAt: Date.now() + ttlMs,
       });
     }
 

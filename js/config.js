@@ -52,6 +52,34 @@ export function saveApiUrl(url) {
 export const AUTH_TOKEN_STORAGE_KEY = "pontypool_token";
 export const USER_STORAGE_KEY = "currentUser";
 
+//* How long before its real end a token counts as already gone, so a request is
+//* never fired with a token that expires mid-flight.
+export const AUTH_TOKEN_SKEW_MS = 60 * 1000;
+
+//* Read the expiry stamped inside a signed token payload ({ u, e }) — 0 when the
+//* value is unreadable, which is treated as "no session".
+export function readAuthTokenExpiry(token) {
+  const payload = String(token || "").split(".")[0];
+  if (!payload) return 0;
+
+  try {
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const decoded = typeof atob === "function"
+      ? atob(padded)
+      : Buffer.from(padded, "base64").toString("binary");
+    const expiry = Number(JSON.parse(decoded)?.e);
+    return Number.isFinite(expiry) ? expiry : 0;
+  } catch {
+    return 0;
+  }
+}
+
+//* A stored session is only usable while its token still has life in it
+export function authTokenIsUsable(token = getAuthToken()) {
+  return readAuthTokenExpiry(token) > Date.now() + AUTH_TOKEN_SKEW_MS;
+}
+
 //* Read the session auth token stored in the browser (persistent or session-only)
 export function getAuthToken() {
   if (typeof localStorage === "undefined") return "";
@@ -66,16 +94,23 @@ export function getAuthToken() {
   }
 }
 
-//* Save the session auth token
-export function saveAuthToken(token) {
-  if (typeof localStorage !== "undefined") {
+//* Save the session auth token — persistent for "keep me signed in", otherwise
+//* session-only so closing the browser ends the session.
+export function saveAuthToken(token, { persistent = true } = {}) {
+  const write = (storage, value) => {
+    if (typeof storage === "undefined") return;
     try {
-      if (token) {
-        localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+      if (value) {
+        storage.setItem(AUTH_TOKEN_STORAGE_KEY, value);
       } else {
-        localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+        storage.removeItem(AUTH_TOKEN_STORAGE_KEY);
       }
     } catch {}
+  };
+
+  if (typeof localStorage !== "undefined") {
+    write(persistent ? localStorage : sessionStorage, token);
+    write(persistent ? sessionStorage : localStorage, "");
   }
   return token;
 }

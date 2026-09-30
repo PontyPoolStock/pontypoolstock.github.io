@@ -28,6 +28,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 ## ✨ Features
 
 - 📦 **Product Management** — Add, edit, delete, search, and filter products by category and status
+- 👁️ **Product Preview** — Click any product row (or press Enter on it) for a card with its picture, category, unit, price, stock value, status and one line per rating; Edit hands straight over to the product form
 - 🏷️ **Categories** — Manage product categories with product count tracking
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries
 - 🛒 **Record Sale** — Sell a product or a specific rating; stock, sales totals, and the activity log update together
@@ -84,6 +85,7 @@ inventory-management-system/
     │   ├── pagination.js       # Pagination + rows-per-page component
     │   ├── modal.js            # Generic modal handler
     │   ├── lowstock.js         # Shared Low Stock list (opened by every Low Stock card)
+    │   ├── preview.js          # Product preview card (opened by clicking a product row)
     │   └── form.js             # Form builders for each entity
     │
     └── 📁 pages/
@@ -163,7 +165,25 @@ Base URL: `js/config.js` → `https://br-blue-base-b451rqwn-api.compute.c-6.us-e
 | POST | `/sales` | Record a sale (transactionally: validates stock, deducts it, writes the sale + activity log) |
 | PUT | `/sales/:id` | Edit a sale (transactionally: returns the original stock, takes the corrected amount, logs `SALE_EDITED`) |
 | DELETE | `/sales/:id` | Void a sale and return its stock to the same rating |
-| POST | `/auth/login` | Validate email and password |
+| POST | `/auth/login` | Validate email and password — returns the user, a signed session token and its `expiresAt` |
+
+### Sessions
+
+`POST /auth/login` accepts a `rememberMe` flag (the **Keep me signed in** box on the
+sign-in screen) and signs the token to match:
+
+| Sign-in | Token lifetime | Stored in |
+|---|---|---|
+| Keep me signed in (default) | 30 days | `localStorage` |
+| Unchecked | 12 hours | `sessionStorage`, so closing the browser signs out |
+
+The browser stores the session with its expiry, and `js/pages/login.js` +
+`js/config.js` treat an ended token as no session at all — the app no longer paints
+the dashboard and then bounces back to the form. When a session does end, the sign-in
+screen says so (`./login.html?expired=1`) instead of appearing out of nowhere.
+
+> The 30-day token comes from `hello.ts`, so run `neon deploy --env .env.local` after
+> changing it — an older deployed function still issues 12-hour tokens.
 
 ---
 
@@ -284,6 +304,23 @@ openLowStockList()
 Pages register their snapshot as they render, and one delegated listener per
 event type handles every `[data-low-stock-open]` trigger — so re-rendering a page
 (Statistics period change, reports pagination) never stacks duplicate handlers.
+
+### `preview.js`
+The product card behind a click on any product row: picture, category, unit, price,
+stock value, status, and one line per rating.
+
+```javascript
+openProductPreview(product, { categories, onEdit })
+// product    — the list row that was clicked
+// categories — every category, so the card can name where the product belongs
+// onEdit     — called with the product id once the card has closed
+```
+
+List rows carry no image bytes on purpose (that is what keeps them fast), so the
+picture is filled in from the shared on-demand image fetch after the card is open —
+a cached image is painted in the same frame. The Edit button waits for the card to
+finish closing before opening the product form, so two modals never fight over the
+backdrop.
 
 ### `form.js`
 Builds form HTML for each entity.

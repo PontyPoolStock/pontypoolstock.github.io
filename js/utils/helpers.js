@@ -208,19 +208,23 @@ export function getProductDisplayName(productOrName) {
   const name = typeof productOrName === "string" ? productOrName : productOrName?.name;
   return String(name ?? "").trim() || "-";
 }
-//* "St64 4W · White · 0.05A" — used by alerts, reports, adjustments and the log
-export function getVariantName(product, variant) {
-  const name = String(product?.name || "").trim();
-  if (!variant) return name;
-  const ampsRaw = variant.amps;
+//* "4W · White · 0.05A" — the rating text every list, alert and preview shows
+export function getVariantSuffix(variant) {
+  const ampsRaw = variant?.amps;
   const amps =
     ampsRaw !== "" && ampsRaw !== null && ampsRaw !== undefined && Number.isFinite(Number(ampsRaw))
       ? `${Number(ampsRaw)}A`
       : "";
-  const suffix = [variant.label, variant.colour, amps]
+  return [variant?.label, variant?.colour, amps]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(" · ");
+}
+//* "St64 4W · White · 0.05A" — used by alerts, reports, adjustments and the log
+export function getVariantName(product, variant) {
+  const name = String(product?.name || "").trim();
+  if (!variant) return name;
+  const suffix = getVariantSuffix(variant);
   if (!suffix) return name;
   //^ a nameless product keeps just its rating text ("4W") instead of " 4W"
   return name ? `${name} ${suffix}` : suffix;

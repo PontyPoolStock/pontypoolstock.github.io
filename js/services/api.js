@@ -319,7 +319,8 @@ async function fetchWithFallback(endpoint, options = {}) {
     if (response.status === 401 && endpoint !== "auth/login") {
       clearSession();
       if (typeof window !== "undefined" && !window.location.pathname.endsWith("login.html")) {
-        window.location.replace("./login.html");
+        //^ Say why instead of dumping the user back on a blank form
+        window.location.replace("./login.html?expired=1");
       }
       throw new Error("Authentication required");
     }

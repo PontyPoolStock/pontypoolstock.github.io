@@ -11,6 +11,7 @@ import {
   CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
+import { openProductPreview } from "../components/preview.js";
 import {
   GetCurrentDate,
   escapeHtml,
@@ -18,6 +19,7 @@ import {
   getProductStock,
   getProductVariants,
   getProductStatusCode,
+  getVariantSuffix,
   getVariantPriceRange,
   productThumbnailHtml,
   sortData,
@@ -36,7 +38,27 @@ export async function loadProducts() {
   lastFiltered = [...products];
   renderProducts();
   setupEventListeners();
-  hydrateEntityImages(document.getElementById("productsTableContainer"));
+  paintRows();
+}
+
+//* Hydrate the deferred thumbnails and mark every row/card as clickable — a
+//* click anywhere on a product opens its preview card.
+function paintRows(container = document.getElementById("productsTableContainer")) {
+  if (!container) return;
+  hydrateEntityImages(container);
+  container
+    .querySelectorAll("table tbody tr[data-id], .entity-card[data-id]")
+    .forEach((row) => {
+      const product = lastFiltered.find((p) => String(p.id) === row.dataset.id);
+      row.classList.add("preview-row");
+      //^ Keyboard users get the same card as a click: the row is focusable and
+      //^ Enter/Space opens it (see the keydown handler below)
+      row.setAttribute("tabindex", "0");
+      row.setAttribute(
+        "aria-label",
+        `Preview ${product ? getProductDisplayName(product) : "product"}`,
+      );
+    });
 }
 
 async function loadData() {
@@ -151,13 +173,35 @@ function setupEventListeners() {
         currentPage = page;
         const container = document.getElementById("productsTableContainer");
         container.innerHTML = getTableHtml(lastFiltered);
-        hydrateEntityImages(container);
+        paintRows(container);
         return;
       }
       const editBtn = e.target.closest(".edit-btn");
       const deleteBtn = e.target.closest(".delete-btn");
-      if (editBtn) handleEdit(editBtn.dataset.id);
-      else if (deleteBtn) handleDelete(deleteBtn.dataset.id);
+      if (editBtn) {
+        handleEdit(editBtn.dataset.id);
+        return;
+      }
+      if (deleteBtn) {
+        handleDelete(deleteBtn.dataset.id);
+        return;
+      }
+
+      //& A click anywhere else on the row (picture, name, price…) opens the preview
+      if (e.target.closest(".action-btn")) return;
+      previewRow(e.target.closest("tr[data-id], .entity-card[data-id]"));
+    });
+
+  //& Enter/Space on a focused row opens the same preview card
+  document
+    .querySelector("#productsTableContainer")
+    .addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if (e.target.closest?.("button, a, input")) return;
+      const row = e.target.closest?.(".preview-row");
+      if (!row) return;
+      e.preventDefault();
+      previewRow(row);
     });
 
   //& Limit
@@ -170,7 +214,7 @@ function setupEventListeners() {
         currentPage = 1;
         const container = document.getElementById("productsTableContainer");
         container.innerHTML = getTableHtml(lastFiltered);
-        hydrateEntityImages(container);
+        paintRows(container);
       }
     });
   //& Add product
@@ -210,7 +254,7 @@ function filterProducts() {
   currentPage = 1;
   const container = document.getElementById("productsTableContainer");
   container.innerHTML = getTableHtml(filtered);
-  hydrateEntityImages(container);
+  paintRows(container);
   updateStats(filtered.length, searchTerm, categoryId, statusFilter);
 }
 
@@ -221,6 +265,15 @@ function handleAdd() {
     lastFiltered = [...products];
     filterProducts();
   }, { categories });
+}
+
+//* PREVIEW — the card a click on a row opens. Edit inside the card hands over to
+//* the ordinary edit modal (it opens once the card has closed).
+function previewRow(row) {
+  if (!row) return;
+  const product = lastFiltered.find((p) => String(p.id) === row.dataset.id);
+  if (!product) return;
+  openProductPreview(product, { categories, onEdit: handleEdit });
 }
 
 //* UPDATE — reuse the cached row for an instant modal; then refresh just
@@ -284,19 +337,9 @@ function getRatingsHtml(variants) {
       const qty = Number(variant.quantity) || 0;
       const min = Number(variant.reorderLevel) || 0;
       const tone = qty <= 0 ? "status-out" : qty <= min ? "status-low" : "";
-      const details = [];
-      if (variant.label) details.push(escapeHtml(variant.label));
-      if (variant.colour) details.push(escapeHtml(variant.colour));
-      if (
-        variant.amps !== "" &&
-        variant.amps !== null &&
-        variant.amps !== undefined &&
-        Number.isFinite(Number(variant.amps))
-      ) {
-        details.push(`${Number(variant.amps)}A`);
-      }
-      if (!details.length) details.push("-");
-      return `<span class="variant-chip ${tone}">${details.join(" · ")}: ${qty}</span>`;
+      //^ Same rating text as the preview card and the alerts ("4W · White · 0.05A")
+      const details = getVariantSuffix(variant) || "-";
+      return `<span class="variant-chip ${tone}">${escapeHtml(details)}: ${qty}</span>`;
     })
     .join("");
 

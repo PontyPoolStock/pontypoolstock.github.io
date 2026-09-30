@@ -30,7 +30,8 @@ export default function renderTable(data, cols, actions = true) {
   table += `</tr></thead><tbody>`;
 
   data.forEach((item) => {
-    table += `<tr>`;
+    //^ The row carries its entity id so a page can open a preview card for it
+    table += `<tr data-id="${item.id ?? ""}">`;
     cols.forEach((col) => {
       table += `<td>${cellValue(item, col)}</td>`;
     });
@@ -56,7 +57,7 @@ export default function renderTable(data, cols, actions = true) {
 
   data.forEach((item) => {
     cards += `
-      <div class="bg-white border rounded p-3 shadow-sm">
+      <div class="bg-white border rounded p-3 shadow-sm entity-card" data-id="${item.id ?? ""}">
         <div class="d-flex justify-content-between align-items-start">
           <div class="flex-grow-1">
     `;

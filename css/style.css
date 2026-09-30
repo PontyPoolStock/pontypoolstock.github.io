@@ -2347,3 +2347,154 @@ a:focus-visible,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Product preview card — opened by clicking any product row on Products
+   --------------------------------------------------------------------------- */
+.preview-row {
+  cursor: pointer;
+}
+
+#productPreviewModal .modal-dialog {
+  max-width: 880px;
+}
+
+#productPreviewModal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.product-preview {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.product-preview-media {
+  display: grid;
+  place-items: center;
+  min-height: 210px;
+  padding: 0.75rem;
+  background: var(--pontypool-soft);
+  border: 1px solid var(--pontypool-border);
+  border-radius: 12px;
+}
+
+.product-preview-image {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.product-preview-empty {
+  display: grid;
+  place-items: center;
+  gap: 0.4rem;
+  padding: 2rem 0.5rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.product-preview-empty i {
+  font-size: 2rem;
+  color: #cbd5e1;
+}
+
+.product-preview-name {
+  margin-bottom: 0.55rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--pontypool-dark);
+  overflow-wrap: anywhere;
+}
+
+.preview-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.preview-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--pontypool-white);
+  border: 1px solid var(--pontypool-border);
+  border-radius: 10px;
+}
+
+.preview-detail-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.preview-detail-label i {
+  color: #ca8a04;
+}
+
+.preview-detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--pontypool-dark);
+}
+
+.preview-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pontypool-muted);
+  border-bottom: 1px solid var(--pontypool-border);
+}
+
+.preview-ratings-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.85rem;
+  color: var(--pontypool-muted);
+  background: var(--pontypool-soft);
+  border: 1px dashed var(--pontypool-border);
+  border-radius: 10px;
+}
+
+.product-preview-ratings th {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.product-preview-ratings td {
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+
+/* The row tint stays, the table's left bar would clash with the card frame. */
+.product-preview-ratings tbody tr:hover {
+  background: #fffdf0;
+  box-shadow: none;
+}
+
+@media (min-width: 576px) {
+  .product-preview {
+    grid-template-columns: 260px 1fr;
+    align-items: start;
+  }
+}
