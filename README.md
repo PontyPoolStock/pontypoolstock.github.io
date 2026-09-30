@@ -308,8 +308,9 @@ event type handles every `[data-low-stock-open]` trigger — so re-rendering a p
 ### `preview.js`
 The product card behind a click on any product row: picture, category, unit, price,
 stock value, status, and one line per rating. The category card behind a click on any
-category row: picture, parent category, total stock, stock value, average per product,
-and the products inside it.
+category row: picture, product count and health badges, total stock, stock value,
+needs-reorder count, price range, and the products inside it (click a product to
+open its own card).
 
 ```javascript
 openProductPreview(product, { categories, onEdit })

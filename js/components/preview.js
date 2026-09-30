@@ -94,7 +94,7 @@ export function openCategoryPreview(
   const items = productsInCategory(products, category.id);
   const modalElement = mountCard(
     CATEGORY_CARD_ID,
-    categoryCardHtml(category, categories, items),
+    categoryCardHtml(category, items),
   );
 
   modalElement
@@ -254,17 +254,13 @@ function cardShell(modalId, icon, title, actionLabel, bodyHtml) {
 
 //* The category card: the picture, then how much of the catalogue sits inside it,
 //* then the products themselves — one glance instead of opening every product.
-function categoryCardHtml(category, categories, items) {
+function categoryCardHtml(category, items) {
   const units = items.reduce((sum, product) => sum + getProductStock(product), 0);
   const value = items.reduce((sum, product) => sum + getProductStockValue(product), 0);
   const low = items.filter((product) => getProductStatusCode(product) === "low").length;
   const out = items.filter((product) => getProductStatusCode(product) === "out").length;
   const healthy = items.length - low - out;
-  const parentId = category.parentId;
-  const parent =
-    parentId === "" || parentId === null || parentId === undefined
-      ? "Top level"
-      : escapeHtml(getCategoryLabel(categories, parentId));
+  const range = categoryPriceRange(items);
 
   return cardShell(
     CATEGORY_CARD_ID,
@@ -291,14 +287,20 @@ function categoryCardHtml(category, categories, items) {
             ${out ? `<span class="status-badge status-out">${out} out</span>` : ""}
           </div>
           <div class="preview-detail-grid">
-            ${detailHtml("bi-diagram-3", "Sits under", parent)}
             ${detailHtml("bi-box-seam", "Total stock", `${units} unit${units === 1 ? "" : "s"}`)}
             ${detailHtml("bi-graph-up-arrow", "Stock value", formatCurrency(value))}
-            ${detailHtml(
-              "bi-cash-coin",
-              "Average per product",
-              formatCurrency(items.length ? value / items.length : 0),
-            )}
+            ${detailHtml("bi-arrow-repeat", "Needs reorder", `${low + out}`)}
+            ${
+              range
+                ? detailHtml(
+                    "bi-tag",
+                    "Price range",
+                    range.min === range.max
+                      ? formatCurrency(range.min)
+                      : `${formatCurrency(range.min)} – ${formatCurrency(range.max)}`,
+                  )
+                : ""
+            }
           </div>
           ${
             category.description
@@ -362,6 +364,24 @@ function priceText(product) {
   return range.min === range.max
     ? formatCurrency(range.min)
     : `${formatCurrency(range.min)} – ${formatCurrency(range.max)}`;
+}
+
+//* Cheapest and dearest price anywhere in a category — each product's rating
+//* range when it has one, its own price when it does not. Null when nothing
+//* inside the category carries a price at all.
+function categoryPriceRange(items) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const product of items) {
+    const range = getVariantPriceRange(getProductVariants(product));
+    const prices = range ? [range.min, range.max] : [Number(product.price) || 0];
+    for (const price of prices) {
+      if (!(price > 0)) continue;
+      if (price < min) min = price;
+      if (price > max) max = price;
+    }
+  }
+  return min === Infinity ? null : { min, max };
 }
 
 //* Short "Low"/"Out" wording, for the tight list column
