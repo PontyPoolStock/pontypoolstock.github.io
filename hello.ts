@@ -138,6 +138,24 @@ function tokenIsValid(token: string) {
   }
 }
 
+//* Read the { u, e } claims out of a signed token. Callers reach this only
+//* after tokenIsValid has already checked the signature, so the values are
+//* trustworthy — the renewal endpoint uses `u` to prove the account still exists.
+function readTokenClaims(token: string) {
+  const [payload] = String(token || "").split(".");
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8")) as {
+      u?: unknown;
+      e?: unknown;
+    };
+    if (claims.u === undefined || claims.e === undefined) return null;
+    return { u: String(claims.u), e: Number(claims.e) };
+  } catch {
+    return null;
+  }
+}
+
 function getRoute(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
   return { resource: parts[0] || "", id: parts[1] || "" };
@@ -697,6 +715,32 @@ export default async function api(request: Request): Promise<Response> {
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     if (!tokenIsValid(token)) {
       return json({ error: "Authentication required" }, 401);
+    }
+
+    //* A live token can be traded in for a brand-new one, which slides the
+    //* session forward. A remembered browser that opens the app at least once
+    //* every REMEMBERED_TOKEN_TTL_MS therefore never reaches an expired
+    //* session: "keep me signed in" stays true for as long as the app is used.
+    if (resource === "auth" && id === "refresh" && request.method === "POST") {
+      let body: Record<string, unknown> = {};
+      try {
+        body = await readBody(request);
+      } catch {
+        body = {};
+      }
+
+      const claims = readTokenClaims(token);
+      if (!claims) return json({ error: "Authentication required" }, 401);
+
+      //* The account must still exist — a deleted user's token must not keep
+      //* renewing itself just because its signature is still good.
+      const account = await pool.query(`SELECT id FROM users WHERE id = $1 LIMIT 1`, [claims.u]);
+      if (!account.rows[0]) return json({ error: "Authentication required" }, 401);
+
+      //* Renewal honours the same flag as sign-in, so a session-only login
+      //* renews to another working-day token instead of becoming permanent.
+      const ttlMs = body.rememberMe === false ? TOKEN_TTL_MS : REMEMBERED_TOKEN_TTL_MS;
+      return json({ token: signToken(account.rows[0].id, ttlMs), expiresAt: Date.now() + ttlMs });
     }
 
     if (!Object.prototype.hasOwnProperty.call(tableNames, resource)) return json({ error: "Not found" }, 404);

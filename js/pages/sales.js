@@ -13,8 +13,10 @@ import {
   getVariantsTotalQuantity,
   getVariantPrice,
   getProductDisplayName,
+  describeApiError,
   debounce,
 } from "../utils/helpers.js";
+import { showToast, confirmAction } from "../components/toast.js";
 
 let sales = [];
 let products = [];
@@ -31,14 +33,23 @@ export async function loadSales() {
 
 //* Sales and stock are separate sources on purpose: a recorded sale writes a
 //* sales row and moves stock in one transaction, so both pages agree.
-async function loadData() {
+//* `freshSales` bypasses the local cache — used when the list on screen has
+//* just been proved wrong by the server, so we must ask it directly.
+async function loadData({ freshSales = false } = {}) {
   const [saleData, productData] = await Promise.all([
-    fetchData("sales"),
+    fetchData("sales", freshSales ? { fresh: true } : undefined),
     fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
   ]);
-  sales = (Array.isArray(saleData) ? saleData : [])
-    .sort((a, b) => new Date(b.soldAt || b.createdAt) - new Date(a.soldAt || a.createdAt));
+  sales = sortSales(Array.isArray(saleData) ? saleData : []);
   products = Array.isArray(productData) ? productData : [];
+}
+
+//* Newest first — shared with the background refresh so a repaint caused by
+//* fresh data never reorders the table under the user's cursor.
+function sortSales(list) {
+  return [...list].sort(
+    (a, b) => new Date(b.soldAt || b.createdAt) - new Date(a.soldAt || a.createdAt),
+  );
 }
 
 function renderSalesPage() {
@@ -65,15 +76,15 @@ function renderSalesPage() {
       <div class="sale-hero-stats">
         <div class="sale-hero-stat">
           <span>Sales today</span>
-          <strong>${formatCurrency(getSalesTotal(today))}</strong>
+          <strong id="salesTodayTotal">${formatCurrency(getSalesTotal(today))}</strong>
         </div>
         <div class="sale-hero-stat">
           <span>Units today</span>
-          <strong>${getSalesUnits(today).toLocaleString("en-US")}</strong>
+          <strong id="salesTodayUnits">${getSalesUnits(today).toLocaleString("en-US")}</strong>
         </div>
         <div class="sale-hero-stat">
           <span>All time</span>
-          <strong>${formatCurrency(getSalesTotal(sales))}</strong>
+          <strong id="salesAllTimeTotal">${formatCurrency(getSalesTotal(sales))}</strong>
         </div>
       </div>
     </section>
@@ -490,33 +501,62 @@ function restoreSaleFormState(state) {
 
 //* Voiding a sale returns the units it took to stock on the server, inside the
 //* same transaction that removes the row, so the two can never drift apart.
+//* Every outcome is reported on screen: a delete whose failure only appeared
+//* in a form at the far top of the page read as "I clicked and nothing
+//* happened", which is exactly how this feature got reported as broken.
 async function handleDeleteSale(id) {
   const sale = sales.find((item) => String(item.id) === String(id));
-  if (!sale) return;
+  if (!sale) {
+    //* Already gone from the loaded list (a background refresh dropped it).
+    //* Still say so — a silent return looks like a dead button.
+    showToast("That sale is no longer in the list.", "warning");
+    await refreshSaleHistory({ fresh: true });
+    return;
+  }
 
   const quantity = Number(sale.quantity) || 0;
   const label = sale.productName || "this product";
   const units = `${quantity} unit${quantity === 1 ? "" : "s"}`;
-  const ok = confirm(
-    `Delete this sale?\n\n${quantity} × ${label} — ${formatCurrency(sale.total)}\n\n`
-    + `${units} will be returned to stock.`,
-  );
+  const ok = await confirmAction({
+    title: "Delete this sale?",
+    message: `${quantity} × ${label} — ${formatCurrency(sale.total)}\n\n${units} will be returned to stock.`,
+    confirmLabel: "Delete sale",
+    cancelLabel: "Keep it",
+    tone: "danger",
+  });
   if (!ok) return;
 
   const formState = captureSaleFormState();
   const result = await deleteData("sales", sale.id);
+
   if (!result.ok) {
-    //* The API can refuse for a real reason (missing product or rating), so
-    //* show what it said rather than a generic "something went wrong".
-    showSaleFormMessage(
-      String(result.error || "Unable to delete this sale.").replace(/^Request failed with status \d+\s*:\s*/, ""),
-      "danger",
-    );
+    //* 404 is the stale-cache case: this browser was still listing a sale the
+    //* server has never heard of (or one deleted elsewhere / wiped by a
+    //* migration). Repaint from the server so the phantom row disappears —
+    //* leaving it on screen is what made the click look like it did nothing.
+    if (result.status === 404) {
+      showToast("That sale is no longer on the server — the list has been refreshed.", "warning");
+      await refreshSaleHistory({ formState, fresh: true });
+      return;
+    }
+    //* Otherwise the API refused for a real reason (a rating that has since
+    //* been removed, say): show exactly what it said, where the user is looking.
+    const reason = describeApiError(result.error, "Unable to delete this sale.");
+    showSaleFormMessage(reason, "danger");
+    showToast(reason, "danger", { title: "Delete failed" });
     return;
   }
 
-  //* Re-fetch so the history, the KSh totals and stock all reflect the delete
-  await loadData();
+  const message = `Sale deleted: ${quantity} × ${label} — ${units} returned to stock.`;
+  await refreshSaleHistory({ formState });
+  showSaleFormMessage(message, "success");
+  showToast(message, "success");
+}
+
+//* Reload the history, repaint it, and put back whatever was being typed into
+//* the Record Sale form. Every path lands on exactly the same screen state.
+async function refreshSaleHistory({ formState, fresh = false } = {}) {
+  await loadData({ freshSales: fresh });
   lastFiltered = [...sales];
   //* Removing the last row of the final page would otherwise strand the user
   //* on an empty page, so step back one page when that happens.
@@ -525,10 +565,6 @@ async function handleDeleteSale(id) {
 
   renderSalesPage();
   restoreSaleFormState(formState);
-  showSaleFormMessage(
-    `Sale deleted: ${quantity} × ${label} — ${units} returned to stock.`,
-    "success",
-  );
 }
 
 function openEditSaleModal(sale) {
@@ -669,6 +705,14 @@ function openEditSaleModal(sale) {
       return;
     }
 
+    modal.hide();
+    //* Re-fetch so history, KSh totals and stock all reflect the edit
+    await loadData();
+    lastFiltered = [...sales];
+    renderSalesPage();
+  });
+}
+
 //* Editing must be able to re-pick the original rating even when it is now sold
 //* out, otherwise a sale could never be corrected back to what it was.
 function populateEditVariantSelect(variantSelect, preferredIndex) {
@@ -710,15 +754,6 @@ function showEditSaleMessage(message, tone) {
   const icon = tone === "success" ? "check-circle-fill" : "exclamation-triangle-fill";
   alert.className = `alert alert-${tone} sale-form-alert`;
   alert.innerHTML = `<i class="bi bi-${icon} me-2"></i>${escapeHtml(message)}`;
-}
-
-
-    modal.hide();
-    //* Re-fetch so history, KSh totals and stock all reflect the edit
-    await loadData();
-    lastFiltered = [...sales];
-    renderSalesPage();
-  });
 }
 
 function filterSales() {
@@ -777,5 +812,62 @@ function formatSaleDate(value) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+//* A sale can disappear while this page shows a cached copy of it — deleted
+//* on another device, or wiped by a migration. When the background refresh
+//* lands with different rows, repaint the history and the hero totals in
+//* place; the Record Sale form, which may be half-filled, is left alone.
+function salesSignature(list) {
+  return list
+    .map((sale) => `${sale.id}:${sale.quantity}:${sale.unitPrice}:${sale.total}`)
+    .sort()
+    .join("|");
+}
+
+function updateHeroStats() {
+  const today = getSalesForLocalDay(sales);
+  setHeroStat("salesTodayTotal", formatCurrency(getSalesTotal(today)));
+  setHeroStat("salesTodayUnits", getSalesUnits(today).toLocaleString("en-US"));
+  setHeroStat("salesAllTimeTotal", formatCurrency(getSalesTotal(sales)));
+}
+
+function setHeroStat(id, text) {
+  const el = document.getElementById(id);
+  if (!el || el.textContent === text) return;
+  el.textContent = text;
+  //* Re-trigger the pop so a figure that just changed draws the eye.
+  el.classList.remove("bump");
+  void el.offsetWidth;
+  el.classList.add("bump");
+}
+
+function applyFreshSales(rows) {
+  //* Another page is on screen — nothing here to repaint.
+  if (!document.getElementById("salesTableContainer")) return;
+  const list = Array.isArray(rows) ? rows : [];
+  if (salesSignature(list) === salesSignature(sales)) return;
+
+  sales = sortSales(list);
+  const search = document.getElementById("searchSales");
+  const period = document.getElementById("salePeriodFilter");
+  if (search && period) {
+    //* Re-derives lastFiltered from the new `sales` and repaints the table,
+    //* keeping whatever search/period the user has set.
+    filterSales();
+  } else {
+    lastFiltered = [...sales];
+    document.getElementById("salesTableContainer").innerHTML = getTableHtml(lastFiltered);
+  }
+  updateHeroStats();
+}
+
+//* Registered once for the life of the module: pages rebuild their DOM on
+//* every render, so a per-render listener would stack duplicates.
+if (typeof document !== "undefined") {
+  document.addEventListener("pontypool:data", (event) => {
+    if (event?.detail?.endpoint !== "sales") return;
+    applyFreshSales(event.detail.data);
   });
 }

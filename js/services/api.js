@@ -1,4 +1,14 @@
-import { DEFAULT_API_URL, clearSession, getAuthToken, getSavedApiUrl, saveApiUrl } from "../config.js";
+import {
+  DEFAULT_API_URL,
+  USER_STORAGE_KEY,
+  authTokenIsUsable,
+  clearSession,
+  getAuthToken,
+  getSavedApiUrl,
+  readAuthTokenExpiry,
+  saveApiUrl,
+  saveAuthToken,
+} from "../config.js";
 
 // Canonical slim field projections for fast list views (~99.8% smaller payload)
 export const PRODUCT_LIST_FIELDS = "id,name,sku,categoryId,price,quantity,reorderLevel,unit,variants,createdAt,updatedAt";
@@ -303,10 +313,79 @@ async function responseErrorMessage(response) {
   }
 }
 
+//* Where the saved session lives says how it was signed in: localStorage =
+//* "keep me signed in", sessionStorage = session-only.
+function sessionIsPersistent() {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem(USER_STORAGE_KEY) !== null;
+  } catch {
+    return true;
+  }
+}
+
+//* Single-flight renewal: parallel requests that all hit a 401 must share one
+//* refresh call instead of racing a handful of their own.
+let renewalInFlight = null;
+
+//* Trade a live token in for a brand-new one and slide the stored expiry with
+//* it. This never throws and never clears anything — a renewal that fails
+//* (offline, server briefly down) must leave the existing session untouched.
+export function refreshSession() {
+  if (!renewalInFlight) {
+    renewalInFlight = renewSessionOnce()
+      .catch(() => false)
+      .finally(() => {
+        renewalInFlight = null;
+      });
+  }
+  return renewalInFlight;
+}
+
+async function renewSessionOnce() {
+  const token = getAuthToken();
+  if (!token) return false;
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ rememberMe: sessionIsPersistent() }),
+    });
+    if (!response.ok) return false;
+
+    const result = await response.json();
+    if (!result || !result.token) return false;
+
+    const persistent = sessionIsPersistent();
+    saveAuthToken(result.token, { persistent });
+    slideStoredExpiry(Number(result.expiresAt) || readAuthTokenExpiry(result.token), persistent);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+//* Keep the stored session's expiry in step with the renewed token so
+//* getCurrentUser never drops a session the server still honours.
+function slideStoredExpiry(expiresAt, persistent) {
+  if (!expiresAt) return;
+  try {
+    const storage = persistent ? localStorage : sessionStorage;
+    const raw = storage.getItem(USER_STORAGE_KEY);
+    if (!raw) return;
+    const user = JSON.parse(raw);
+    user.expiresAt = expiresAt;
+    storage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  } catch {}
+}
+
 async function fetchWithFallback(endpoint, options = {}) {
   const primaryUrl = getApiBaseUrl();
 
-  const requestWithBase = async (baseUrl) => {
+  const requestWithBase = async (baseUrl, allowRenewal = true) => {
     const token = getAuthToken();
     const headers = {
       ...(options.headers || {}),
@@ -317,6 +396,13 @@ async function fetchWithFallback(endpoint, options = {}) {
       headers,
     });
     if (response.status === 401 && endpoint !== "auth/login") {
+      //^ One silent renewal before giving up: a token that is a hair past its
+      //^ local skew can still be traded in, so a single 401 must not be what
+      //^ ends the session. Only when the renewal itself is rejected does the
+      //^ user get sent back to the sign-in screen.
+      if (allowRenewal && token && (await refreshSession())) {
+        return requestWithBase(baseUrl, false);
+      }
       clearSession();
       if (typeof window !== "undefined" && !window.location.pathname.endsWith("login.html")) {
         //^ Say why instead of dumping the user back on a blank form
@@ -351,14 +437,56 @@ async function fetchWithFallback(endpoint, options = {}) {
   }
 }
 
+//* Stale-while-revalidate: a cache hit paints instantly (that is the whole
+//* point of the cache) but also schedules one quiet background check so the
+//* copy on screen cannot drift away from the server forever. Without this a
+//* row deleted on another device — or wiped by a migration — stays on screen
+//* indefinitely, and every action on it fails against a server that has never
+//* heard of it. A write bumps mutationVersion, so a refresh that started
+//* before it is discarded instead of overwriting the newer optimistic copy.
+const REVALIDATE_AFTER_MS = 30_000;
+const lastRevalidatedAt = new Map();
+
+function revalidateInBackground(endpoint) {
+  if (typeof document === "undefined") return;
+  if (pendingRequests.has(endpoint)) return;
+  const last = lastRevalidatedAt.get(endpoint) || 0;
+  if (Date.now() - last < REVALIDATE_AFTER_MS) return;
+  //* An unusable session would answer every one of these with a 401 and the
+  //* 401 handler sends the user to the sign-in screen — a background check must
+  //* never log somebody out, so leave session expiry to requests they made.
+  if (!authTokenIsUsable()) return;
+  lastRevalidatedAt.set(endpoint, Date.now());
+
+  const version = mutationVersion;
+  (async () => {
+    try {
+      const response = await fetchWithFallback(endpoint);
+      const data = await response.json();
+      if (version !== mutationVersion) return; // a newer write won
+      const previous = dataCache.get(endpoint);
+      if (JSON.stringify(previous) === JSON.stringify(data)) return;
+      dataCache.set(endpoint, data);
+      writePersistentCache(endpoint, data);
+      document.dispatchEvent(
+        new CustomEvent("pontypool:data", { detail: { endpoint, data } }),
+      );
+    } catch {
+      //* Offline or a dead session: the cached copy is still the best answer.
+    }
+  })();
+}
+
 export async function fetchData(endpoint, { fresh = false } = {}) {
   if (!fresh) {
     if (dataCache.has(endpoint)) {
+      revalidateInBackground(endpoint);
       return dataCache.get(endpoint);
     }
     const stored = await readPersistentCache(endpoint);
     if (stored !== null && stored !== undefined) {
       dataCache.set(endpoint, stored);
+      revalidateInBackground(endpoint);
       return stored;
     }
   }
@@ -531,9 +659,11 @@ export async function updateData(endpoint, id, data) {
   }
 }
 
-//* Returns { ok, error } rather than a bare boolean: a rejected delete is
-//* almost always a real reason worth showing ("the product no longer exists",
-//* "not found"), not a generic failure, so the caller needs the detail.
+//* Returns { ok, status, error } rather than a bare boolean: a rejected delete
+//* is almost always a real reason worth showing ("the product no longer
+//* exists", "not found"), not a generic failure, so the caller needs both the
+//* detail and the status — a 404 in particular means the row only ever existed
+//* in this browser's cache and the list itself is stale.
 //* The existing product/category callers ignore the result and still work.
 export async function deleteData(endpoint, id) {
   try {
@@ -543,14 +673,18 @@ export async function deleteData(endpoint, id) {
     if (response.ok) {
       // Optimistic removal + background refresh — the row disappears at once.
       applyOptimisticMutation(collectionEndpoint(endpoint), "DELETE", id);
-    } else {
-      clearDataCache(endpoint);
     }
-    if (response.status === 204) return { ok: true, error: "" };
-    return { ok: response.ok, error: response.ok ? "" : "Delete failed" };
+    if (response.status === 204) return { ok: true, status: 204, error: "" };
+    return { ok: true, status: response.status, error: "" };
   } catch (error) {
     console.error("Error deleting data:", error);
-    return { ok: false, error: error?.message || "Unable to delete" };
+    const message = error?.message || "Unable to delete";
+    const status = Number(/status (\d+)/.exec(message)?.[1]) || 0;
+    //* The server answered and said no, so whatever the cache is holding is at
+    //* best out of date — drop it so the next read goes and asks again. A
+    //* network failure (no status) keeps the cache: offline data is the point.
+    if (status > 0) clearDataCache(endpoint);
+    return { ok: false, status, error: message };
   }
 }
 

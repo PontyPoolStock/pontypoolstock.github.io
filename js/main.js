@@ -55,7 +55,15 @@ function navigateTo(text) {
   // A genuine page switch: return to the top instantly and deliberately.
   window.scrollTo(0, 0);
 
-  $("#pageTitle").text(text);
+  //& Re-pointing the heading with a quick fade + settle marks the page change
+  //& and ties it to the content animation below.
+  const titleEl = document.getElementById("pageTitle");
+  if (titleEl) {
+    titleEl.textContent = text;
+    titleEl.classList.remove("page-title-swap");
+    void titleEl.offsetWidth; // restart the animation
+    titleEl.classList.add("page-title-swap");
+  }
   $(".nav-item").removeClass("active-content");
   $(`.nav-item[data-page="${text}"]`).addClass("active-content");
 

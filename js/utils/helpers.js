@@ -309,6 +309,18 @@ export function formatCurrency(amount) {
   const num = Math.round((Number(amount) || 0) * 100) / 100;
   return `KSh ${num.toLocaleString("en-US")}`;
 }
+
+//* The API's failures arrive as "Request failed with status 404: Not found" —
+//* developer-speak that says nothing a person can act on. Strip the plumbing,
+//* translate the reasons that actually reach users, and hand back a sentence.
+export function describeApiError(error, fallback = "Something went wrong.") {
+  const raw = String(error || "")
+    .replace(/^Request failed with status \d+\s*:\s*/, "")
+    .trim();
+  if (!raw || /^Request failed with status \d+$/i.test(raw)) return fallback;
+  if (/^not found$/i.test(raw)) return "It no longer exists on the server.";
+  return raw;
+}
 //* Shared by the Products status badge and the status filter so they always agree
 export function getProductStatusCode(product) {
   const variants = getProductVariants(product);

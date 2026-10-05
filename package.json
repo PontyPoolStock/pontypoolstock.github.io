@@ -5,7 +5,7 @@
   "description": "A responsive stock management application for products, categories, and inventory.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node scripts/api-cache.test.mjs && node scripts/sales-delete.test.mjs",
     "serve": "node scripts/static-server.mjs",
     "share": "npx --yes localtunnel --port 5500 --subdomain pontypool",
     "server": "json-server --watch data/db.json --port 3000",
@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
-    "@types/pg": "^8.23.1"
+    "@types/pg": "^8.23.1",
+    "jsdom": "^30.1.2"
   }
 }

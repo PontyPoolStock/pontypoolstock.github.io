@@ -10,8 +10,9 @@ import {
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import { openCategoryPreview } from "../components/preview.js";
+import { showToast, confirmAction } from "../components/toast.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml } from "../utils/helpers.js";
+import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml, describeApiError } from "../utils/helpers.js";
 
 let products = [];
 let categories = [];
@@ -225,21 +226,31 @@ function handleProductEdit(id) {
   }, { initialProduct: cached, categories, refreshFields: PRODUCT_EDIT_FIELDS });
 }
 
-//* DELETE
+//* DELETE — repaint first, verify in the background; a rejected delete
+//* restores the list. Both outcomes are toasted so the click always answers.
 async function handleDelete(id) {
   let c = categories.find((e) => e.id == id);
   if (!c) return;
 
   let productsCount = products.filter((p) => p.categoryId == id).length;
   if (productsCount > 0) {
-    alert("You can't delete this category because it has products.");
+    showToast(
+      `You can't delete this category because it still has ${productsCount} product${productsCount === 1 ? "" : "s"}.`,
+      "warning",
+      { title: "Category in use" },
+    );
     return;
   }
 
-  let ok = confirm(`Delete category "${c.name}"?`);
+  const ok = await confirmAction({
+    title: "Delete this category?",
+    message: `"${c.name}" will be removed. Products already filed under it are not affected.`,
+    confirmLabel: "Delete category",
+    cancelLabel: "Keep it",
+    tone: "danger",
+  });
   if (!ok) return;
 
-  //* Repaint first, verify in the background — a rejected delete restores.
   categories = categories.filter((e) => e.id != id);
   lastFiltered = [...categories];
   currentPage = 1;
@@ -248,11 +259,21 @@ async function handleDelete(id) {
   const result = await deleteData("categories", id);
   if (!result.ok) {
     console.warn("Category delete was rejected:", result.error);
+    const stale = result.status === 404;
+    showToast(
+      stale
+        ? `"${c.name}" is no longer on the server — the list has been refreshed.`
+        : describeApiError(result.error, "Unable to delete this category."),
+      stale ? "warning" : "danger",
+      { title: "Delete failed" },
+    );
     await loadData();
     lastFiltered = [...categories];
     filterCategories();
     return;
   }
+
+  showToast(`"${c.name}" deleted.`, "success");
 
   //* The audit trail is cosmetic — never hold the UI open for it.
   void postData("activityLog", {

@@ -1,4 +1,4 @@
-import { postData } from "../services/api.js";
+import { postData, refreshSession } from "../services/api.js";
 import {
   DEFAULT_API_URL,
   USER_STORAGE_KEY,
@@ -249,6 +249,12 @@ export function checkAuth() {
   }
 
   renderCurrentUser(user);
+
+  //* Slide the session forward in the background while the app opens: for as
+  //* long as the browser comes back inside its window, "keep me signed in"
+  //* never runs out and the user is never bounced back to the sign-in form.
+  void refreshSession();
+
   return user;
 }
 

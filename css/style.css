@@ -2536,3 +2536,454 @@ a:focus-visible,
   color: var(--pontypool-muted);
   overflow-wrap: anywhere;
 }
+
+/* =============================================================================
+   Motion pass 2026-10-05 — toasts, the confirm dialog and the extra shine.
+   The prefers-reduced-motion block above already flattens every duration;
+   the extra rules at the end of this section also stop the loops outright.
+   ========================================================================== */
+
+/* ---- Toasts ------------------------------------------------------------- */
+/* Fixed top-right (bottom on phones), newest at the top. They sit above the
+   modal layer so a message raised from inside a dialog still gets through. */
+.toast-stack {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(22rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.app-toast {
+  --toast-accent: var(--pontypool-yellow);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.8rem 2.4rem 0.9rem 0.95rem;
+  overflow: hidden;
+  pointer-events: auto;
+  background: var(--pontypool-white);
+  border: 1px solid var(--pontypool-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgb(15 23 42 / 18%);
+  animation: toastIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.app-toast::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--toast-accent);
+}
+
+.app-toast--success { --toast-accent: #16a34a; }
+.app-toast--danger { --toast-accent: #ef4444; }
+.app-toast--warning { --toast-accent: #f59e0b; }
+.app-toast--info { --toast-accent: #0284c7; }
+
+.app-toast.is-leaving {
+  animation: toastOut 0.3s ease forwards;
+}
+
+.app-toast__icon {
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+  font-size: 1.1rem;
+  color: var(--toast-accent);
+  animation: toastIconPop 0.4s 0.12s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.app-toast__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-toast__title {
+  display: block;
+  margin-bottom: 0.1rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--toast-accent);
+}
+
+.app-toast__message {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+
+.app-toast__close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: #94a3b8;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-toast__close:hover {
+  color: var(--pontypool-black);
+  background: var(--pontypool-soft);
+  transform: rotate(90deg);
+}
+
+/* Countdown bar: it doubles as the "how long is left" cue and it is what the
+   hover pause below freezes. */
+.app-toast__bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--toast-accent);
+  opacity: 0.7;
+  transform: scaleX(1);
+  transform-origin: left center;
+  animation: toastBar linear forwards;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(2.5rem) scale(0.96); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(2rem) scale(0.97); }
+}
+
+@keyframes toastBar {
+  to { transform: scaleX(0); }
+}
+
+@keyframes toastIconPop {
+  from { opacity: 0; transform: scale(0.4) rotate(-25deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@media (max-width: 575.98px) {
+  .toast-stack {
+    top: auto;
+    bottom: 1rem;
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+  }
+}
+
+/* ---- Confirmation dialog ------------------------------------------------ */
+/* Stands in for window.confirm: same promises, but it can be themed, it never
+   leaves the page, and Escape / the backdrop are a "no" like everywhere else. */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(5px);
+  animation: confirmBackdrop 0.22s ease both;
+}
+
+.confirm-card {
+  position: relative;
+  width: min(25rem, 100%);
+  padding: 1.4rem 1.4rem 1.2rem;
+  overflow: hidden;
+  background: var(--pontypool-white);
+  border: 1px solid var(--pontypool-border);
+  border-radius: 18px;
+  box-shadow: 0 30px 70px rgb(15 23 42 / 40%);
+  animation: confirmPop 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Slowly travelling brand stripe so even a destructive prompt looks like it
+   belongs to this app. */
+.confirm-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--pontypool-yellow),
+    #fff7c6,
+    var(--pontypool-yellow-dark),
+    #fff7c6,
+    var(--pontypool-yellow)
+  );
+  background-size: 250% 100%;
+  animation: stripeSlide 3.5s linear infinite;
+}
+
+.confirm-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.confirm-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.1rem;
+  border-radius: 12px;
+  /* Fallback tone for any caller that is not destructive. */
+  color: #ca8a04;
+  background: #fffbeb;
+}
+
+.confirm-icon--danger {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.confirm-icon--default {
+  color: #ca8a04;
+  background: #fffbeb;
+}
+
+.confirm-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--pontypool-black);
+}
+
+.confirm-message {
+  margin: 0.85rem 0 1.15rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #475569;
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.confirm-accept--danger {
+  color: #fff;
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.confirm-accept--danger:hover,
+.confirm-accept--danger:focus {
+  color: #fff;
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 10px 22px rgb(239 68 68 / 35%);
+}
+
+@keyframes confirmBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes confirmPop {
+  from { opacity: 0; transform: translateY(1rem) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes stripeSlide {
+  to { background-position: -250% 0; }
+}
+
+/* ---- Extra shine -------------------------------------------------------- */
+
+/* The heading re-settles whenever a page is swapped in, tying the top of the
+   screen to the content animation underneath it. */
+.page-title-swap {
+  animation: titleSwap 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes titleSwap {
+  from { opacity: 0; transform: translateY(7px); letter-spacing: 0.06em; }
+  to { opacity: 1; transform: translateY(0); letter-spacing: -0.01em; }
+}
+
+/* A highlight sweeps across the Record Sale banner on a slow loop so the hero
+   never sits dead. The text layers sit above it; the sweep never takes clicks. */
+.sale-hero::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: -45%;
+  z-index: 0;
+  width: 38%;
+  height: 220%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 9%) 45%,
+    rgb(250 204 21 / 26%) 55%,
+    transparent 100%
+  );
+  transform: skewX(-18deg);
+  pointer-events: none;
+  animation: heroSweep 6.5s ease-in-out infinite;
+}
+
+.sale-hero-text,
+.sale-hero-stats {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes heroSweep {
+  0% { left: -45%; opacity: 0; }
+  10% { opacity: 1; }
+  55% { left: 120%; opacity: 0; }
+  100% { left: 120%; opacity: 0; }
+}
+
+/* Gradient crawl on the "Point of sale" kicker. Guarded so the plain yellow
+   text stays if background-clip:text is ever unavailable. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .sale-hero .statistics-kicker {
+    background-image: linear-gradient(
+      90deg,
+      var(--pontypool-yellow) 0%,
+      #ffffff 45%,
+      var(--pontypool-yellow) 90%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: kickerShimmer 4s linear infinite;
+  }
+
+  .page-loading span {
+    background-image: linear-gradient(90deg, #737373 0%, #a3a3a3 40%, #737373 80%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: kickerShimmer 2.2s linear infinite;
+  }
+}
+
+@keyframes kickerShimmer {
+  to { background-position: -200% 0; }
+}
+
+/* Hero totals pop when the background refresh rewrites them. */
+.sale-hero-stat strong.bump {
+  animation: totalBump 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* History cards: staggered entrance. `backwards` rather than `both` on
+   purpose — a filling animation outranks :hover, so `both` would quietly
+   kill the lift below for as long as the element lives. */
+.sale-history-card {
+  animation: cardRise 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.sale-history-card:nth-child(2) { animation-delay: 0.05s; }
+.sale-history-card:nth-child(3) { animation-delay: 0.1s; }
+.sale-history-card:nth-child(n+4) { animation-delay: 0.15s; }
+
+.sale-history-card:hover {
+  transform: translateY(-3px);
+  border-color: rgb(250 204 21 / 55%);
+  box-shadow: 0 14px 30px rgb(15 23 42 / 12%), 0 0 24px rgb(250 204 21 / 20%);
+}
+
+/* Row actions: a tone-coloured glow that says which one is destructive. */
+.sale-delete-btn,
+.sale-edit-btn {
+  transition: background 0.2s ease, color 0.2s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+
+.sale-delete-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgb(239 68 68 / 30%);
+}
+
+.sale-edit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgb(59 130 246 / 28%);
+}
+
+.sale-delete-btn:active,
+.sale-edit-btn:active {
+  transform: scale(0.9);
+}
+
+.sale-history-table tbody tr {
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sale-history-table tbody tr:hover {
+  box-shadow: inset 4px 0 var(--pontypool-yellow);
+}
+
+/* The empty state breathes instead of sitting still. */
+.sale-history-empty i {
+  animation: emptyFloat 3s ease-in-out infinite;
+}
+
+@keyframes emptyFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+/* Filter bars and inputs pick up a brand-coloured ring on focus. */
+.page-filter-bar:focus-within {
+  border-color: var(--pontypool-yellow) !important;
+  box-shadow: 0 0 0 4px rgb(250 204 21 / 18%);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--pontypool-yellow);
+  box-shadow: 0 0 0 0.2rem rgb(250 204 21 / 25%);
+}
+
+/* The Record Sale call to action is the one button people press all day —
+   give it a halo on hover so it is impossible to miss. */
+.sale-total-row .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgb(15 23 42 / 22%), 0 0 0 5px rgb(250 204 21 / 25%);
+}
+
+/* Loops have nowhere to hide under reduced motion: stop them outright rather
+   than letting a 0.01ms infinite animation spin. */
+@media (prefers-reduced-motion: reduce) {
+  .sale-hero::after,
+  .sale-hero .statistics-kicker,
+  .page-loading span,
+  .sale-history-empty i,
+  .confirm-card::before,
+  .app-toast__bar {
+    animation: none !important;
+  }
+}

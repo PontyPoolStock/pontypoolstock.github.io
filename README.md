@@ -166,6 +166,7 @@ Base URL: `js/config.js` → `https://br-blue-base-b451rqwn-api.compute.c-6.us-e
 | PUT | `/sales/:id` | Edit a sale (transactionally: returns the original stock, takes the corrected amount, logs `SALE_EDITED`) |
 | DELETE | `/sales/:id` | Void a sale and return its stock to the same rating |
 | POST | `/auth/login` | Validate email and password — returns the user, a signed session token and its `expiresAt` |
+| POST | `/auth/refresh` | Trade a live token in for a fresh one — returns the new token and its `expiresAt` (sliding session) |
 
 ### Sessions
 
@@ -182,8 +183,17 @@ The browser stores the session with its expiry, and `js/pages/login.js` +
 the dashboard and then bounces back to the form. When a session does end, the sign-in
 screen says so (`./login.html?expired=1`) instead of appearing out of nowhere.
 
-> The 30-day token comes from `hello.ts`, so run `neon deploy --env .env.local` after
-> changing it — an older deployed function still issues 12-hour tokens.
+Sessions **slide**: `js/services/api.js` calls `POST /auth/refresh` in the background
+every time the app opens (and once more before giving up on a `401`), replacing the
+token with a brand-new one and moving the stored expiry with it. A browser that opens
+the app at least once every 30 days therefore never reaches an expired session —
+"keep me signed in" keeps renewing itself for as long as the app is actually used.
+A renewal that fails never clears the session; only a renewal the server itself
+rejects sends the user back to the sign-in screen.
+
+> Renewal lives in `hello.ts`, so run `neon deploy --env .env.local` after changing
+> it — an older deployed function has no `/auth/refresh` (the app then keeps its
+> current behaviour: sessions last their original 30 days / 12 hours).
 
 ---
 

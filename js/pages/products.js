@@ -12,6 +12,7 @@ import {
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import { openProductPreview } from "../components/preview.js";
+import { showToast, confirmAction } from "../components/toast.js";
 import {
   GetCurrentDate,
   escapeHtml,
@@ -25,6 +26,7 @@ import {
   productThumbnailHtml,
   sortData,
   getProductDisplayName,
+  describeApiError,
   debounce,
 } from "../utils/helpers.js";
 
@@ -291,12 +293,21 @@ function handleEdit(id) {
 }
 
 //* DELETE — repaint first so the row vanishes on the click, then verify in
-//* the background; a rejected delete quietly restores the list, as before.
+//* the background; a rejected delete quietly restores the list. The outcome is
+//* toasted either way: a failure with no visible feedback reads as a dead
+//* button, which is how "delete does nothing" bugs go unnoticed.
 async function handleDelete(id) {
   let p = products.find((e) => e.id == id);
   if (!p) return;
 
-  let ok = confirm(`Delete product "${getProductDisplayName(p)}"?`);
+  const name = getProductDisplayName(p);
+  const ok = await confirmAction({
+    title: "Delete this product?",
+    message: `${name}${p.sku ? ` (${p.sku})` : ""} will be removed from the catalogue.`,
+    confirmLabel: "Delete product",
+    cancelLabel: "Keep it",
+    tone: "danger",
+  });
   if (!ok) return;
 
   products = products.filter((e) => e.id != id);
@@ -307,16 +318,26 @@ async function handleDelete(id) {
   const result = await deleteData("products", id);
   if (!result.ok) {
     console.warn("Product delete was rejected:", result.error);
+    const stale = result.status === 404;
+    showToast(
+      stale
+        ? `"${name}" is no longer on the server — the list has been refreshed.`
+        : describeApiError(result.error, "Unable to delete this product."),
+      stale ? "warning" : "danger",
+      { title: "Delete failed" },
+    );
     await loadData();
     lastFiltered = [...products];
     filterProducts();
     return;
   }
 
+  showToast(`"${name}" deleted.`, "success");
+
   //* The audit trail is cosmetic — never hold the UI open for it.
   void postData("activityLog", {
     action: "DELETE_PRODUCT",
-    details: `Product deleted: ${getProductDisplayName(p)}${p.sku ? ` (${p.sku})` : ""}`,
+    details: `Product deleted: ${name}${p.sku ? ` (${p.sku})` : ""}`,
     user: "admin",
     timestamp: GetCurrentDate(),
   });
