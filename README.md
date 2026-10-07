@@ -364,7 +364,7 @@ becomes `null`).
 - Name: required, must not be blank
 - Code (SKU): optional, trimmed
 - Price, Quantity: optional, clamped to `0` or more
-- Unit: optional, normalised to `pcs` / `kg` / `box` (e.g. `2 boxes` also sets quantity)
+- Unit: optional, normalised to `pcs` / `kg` / `box` / `bundle` / `roll` (e.g. `2 boxes` also sets quantity)
 - Ratings / variants: optional and freely combinable (watts + colour + amperes)
 
 ### Category

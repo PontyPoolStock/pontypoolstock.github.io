@@ -15,12 +15,13 @@
     <link rel="dns-prefetch" href="https://br-blue-base-b451rqwn-api.compute.c-6.us-east-2.aws.neon.tech">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
     <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
-    <link rel="stylesheet" href="./css/style.css?v=20261005-1">
+    <link rel="stylesheet" href="./css/style.css?v=20261007-1">
   </head>
 
   <body class="d-flex">
@@ -102,11 +103,13 @@
     window.__PONTYPOOL_CONFIG__ = window.__PONTYPOOL_CONFIG__ || {};
     window.__PONTYPOOL_CONFIG__.apiUrl = saveApiUrl(getSavedApiUrl());
   </script>
-  <script
-      src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-    <script
+  <script defer
+      src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"
+      onload="window.dispatchEvent(new Event('jquery-loaded'))"
+      onerror="window.dispatchEvent(new Event('jquery-loaded'))"></script>
+    <script defer
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="./js/main.js?v=20261005-1" type="module"></script>
+    <script src="./js/main.js?v=20261007-1" type="module"></script>
     <script>
       // Mobile drawer + global click ripple. Pure UI, no data changes.
       (function () {

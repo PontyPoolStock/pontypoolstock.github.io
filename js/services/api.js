@@ -190,7 +190,9 @@ function projectRowLike(payload, sampleRow) {
 //* the very next render (the onAfterSave re-fetch) paints instantly instead of
 //* waiting on a full collection refetch. The background refresh below then
 //* replaces the optimistic copy with server truth.
-function applyOptimisticMutation(collection, kind, payload) {
+//* `revalidate: false` defers that refresh — used when the patch lands before
+//* the request does, so a still-running refresh can't repaint the old row.
+function applyOptimisticMutation(collection, kind, payload, { revalidate = true } = {}) {
   mutationVersion += 1;
   const keepKeys = new Set();
 
@@ -237,13 +239,15 @@ function applyOptimisticMutation(collection, kind, payload) {
   }
 
   // A freshly stored/changed image must win over the old cached thumbnail.
-  if (kind !== "DELETE" && payload && typeof payload.imageUrl === "string") {
+  // An empty string (an edit that never touched the image) leaves it alone.
+  if (kind !== "DELETE" && payload && typeof payload.imageUrl === "string" && payload.imageUrl) {
     const imageKey = `img:${collection}:${payload.id}`;
     imageCache.set(imageKey, payload.imageUrl);
     writePersistentCache(imageKey, payload.imageUrl);
   }
 
   deletePersistentKeysExcept(collection, keepKeys);
+  if (!revalidate) return;
   revalidateCollection(collection);
   // Recording a sale moves stock on the server too — refresh products so the
   // next visit shows the true quantities.
@@ -540,7 +544,11 @@ export async function fetchEntityImage(resource, id) {
 
   const task = (async () => {
     try {
-      const record = await fetchData(`${resource}/${id}?fields=imageUrl`);
+      //* Straight to the wire instead of fetchData: a base64 image record has
+      //* no business in the list cache, where revalidateCollection would
+      //* refetch its ~90 KB after every write to the collection.
+      const response = await fetchWithFallback(`${resource}/${id}?fields=imageUrl`);
+      const record = await response.json();
       const url = record?.imageUrl || "";
       imageCache.set(cacheKey, url);
       writePersistentCache(cacheKey, url);
@@ -638,15 +646,27 @@ export async function postData(endpoint, data) {
   }
 }
 
-export async function updateData(endpoint, id, data) {
+export async function updateData(endpoint, id, data, { optimistic = false } = {}) {
+  const collection = collectionEndpoint(endpoint);
+  const updatedAt = new Date().toISOString();
+  const body = JSON.stringify({ ...data, updatedAt });
+
+  //* Optimistic mode patches the caches BEFORE the round trip so the caller
+  //* can close and repaint in the same tick while the PUT is still flying.
+  //* Server truth is merged over it once the response lands, and the
+  //* background revalidation waits for exactly that — a refresh started now
+  //* could otherwise paint the pre-save row back over the patch.
+  if (optimistic && collection !== "auth") {
+    applyOptimisticMutation(collection, "PUT", { ...data, id, updatedAt }, { revalidate: false });
+  }
+
   try {
     const response = await fetchWithFallback(`${endpoint}/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, updatedAt: new Date().toISOString() }),
+      body,
     });
     const result = await response.json();
-    const collection = collectionEndpoint(endpoint);
     if (collection !== "auth" && result && result.id !== undefined && !result.error) {
       applyOptimisticMutation(collection, "PUT", result);
     } else {
@@ -655,6 +675,10 @@ export async function updateData(endpoint, id, data) {
     return result;
   } catch (error) {
     console.error("Error updating data:", error);
+    //^ The optimistic copy would outlive the failure and keep showing edits
+    //^ the server never saw — drop the collection so the caller's repaint
+    //^ falls back to server truth.
+    if (optimistic) clearDataCache(endpoint);
     return null;
   }
 }

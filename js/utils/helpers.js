@@ -68,13 +68,13 @@ function isValidName(name) {
 }
 
 //* Suggested units for the unit field — anything else typed in is still accepted
-export const UNIT_SUGGESTIONS = ["pcs", "box", "bundle", "kg"];
+export const UNIT_SUGGESTIONS = ["pcs", "box", "bundle", "roll", "kg"];
 
 //* Units are free text, but the common ones are canonicalised so badges, tables
 //* and stock text stay tidy: "Boxes" -> "box", "2 bundles" -> quantity 2 + "bundle"
 function normalizeProductUnit(data) {
   const value = String(data.unit || "").trim().toLowerCase();
-  const combined = value.match(/^(\d+(?:\.\d+)?)\s*(boxes?|bundles?|pieces?|pcs?|kgs?)$/);
+  const combined = value.match(/^(\d+(?:\.\d+)?)\s*(boxes?|bundles?|rolls?|pieces?|pcs?|kgs?)$/);
   if (combined) {
     if (!data.quantity) data.quantity = combined[1];
     data.unit = combined[2];
@@ -83,6 +83,7 @@ function normalizeProductUnit(data) {
   const aliases = {
     boxes: "box", box: "box",
     bundles: "bundle", bundle: "bundle",
+    rolls: "roll", roll: "roll",
     pieces: "pcs", piece: "pcs", pcs: "pcs",
     kg: "kg", kgs: "kg",
   };

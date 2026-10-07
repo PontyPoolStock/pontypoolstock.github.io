@@ -1,4 +1,4 @@
-import { fetchData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
+import { fetchData, PRODUCT_ADJUSTMENT_FIELDS, CATEGORY_LIST_FIELDS } from "../services/api.js";
 import {
   getProductVariants,
   getVariantsTotalQuantity,
@@ -19,7 +19,9 @@ export async function makeProductForm(id, categoryId = "", opts = {}) {
       : Promise.resolve(""),
     opts.categories
       ? Promise.resolve(opts.categories)
-      : fetchData("categories?fields=id,name,parentId"),
+      //^ Same projection as the prewarmed list, so this falls back to a warm
+      //^ cache key instead of a cold network round trip.
+      : fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
   ]);
   let product = fetchedProduct;
   const categories = fetchedCategories || [];
@@ -66,7 +68,7 @@ export async function makeProductForm(id, categoryId = "", opts = {}) {
       </div>
       <div class="col-6">
         <label class="text-secondary form-label" for="unit">Unit</label>
-        <input type="text" class="form-control" name='unit' list="unitSuggestions" placeholder="Pcs / box / bundle / kg" value="${escAttr(id ? (product.unit || "") : "")}">
+        <input type="text" class="form-control" name='unit' list="unitSuggestions" placeholder="Pcs / box / bundle / roll / kg" value="${escAttr(id ? (product.unit || "") : "")}">
         <datalist id="unitSuggestions">
           ${UNIT_SUGGESTIONS.map((option) => `<option value="${option}"></option>`).join("")}
         </datalist>
@@ -257,7 +259,9 @@ export async function makeCategoryForm(id, parentCategoryId = "", opts = {}) {
       : Promise.resolve(""),
     opts.categories
       ? Promise.resolve(opts.categories)
-      : fetchData("categories?fields=id,name,parentId"),
+      //^ Same projection as the prewarmed list — a warm cache key, not a new
+      //^ network round trip.
+      : fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
   ]);
   let category = fetchedCategory;
   const categories = fetchedCategories || [];

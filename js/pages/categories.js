@@ -5,7 +5,6 @@ import {
   postData,
   hydrateEntityImages,
   PRODUCT_LIST_FIELDS,
-  PRODUCT_EDIT_FIELDS,
   CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
@@ -217,13 +216,13 @@ function handleEdit(id) {
 }
 
 //* A product clicked inside a category card edits exactly like on Products:
-//* reuse the cached row for an instant modal, then refresh it in the background.
+//* reuse the cached row for an instant modal, then repaint from the cache.
 function handleProductEdit(id) {
   const cached = products.find((e) => String(e.id) === String(id));
   getModal("products", "Edit", id, async () => {
     await loadData();
     filterCategories();
-  }, { initialProduct: cached, categories, refreshFields: PRODUCT_EDIT_FIELDS });
+  }, { initialProduct: cached, categories });
 }
 
 //* DELETE — repaint first, verify in the background; a rejected delete

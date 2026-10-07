@@ -16,6 +16,16 @@ import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 import { prewarmAppCache } from "./services/api.js";
 
+//^ jQuery arrives on a deferred <script defer> tag in index.html, and module
+//^ scripts have no spec-guaranteed position relative to deferred classic
+//^ scripts — wait for it explicitly, because a missing $ here would take the
+//^ whole app down (index.html dispatches "jquery-loaded" when it lands).
+if (!window.jQuery) {
+  await new Promise((resolve) =>
+    window.addEventListener("jquery-loaded", resolve, { once: true }),
+  );
+}
+
 $(document).ready(function () {
   const currentUser = checkAuth();
   if (!currentUser) return;

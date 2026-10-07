@@ -7,7 +7,6 @@ import {
   deleteData,
   hydrateEntityImages,
   PRODUCT_LIST_FIELDS,
-  PRODUCT_EDIT_FIELDS,
   CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
@@ -281,15 +280,15 @@ function previewRow(row) {
   openProductPreview(product, { categories, onEdit: handleEdit });
 }
 
-//* UPDATE — reuse the cached row for an instant modal; then refresh just
-//* this product's full record (with image) in the background so Save keeps it.
+//* UPDATE — reuse the cached row for an instant modal; the preview image fills
+//* from the image cache and the save itself goes out optimistically.
 function handleEdit(id) {
   const cached = products.find((e) => String(e.id) === String(id));
   getModal("products", "Edit", id, async () => {
     await loadData();
     lastFiltered = [...products];
     filterProducts();
-  }, { initialProduct: cached, categories, refreshFields: PRODUCT_EDIT_FIELDS });
+  }, { initialProduct: cached, categories });
 }
 
 //* DELETE — repaint first so the row vanishes on the click, then verify in

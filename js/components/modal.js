@@ -18,32 +18,32 @@ import {
   getVariantPriceRange,
   getVariantName,
   getProductDisplayName,
+  describeApiError,
 } from "../utils/helpers.js";
+import { showToast } from "./toast.js";
 
-import { postData, updateData, fetchData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
+import { postData, updateData, fetchData, fetchEntityImage, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
 import {getCurrentUser} from "../pages/login.js";
 
-//* Background refill for Edit modals opened from the slim cached row: pull the
-//* single full record (fields=…imageUrl) and patch the hidden image value +
-//* preview only if the user hasn't already picked a new image. Fire-and-forget
-//* so the modal stays instant; Save before it lands still keeps the old image
-//* because the PUT only sends imageUrl when it changed (see saveBtnEvent).
+//* Image refill for an Edit modal opened from the slim cached row (which has
+//* no image bytes): fill the preview from the image cache — the row's own
+//* thumbnail already warmed it, so this is usually a memory hit and never a
+//* blocking fetch. Fire-and-forget, so the modal stays instant.
+//* The hidden imageUrl field is deliberately left EMPTY: an untouched image is
+//* then left out of the PUT entirely (see saveBtnEvent), the server keeps its
+//* stored copy, and a save no longer uploads ~90 KB of base64 for nothing.
 function refreshEditImage(obj, id, opts, modalElement) {
-  if (!id || !opts?.refreshFields) return;
+  if (!id) return;
   const resource = obj === "categories" ? "categories" : "products";
   const initial = obj === "categories" ? opts.initialCategory : opts.initialProduct;
   if (initial?.imageUrl) return; // already has bytes, nothing to refill
-  fetchData(`${resource}/${id}?fields=${opts.refreshFields}`, { fresh: true })
-    .then((full) => {
-      if (!modalElement.isConnected || !full?.imageUrl) return;
-      const value = modalElement.querySelector('input[type="hidden"][name="imageUrl"]');
-      //^ user already chose a replacement — never overwrite their pick
-      if (!value || value.value) return;
-      value.value = full.imageUrl;
+  fetchEntityImage(resource, id)
+    .then((url) => {
+      if (!url || !modalElement.isConnected) return;
       const preview = modalElement.querySelector("img.product-image-preview");
       const prompt = modalElement.querySelector(".product-image-prompt");
       if (preview) {
-        preview.src = full.imageUrl;
+        preview.src = url;
         preview.classList.remove("d-none");
       }
       prompt?.classList.add("d-none");
@@ -113,8 +113,8 @@ export async function getModal(obj, action, id, onAfterSave, opts = {}) {
     setupImageUploader("product");
     setupProductVariants();
     //^ The cached list row has no image bytes (that's what makes it fast).
-    //^ Rehydrate just this product's full record in the background so an
-    //^ untouched image preview + Save keeps the original instead of wiping it.
+    //^ Pull the preview from the image cache instead — usually zero network,
+    //^ and Save leaves an untouched image alone (the PUT omits it).
     refreshEditImage(obj, id, opts, modalElement);
   }
   if (obj === "categories") {
@@ -126,11 +126,31 @@ export async function getModal(obj, action, id, onAfterSave, opts = {}) {
 }
 
 
+//* Flip the Save button into (and out of) a spinner for the writes that really
+//* do wait on the server — a button that answers instantly never reads as dead.
+function setSaveBusy(saveButton, busy) {
+  if (!saveButton) return;
+  if (busy) {
+    saveButton.dataset.idleHtml = saveButton.innerHTML;
+    saveButton.disabled = true;
+    saveButton.innerHTML =
+      '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Saving…';
+  } else {
+    saveButton.disabled = false;
+    saveButton.innerHTML = saveButton.dataset.idleHtml || "Save";
+  }
+}
+
 async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
-  document
-    .querySelector(".save-btn")
-    .addEventListener("click", async function () {
-      const form = document.querySelector("form");
+  const saveButton = modalElement.querySelector(".save-btn");
+  saveButton
+    ?.addEventListener("click", async function () {
+      //^ Take the button out of action on the first click: a double tap (or a
+      //^ re-click while a cold fetch is still in flight) must never save twice.
+      //^ Every path that leaves the modal open puts it back.
+      if (saveButton.disabled) return;
+      saveButton.disabled = true;
+      const form = modalElement.querySelector("form");
       let data = Object.fromEntries(new FormData(form));
 
       const ratings = obj === "products" ? collectProductVariants() : [];
@@ -142,7 +162,10 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
       }
 
       let isValid = validateData(obj, data, id, productsForAdjustment, ratings);
-      if (!isValid) return;
+      if (!isValid) {
+        saveButton.disabled = false;
+        return;
+      }
 
       if (obj === "products") {
         //^ the ratings drive price and stock, so the totals always stay in sync
@@ -160,11 +183,11 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         data.categoryId = String(data.categoryId ?? "").trim() || null;
         data.price = Math.max(0, Number(data.price) || 0);
         data.quantity = Math.max(0, Number(data.quantity) || 0);
-        //^ Edit opened from the slim cached row has no image bytes yet. If the
-        //^ background refill hasn't landed and the user didn't touch the image,
-        //^ OMIT imageUrl from the PUT so the server keeps the stored original
-        //^ instead of wiping it to "" — this is what made Save feel "slow then
-        //^ lossy" before. A newly picked image still sends normally.
+        //^ The hidden imageUrl field only holds bytes the user just picked —
+        //^ refreshEditImage fills the PREVIEW from the image cache but never
+        //^ the field. So an untouched image is OMITTED from the PUT, the server
+        //^ keeps the stored original, and Save doesn't upload ~90 KB of base64
+        //^ for nothing. A newly picked image still sends normally.
         if (action === "Edit" && !String(data.imageUrl || "").trim()) {
           delete data.imageUrl;
         }
@@ -179,7 +202,10 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
       if (obj === "stockAdjustments") {
         const product = productsForAdjustment.find((p) => p.id == data.productId);
-        if (!product) return;
+        if (!product) {
+          saveButton.disabled = false;
+          return;
+        }
 
         const qty = parseInt(data.quantity, 10);
         const type = data.type;
@@ -190,6 +216,7 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         if (variants.length && !rating) {
           document.querySelector(".errorMes-variantLabel").innerHTML =
             "Select the rating you are adjusting.";
+          saveButton.disabled = false;
           return;
         }
 
@@ -209,6 +236,7 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
         //* The adjustment row and the stock write are independent — run them
         //* together so the modal closes after ONE round trip instead of two.
+        setSaveBusy(saveButton, true);
         await Promise.all([
           postData("stockAdjustments", {
             productId: product.id,
@@ -227,6 +255,7 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
             }
             : { ...product, quantity: newQty }),
         ]);
+        setSaveBusy(saveButton, false);
 
         const sign = type === "increase" ? "+" : "−";
         //* The log entry is cosmetic — never hold the modal open for it.
@@ -242,14 +271,23 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
         return;
       }
 
+      let pendingEdit = null;
       if (action === "Edit") {
-        const result = await updateData(`${obj}`, id, data);
-        if (!result || result.error) {
-          alert(result?.error || "Unable to update this item.");
-          return;
-        }
+        //^ Optimistic edit: patch the caches and start the PUT right here.
+        //^ The modal closes and the list repaints below without waiting on the
+        //^ round trip; a rejected write drops the patched copy inside
+        //^ updateData, and the repaint after it reverts to the server's row.
+        pendingEdit = updateData(`${obj}`, id, data, { optimistic: true });
       } else if (action === "Add") {
-        const result = await postData(`${obj}`, data);
+        //^ Add must wait for the new id, so the button shows a spinner rather
+        //^ than sitting there looking dead.
+        setSaveBusy(saveButton, true);
+        let result;
+        try {
+          result = await postData(`${obj}`, data);
+        } finally {
+          setSaveBusy(saveButton, false);
+        }
         if (!result || result.error) {
           alert(result?.error || "Unable to save this item.");
           return;
@@ -276,6 +314,21 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
       modal.hide();
       if (typeof onAfterSave === "function") {
         await onAfterSave();
+      }
+
+      //^ The optimistic edit settles after the modal is already gone. A
+      //^ failure is toasted (an alert behind a closed modal reads as nothing)
+      //^ and the list repaints from server truth.
+      if (pendingEdit) {
+        const result = await pendingEdit;
+        if (!result || result.error) {
+          showToast(
+            describeApiError(result?.error, "Your change could not be saved."),
+            "danger",
+            { title: "Save failed" },
+          );
+          if (typeof onAfterSave === "function") await onAfterSave();
+        }
       }
     });
 }

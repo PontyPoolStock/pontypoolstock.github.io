@@ -79,6 +79,12 @@ function getCorsHeaders(origin: string | null) {
     ...(allowed ? { "Access-Control-Allow-Origin": origin! } : {}),
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    //^ Every request the app sends carries an Authorization header, so the
+    //^ browser has to preflight (OPTIONS) before it. Without a max-age those
+    //^ preflights are not cached and EVERY read/write costs two round trips;
+    //^ letting the browser keep the answer for a day halves the latency the
+    //^ client pays against this function.
+    "Access-Control-Max-Age": "86400",
     Vary: "Origin",
     "Content-Type": "application/json",
   };
