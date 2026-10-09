@@ -91,7 +91,7 @@ await loadSales();
 assert.ok(document.getElementById("saleCategorySelect"), "category dropdown rendered");
 assert.deepStrictEqual(
   optionLabels("saleCategorySelect"),
-  ["All categories", "Bulbs", "Cables", "Uncategorized"],
+  ["All Categories", "Bulbs", "Cables", "Uncategorized"],
   "all categories plus Uncategorized (a category-less product exists)",
 );
 assert.strictEqual(productOptions().length, 4, "all 3 products + placeholder shown");

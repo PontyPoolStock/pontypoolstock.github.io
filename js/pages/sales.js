@@ -264,7 +264,7 @@ function getFilteredProducts() {
 //* Category dropdown: everything, every category, plus "Uncategorized" only
 //* when such products actually exist — an empty dead-end option helps nobody.
 function getCategoryOptionsHtml() {
-  const allOption = `<option value="" ${saleCategoryFilter === "" ? "selected" : ""}>All categories</option>`;
+  const allOption = `<option value="" ${saleCategoryFilter === "" ? "selected" : ""}>All Categories</option>`;
   const categoryOptions = categories
     .map(
       (category) =>
@@ -717,8 +717,8 @@ async function handleRecordSale(event) {
   if (!failed.length) {
     const message =
       recorded.length === 1
-        ? `Sale recorded: ${recorded[0].quantity} × ${recorded[0].productName || "product"} - ${formatCurrency(recordedTotal)}`
-        : `${recorded.length} sales recorded - ${formatCurrency(recordedTotal)}`;
+        ? `Sale recorded: ${recorded[0].quantity} × ${recorded[0].productName || "product"} — ${formatCurrency(recordedTotal)}`
+        : `${recorded.length} sales recorded — ${formatCurrency(recordedTotal)}`;
     showSaleFormMessage(message, "success");
     showToast(message, "success");
     return;
@@ -809,7 +809,7 @@ function restoreSaleFormState(state) {
 
   productSelect.value = state.productId;
   //* The staged product may sit outside the active category filter (e.g. the
-  //* filter changed elsewhere) — fall back to "All categories" so a half-filled
+  //* filter changed elsewhere) — fall back to "All Categories" so a half-filled
   //* form is never silently emptied by a repaint.
   if (state.productId && productSelect.value !== state.productId) {
     saleCategoryFilter = "";
@@ -1106,7 +1106,7 @@ function filterSales() {
   document.getElementById("salesTableContainer").innerHTML = getTableHtml(lastFiltered);
   document.getElementById("salesHistoryStats").textContent =
     term || period
-      ? `${lastFiltered.length} sale${lastFiltered.length === 1 ? "" : "s"} - ${formatCurrency(getSalesTotal(lastFiltered))}`
+      ? `${lastFiltered.length} sale${lastFiltered.length === 1 ? "" : "s"} — ${formatCurrency(getSalesTotal(lastFiltered))}`
       : "";
 }
 

@@ -31,7 +31,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 - 👁️ **Product Preview** — Click any product row (or press Enter on it) for a card with its picture, category, unit, price, stock value, status and one line per rating; Edit hands straight over to the product form
 - 🏷️ **Categories** — Manage product categories with product count tracking
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries
-- 🛒 **Record Sale** — Sell a product or a specific rating; stock, sales totals, and the activity log update together
+- 🛒 **Record Sale** — Pick a category to narrow the product list, add as many lines as you like to the sale basket (mixing categories freely), then record them all in one click; stock, sales totals, and the activity log update together
 - ✏️ **Edit Sale** — Correct a mis-keyed sale (product, rating, quantity, price); the original stock is returned and re-deducted atomically
 - 🗑️ **Delete Sale** — Void a sale outright; the units it consumed are returned to the same rating in the same transaction, so revenue and stock never drift apart
 - 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking (no sales revenue)
@@ -65,7 +65,10 @@ inventory-management-system/
 ├── 📁 scripts/
 │   ├── static-server.mjs       # `npm run serve` — dependency-free web server
 │   ├── db-check.mjs            # `npm run db:check` — row counts on the Neon branch
-│   └── migrate-db-json-to-neon.mjs  # `npm run db:migrate` — copy db.json into Neon
+│   ├── migrate-db-json-to-neon.mjs  # `npm run db:migrate` — copy db.json into Neon
+│   ├── api-cache.test.mjs      # ┐
+│   ├── sales-delete.test.mjs   # │ `npm test` — automated test suites
+│   └── sales-bulk.test.mjs     # ┘
 │
 ├── 📁 .github/workflows/
 │   └── deploy-pages.yml        # Publishes the app so it opens from anywhere
@@ -93,8 +96,8 @@ inventory-management-system/
         ├── products.js         # Product management
         ├── categories.js       # Category management
         ├── statistics.js       # Management statistics
-        ├── sales.js             # Record Sale + sales history
-        ├── stockadjustment.js      # Stock adjustments
+        ├── sales.js             # Record Sale (category filter + sale basket) + sales history
+        ├── stockadjustment.js   # Stock adjustments
         ├── reports.js          # Reports page
         └── activity.js         # Activity log
 ```
@@ -113,8 +116,8 @@ The app is plain HTML/CSS/JS, and every read and write goes to the Neon database
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/AbdulrahmanSiraj/inventory-management-system.git
-cd inventory-management-system
+git clone https://github.com/PontyPoolStock/pontypoolstock.github.io.git
+cd pontypoolstock.github.io
 
 # 2. Install dependencies
 npm install
@@ -138,7 +141,7 @@ The Neon API URL lives in `js/config.js`, so every page — locally or hosted �
 | `npm run db:schema` | Re-applies `schema.sql` to Neon: creates missing tables and adds columns the live database is missing |
 | `npm run db:migrate` | Copies `data/db.json` into Neon (prints a dry run; add `--apply` to write) |
 | `npm run server` | Offline-only JSON Server on `http://localhost:3000` using `data/db.json` |
-| `npm test` | Placeholder — the project has no automated test suite yet |
+| `npm test` | Runs the automated test suites in `scripts/*.test.mjs` — API cache, sale delete, and the Record Sale basket (needs `npm install` for jsdom) |
 
 ---
 
@@ -217,7 +220,7 @@ neon deploy --env .env.local  # ship changes to hello.ts / neon.ts
 
 - `.env.local` and `.neon` are git-ignored — never commit them.
 - Neon injects `DATABASE_URL` into the function, so the deployed API always talks to the branch it was deployed to.
-- The function sends `Access-Control-Allow-Origin: *`, which is why a hosted page can call it from a different domain.
+- The function only answers requests from known origins (`DEFAULT_ALLOWED_ORIGINS` in `hello.ts` — localhost plus the hosted domain) and echoes `Access-Control-Allow-Origin` back for them, which is why a hosted page can call it from a different domain.
 - `data/db.json` is only an offline sample for `npm run server`; it is not the live database.
 
 ---
@@ -232,7 +235,7 @@ The frontend is static and the database is Neon, so hosting the files is all it 
 
 1. Push these changes to `main`.
 2. Open **Settings → Pages → Source: GitHub Actions** once (the workflow also tries to enable it on its first run).
-3. The app is live at `https://<your-user>.github.io/inventory-management-system/`.
+3. The app is live at `https://pontypoolstock.github.io/`.
 
 ### Option B — Vercel / Netlify / Cloudflare Pages
 
@@ -254,7 +257,7 @@ npm run share   # terminal 2: opens a public https://pontypool.loca.lt tunnel
 
 `npm run serve` also prints your LAN address, so devices on the same Wi-Fi can open the app without the tunnel.
 
-> Every browser starts on the Neon database automatically. The **Neon API URL** box on the login screen only overrides the URL for that one browser.
+> Every browser starts on the Neon database automatically — the API URL is baked into `js/config.js`, so there is nothing to configure on the sign-in screen.
 
 ---
 
@@ -379,6 +382,7 @@ becomes `null`).
 ### Sale
 - Product and selling price: required
 - Quantity: a whole number greater than `0`, and never more than the stock on hand
+  (units already staged in the sale basket count against it)
 
 ---
 
