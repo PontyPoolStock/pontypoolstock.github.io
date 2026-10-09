@@ -5,12 +5,15 @@ import {
   updateData,
   deleteData,
   PRODUCT_LIST_FIELDS,
+  CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
 import {
   escapeHtml,
   formatCurrency,
+  getCategoryLabel,
   getProductVariants,
   getVariantsTotalQuantity,
+  getVariantName,
   getVariantPrice,
   getProductDisplayName,
   describeApiError,
@@ -20,10 +23,18 @@ import { showToast, confirmAction } from "../components/toast.js";
 
 let sales = [];
 let products = [];
+let categories = [];
 let lastFiltered = [];
 let currentPage = 1;
 let PAGE_SIZE = 5;
 let isSubmitting = false;
+//* Staged sale lines: the form collects one line at a time, but everything in
+//* here is recorded together on submit — so a till run can mix products from
+//* as many categories as it likes without being recorded one by one.
+let saleCart = [];
+//* Category shown in the Product dropdown ("": every category). Module state so
+//* the pick survives the full page repaints the history refreshes cause.
+let saleCategoryFilter = "";
 
 export async function loadSales() {
   await loadData();
@@ -35,13 +46,17 @@ export async function loadSales() {
 //* sales row and moves stock in one transaction, so both pages agree.
 //* `freshSales` bypasses the local cache — used when the list on screen has
 //* just been proved wrong by the server, so we must ask it directly.
-async function loadData({ freshSales = false } = {}) {
-  const [saleData, productData] = await Promise.all([
+async function loadData({ freshSales = false, freshProducts = false } = {}) {
+  const [saleData, productData, categoryData] = await Promise.all([
     fetchData("sales", freshSales ? { fresh: true } : undefined),
-    fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
+    fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`, freshProducts ? { fresh: true } : undefined),
+    //^ Slim projection — the Category dropdown only needs id + name, and the
+    //^ shared cache key means it is already warm from Products/Categories.
+    fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
   ]);
   sales = sortSales(Array.isArray(saleData) ? saleData : []);
   products = Array.isArray(productData) ? productData : [];
+  categories = Array.isArray(categoryData) ? categoryData : [];
 }
 
 //* Newest first — shared with the background refresh so a repaint caused by
@@ -55,23 +70,12 @@ function sortSales(list) {
 function renderSalesPage() {
   const today = getSalesForLocalDay(sales);
 
-  const productOptions = products
-    .map((product) => {
-      const variants = getProductVariants(product);
-      const stock = variants.length
-        ? getVariantsTotalQuantity(variants)
-        : Number(product.quantity) || 0;
-      const name = escapeHtml(getProductDisplayName(product));
-      return `<option value="${product.id}" ${stock <= 0 ? "disabled" : ""}>${name} — ${stock} in stock</option>`;
-    })
-    .join("");
-
   document.getElementById("pageContent").innerHTML = `
     <section class="sale-hero">
       <div class="sale-hero-text">
         <span class="statistics-kicker">Point of sale</span>
         <h3>Record a sale</h3>
-        <p>Saves the sale, reduces that rating stock and updates Sales Today — all in one step.</p>
+        <p>Pick a category, choose products, add as many lines as you like — then record the whole basket in one step.</p>
       </div>
       <div class="sale-hero-stats">
         <div class="sale-hero-stat">
@@ -94,10 +98,17 @@ function renderSalesPage() {
         <div id="saleFormAlert" class="alert d-none mb-3" role="alert"></div>
         <div class="row g-3">
           <div class="col-12 col-lg-6">
+            <label class="form-label" for="saleCategorySelect">Category</label>
+            <select id="saleCategorySelect" class="form-select">
+              ${getCategoryOptionsHtml()}
+            </select>
+            <div class="small text-muted mt-1">Narrow the product list to one category.</div>
+          </div>
+          <div class="col-12 col-lg-6">
             <label class="form-label" for="saleProductSelect">Product *</label>
             <select name="productId" id="saleProductSelect" class="form-select">
               <option value="">Select product</option>
-              ${productOptions || "<option value=\"\" disabled>No products in stock</option>"}
+              ${getProductOptionsHtml()}
             </select>
             <div class="text-danger fw-bold errorMes errorMes-productId"></div>
           </div>
@@ -116,6 +127,21 @@ function renderSalesPage() {
             <input type="number" name="unitPrice" id="saleUnitPrice" class="form-control" min="0" step="0.01" placeholder="0.00">
             <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
           </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3 align-items-center flex-wrap">
+          <button type="button" class="btn btn-outline-primary px-4" id="addSaleLineBtn">
+            <i class="bi bi-plus-lg"></i> Add to sale
+          </button>
+          <span class="small text-muted">Add products from as many categories as you need, then record them together below.</span>
+        </div>
+
+        <div class="sale-cart mt-3">
+          <div class="sale-cart-head">
+            <span class="sale-cart-title">Sale items <span id="saleCartCount"></span></span>
+            <button type="button" class="btn btn-link btn-sm p-0 sale-cart-clear d-none" id="clearSaleCartBtn">Clear all</button>
+          </div>
+          <div id="saleCartList">${getCartHtml()}</div>
         </div>
 
         <div class="sale-total-row">
@@ -218,11 +244,214 @@ function getTableHtml(filteredList = lastFiltered) {
   `;
 }
 
+//* ===== Category → Product narrowing + multi-line sale basket =====
+
+//* Sentinel for products filed under no category at all.
+const UNCATEGORIZED_FILTER = "__none__";
+
+//* Does this product fall under the category currently chosen in the form?
+function categoryMatchesFilter(categoryId) {
+  const hasCategory = categoryId !== "" && categoryId !== null && categoryId !== undefined;
+  if (saleCategoryFilter === "") return true;
+  if (saleCategoryFilter === UNCATEGORIZED_FILTER) return !hasCategory;
+  return String(categoryId ?? "") === String(saleCategoryFilter);
+}
+
+function getFilteredProducts() {
+  return products.filter((product) => categoryMatchesFilter(product.categoryId));
+}
+
+//* Category dropdown: everything, every category, plus "Uncategorized" only
+//* when such products actually exist — an empty dead-end option helps nobody.
+function getCategoryOptionsHtml() {
+  const allOption = `<option value="" ${saleCategoryFilter === "" ? "selected" : ""}>All categories</option>`;
+  const categoryOptions = categories
+    .map(
+      (category) =>
+        `<option value="${escapeHtml(String(category.id))}" ${String(saleCategoryFilter) === String(category.id) ? "selected" : ""}>${escapeHtml(category.name)}</option>`,
+    )
+    .join("");
+  const hasUncategorized = products.some((product) => !product.categoryId);
+  const uncatOption =
+    hasUncategorized
+      ? `<option value="${UNCATEGORIZED_FILTER}" ${saleCategoryFilter === UNCATEGORIZED_FILTER ? "selected" : ""}>Uncategorized</option>`
+      : "";
+  return `${allOption}${categoryOptions}${uncatOption}`;
+}
+
+//* Product dropdown — filtered down to the chosen category, out-of-stock rows
+//* still disabled so nothing unsellable can be staged.
+function getProductOptionsHtml(selectedId = "") {
+  const filtered = getFilteredProducts();
+  if (!filtered.length) {
+    return `<option value="" disabled>${saleCategoryFilter !== "" ? "No products in this category" : "No products in stock"}</option>`;
+  }
+  return filtered
+    .map((product) => {
+      const variants = getProductVariants(product);
+      const stock = variants.length
+        ? getVariantsTotalQuantity(variants)
+        : Number(product.quantity) || 0;
+      const name = escapeHtml(getProductDisplayName(product));
+      const isSelected = String(product.id) === String(selectedId);
+      return `<option value="${product.id}" ${isSelected ? "selected" : ""} ${stock <= 0 ? "disabled" : ""}>${name} — ${stock} in stock</option>`;
+    })
+    .join("");
+}
+
+//* Units of this product/rating already waiting in the basket — stock checks
+//* must count them, or ten clicks of "Add" would each think they can sell all.
+function getCartQuantityFor(productId, variantIndex) {
+  return saleCart.reduce(
+    (sum, line) =>
+      String(line.productId) === String(productId)
+      && (line.variantIndex ?? null) === (variantIndex ?? null)
+        ? sum + line.quantity
+        : sum,
+    0,
+  );
+}
+
+function getCartTotal() {
+  return saleCart.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+}
+
+function getCartHtml() {
+  if (!saleCart.length) {
+    return '<div class="sale-cart-empty">Nothing added yet — choose a category and product, set the quantity, then press <strong>Add to sale</strong>.</div>';
+  }
+  return saleCart
+    .map((line, index) => {
+      const product = products.find((item) => String(item.id) === String(line.productId));
+      const variants = getProductVariants(product);
+      const variant =
+        line.variantIndex === null || line.variantIndex === undefined
+          ? undefined
+          : variants[line.variantIndex];
+      const name = product
+        ? getVariantName(product, variant)
+        : String(line.productName || line.productId);
+      const category = product ? getCategoryLabel(categories, product.categoryId) : "";
+      const meta = [category, `${line.quantity} × ${formatCurrency(line.unitPrice)}`]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <div class="sale-cart-line">
+          <div class="sale-cart-line-info">
+            <span class="sale-cart-line-name">${escapeHtml(name)}</span>
+            <small class="sale-cart-line-meta">${escapeHtml(meta)}</small>
+          </div>
+          <span class="sale-cart-line-total">${formatCurrency(line.quantity * line.unitPrice)}</span>
+          <button type="button" class="sale-line-remove" data-index="${index}" aria-label="Remove ${escapeHtml(name)} from this sale">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>`;
+    })
+    .join("");
+}
+
+function renderCart() {
+  const list = document.getElementById("saleCartList");
+  if (list) list.innerHTML = getCartHtml();
+  updateCartSummary();
+}
+
+//* Basket size, "Clear all" visibility and the Record button's label all move
+//* together so the UI never claims a different number of sales than it will post.
+function updateCartSummary() {
+  const count = document.getElementById("saleCartCount");
+  if (count) {
+    count.textContent = saleCart.length
+      ? `· ${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`
+      : "";
+  }
+  document
+    .getElementById("clearSaleCartBtn")
+    ?.classList.toggle("d-none", saleCart.length === 0);
+
+  const button = document.getElementById("recordSaleBtn");
+  if (button && !isSubmitting) {
+    button.innerHTML = `<i class="bi bi-cash-coin"></i> ${
+      saleCart.length > 1 ? `Record ${saleCart.length} Sales` : "Record Sale"
+    }`;
+  }
+}
+
+function handleCategoryChange() {
+  const categorySelect = document.getElementById("saleCategorySelect");
+  saleCategoryFilter = categorySelect?.value || "";
+
+  const productSelect = document.getElementById("saleProductSelect");
+  if (!productSelect) return;
+
+  //* Keep the current product when it still lives under the new category —
+  //* switching the filter must not throw away work already done.
+  const previous = productSelect.value;
+  productSelect.innerHTML = `<option value="">Select product</option>${getProductOptionsHtml(previous)}`;
+  const stillVisible = Array.from(productSelect.options).some(
+    (option) => option.value === previous,
+  );
+
+  if (!stillVisible) {
+    productSelect.value = "";
+    populateVariantSelect(document.getElementById("saleVariantSelect"));
+    updatePriceDefault(document.getElementById("saleUnitPrice"));
+  }
+  updateSalePreview();
+}
+
+//* Stage the line the form is pointing at into the basket. The form then keeps
+//* the product/price but clears the quantity, so the next item goes straight in.
+function handleAddToCart() {
+  if (isSubmitting) return false;
+
+  const productId = document.getElementById("saleProductSelect")?.value || "";
+  const quantity = Number(document.getElementById("saleQuantity")?.value);
+  const unitPrice = Number(document.getElementById("saleUnitPrice")?.value);
+  const variantSelect = document.getElementById("saleVariantSelect");
+  const product = getSelectedProduct();
+  const variants = getProductVariants(product);
+  const hasVariants = variants.length > 0;
+  const variantIndex = hasVariants ? String(variantSelect?.value ?? "") : "";
+
+  if (!isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants })) {
+    return false;
+  }
+
+  const resolvedVariantIndex = hasVariants ? Number(variantIndex) : null;
+  saleCart.push({
+    productId,
+    variantIndex: resolvedVariantIndex,
+    productName: getVariantName(
+      product,
+      resolvedVariantIndex === null ? undefined : variants[resolvedVariantIndex],
+    ),
+    quantity,
+    unitPrice,
+  });
+
+  const quantityInput = document.getElementById("saleQuantity");
+  if (quantityInput) quantityInput.value = "";
+  document
+    .querySelectorAll("#recordSaleForm .errorMes")
+    .forEach((item) => { item.textContent = ""; });
+
+  renderCart();
+  updateSalePreview();
+  paintStockHint();
+  quantityInput?.focus();
+  return true;
+}
+
 function setupEventListeners() {
   const productSelect = document.getElementById("saleProductSelect");
   const variantSelect = document.getElementById("saleVariantSelect");
   const quantityInput = document.getElementById("saleQuantity");
   const priceInput = document.getElementById("saleUnitPrice");
+
+  document
+    .getElementById("saleCategorySelect")
+    ?.addEventListener("change", handleCategoryChange);
 
   productSelect?.addEventListener("change", () => {
     populateVariantSelect(variantSelect);
@@ -235,6 +464,29 @@ function setupEventListeners() {
   });
   quantityInput?.addEventListener("input", updateSalePreview);
   priceInput?.addEventListener("input", updateSalePreview);
+
+  document.getElementById("addSaleLineBtn")?.addEventListener("click", handleAddToCart);
+
+  //* Basket edits are handled here instead of per-render: the list is rebuilt
+  //* wholesale on every change, so only the container listener survives.
+  document.getElementById("saleCartList")?.addEventListener("click", (event) => {
+    const removeBtn = event.target.closest(".sale-line-remove");
+    if (!removeBtn || isSubmitting) return;
+    const index = Number(removeBtn.dataset.index);
+    if (!Number.isInteger(index) || !saleCart[index]) return;
+    saleCart.splice(index, 1);
+    renderCart();
+    updateSalePreview();
+    paintStockHint();
+  });
+  document.getElementById("clearSaleCartBtn")?.addEventListener("click", () => {
+    if (isSubmitting || !saleCart.length) return;
+    saleCart = [];
+    renderCart();
+    updateSalePreview();
+    paintStockHint();
+    showToast("Sale items cleared.", "info");
+  });
 
   document.getElementById("recordSaleForm")?.addEventListener("submit", handleRecordSale);
   document.getElementById("searchSales")?.addEventListener("input", debounce(filterSales, 120));
@@ -271,6 +523,9 @@ function setupEventListeners() {
 
   populateVariantSelect(variantSelect);
   updateSalePreview();
+  //* Paint the basket state (count, button label, Clear all) on every render —
+  //* failed lines survive a re-render and must show up right away.
+  updateCartSummary();
 }
 
 function getSelectedProduct() {
@@ -334,9 +589,37 @@ function getSelectedStock() {
   return variant ? Number(variant.quantity) || 0 : 0;
 }
 
+//* Base hint text (stock for the current selection) kept separately from the
+//* staged-units note so the note can be re-painted after every basket change
+//* without re-deriving the whole sentence.
+let stockHintBase = "";
+
 function updateStockHint(text) {
+  stockHintBase = String(text ?? "");
+  paintStockHint();
+}
+
+function paintStockHint() {
   const hint = document.getElementById("saleStockHint");
-  if (hint) hint.textContent = text;
+  if (!hint) return;
+  //* Tell the picker how many units of this exact line are already staged, so
+  //* "Only 3 left to add" in the validation never comes out of nowhere.
+  let stagedNote = "";
+  const product = getSelectedProduct();
+  if (product) {
+    const variants = getProductVariants(product);
+    let variantIndex = null;
+    if (variants.length) {
+      const parsed = Number.parseInt(
+        String(document.getElementById("saleVariantSelect")?.value ?? ""),
+        10,
+      );
+      variantIndex = Number.isNaN(parsed) ? null : parsed;
+    }
+    const staged = getCartQuantityFor(product.id, variantIndex);
+    if (staged > 0) stagedNote = ` ${staged} unit${staged === 1 ? "" : "s"} already added to this sale.`;
+  }
+  hint.textContent = `${stockHintBase}${stagedNote}`;
 }
 
 //* Prefill the selling price from the selected rating, but let staff override it
@@ -366,7 +649,9 @@ function updateSalePreview() {
   const unitPrice = Math.max(0, Number(document.getElementById("saleUnitPrice")?.value) || 0);
   const preview = document.getElementById("saleTotalPreview");
   if (!preview) return;
-  const next = formatCurrency(quantity * unitPrice);
+  //* Staged lines plus whatever the form is pointing at right now, so the
+  //* figure never lies about what Record would actually charge.
+  const next = formatCurrency(getCartTotal() + quantity * unitPrice);
   if (preview.textContent === next) return;
   preview.textContent = next;
   //* A quick pop when the total changes makes the KSh figure feel live
@@ -379,49 +664,72 @@ async function handleRecordSale(event) {
   event.preventDefault();
   if (isSubmitting) return;
 
-  const productId = document.getElementById("saleProductSelect")?.value || "";
-  const quantity = Number(document.getElementById("saleQuantity")?.value);
-  const unitPrice = Number(document.getElementById("saleUnitPrice")?.value);
-  const variantSelect = document.getElementById("saleVariantSelect");
-  const hasVariants = getProductVariants(getSelectedProduct()).length > 0;
-  const variantIndex = hasVariants ? String(variantSelect?.value ?? "") : "";
+  //* A filled-in but un-staged line still counts on submit: pressing Record
+  //* with a quantity typed must behave exactly like Add, then Record.
+  const quantityRaw = String(document.getElementById("saleQuantity")?.value ?? "").trim();
+  if (quantityRaw !== "" && !handleAddToCart()) return;
 
-  if (!isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants })) return;
-
-  const button = document.getElementById("recordSaleBtn");
-  isSubmitting = true;
-  if (button) {
-    button.disabled = true;
-    button.innerHTML =
-      '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...';
-  }
-
-  const result = await postData("sales", {
-    productId,
-    variantIndex: hasVariants ? Number(variantIndex) : null,
-    quantity,
-    unitPrice,
-  });
-  isSubmitting = false;
-
-  if (!result || result.error) {
-    showSaleFormMessage(result?.error || "Unable to record this sale. Please try again.", "danger");
-    if (button) {
-      button.disabled = false;
-      button.innerHTML = '<i class="bi bi-cash-coin"></i> Record Sale';
-    }
+  if (!saleCart.length) {
+    showSaleFormMessage("Add at least one product to the sale first.", "warning");
     return;
   }
 
-  //* Re-fetch so the history, the KSh totals and stock all reflect the sale
-  await loadData();
+  const lines = [...saleCart];
+  const button = document.getElementById("recordSaleBtn");
+  isSubmitting = true;
+  if (button) button.disabled = true;
+
+  const recorded = [];
+  const failed = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (button) {
+      button.innerHTML =
+        `<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>` +
+        `Recording ${index + 1} of ${lines.length}...`;
+    }
+    const line = lines[index];
+    const result = await postData("sales", {
+      productId: line.productId,
+      variantIndex: line.variantIndex,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+    });
+    if (!result || result.error) {
+      failed.push({ line, error: result?.error || "Unable to record this sale." });
+    } else {
+      recorded.push(result);
+    }
+  }
+  isSubmitting = false;
+
+  //* Lines the server accepted are gone; the refused ones stay staged so a
+  //* stock clash or typo can be corrected and retried instead of retyped.
+  saleCart = failed.map((item) => item.line);
+
+  //* Re-fetch so the history, the KSh totals and stock all reflect the sales —
+  //* products too: every recorded line just moved stock on the server.
+  await loadData({ freshSales: true, freshProducts: true });
   lastFiltered = [...sales];
   currentPage = 1;
   renderSalesPage();
-  showSaleFormMessage(
-    `Sale recorded: ${quantity} x ${result.productName || "product"} - ${formatCurrency(result.total)}`,
-    "success",
-  );
+
+  const recordedTotal = recorded.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+  if (!failed.length) {
+    const message =
+      recorded.length === 1
+        ? `Sale recorded: ${recorded[0].quantity} × ${recorded[0].productName || "product"} - ${formatCurrency(recordedTotal)}`
+        : `${recorded.length} sales recorded - ${formatCurrency(recordedTotal)}`;
+    showSaleFormMessage(message, "success");
+    showToast(message, "success");
+    return;
+  }
+
+  const reason = describeApiError(failed[0].error, "Unable to record this sale.");
+  const message = recorded.length
+    ? `Recorded ${recorded.length} of ${lines.length} sales (${formatCurrency(recordedTotal)}). ${failed.length} could not be recorded and ${failed.length === 1 ? "is" : "are"} still in the basket: ${reason}`
+    : `No sales were recorded: ${reason}`;
+  showSaleFormMessage(message, "danger");
+  showToast(message, "danger", { title: "Sale not recorded" });
 }
 
 function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants }) {
@@ -441,8 +749,20 @@ function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVari
     valid = false;
   } else {
     const available = getSelectedStock();
-    if (quantity > available) {
-      setSaleError("quantity", `Only ${available} in stock`);
+    //* Units already waiting in the basket are spoken for — without this the
+    //* form would happily stage more than the shelf holds.
+    const staged = getCartQuantityFor(
+      productId,
+      hasVariants && variantIndex !== "" ? Number(variantIndex) : null,
+    );
+    const remaining = Math.max(0, available - staged);
+    if (quantity > remaining) {
+      setSaleError(
+        "quantity",
+        staged > 0
+          ? `Only ${remaining} left to add (${available} in stock, ${staged} already in this sale)`
+          : `Only ${available} in stock`,
+      );
       valid = false;
     }
   }
@@ -488,6 +808,17 @@ function restoreSaleFormState(state) {
   if (!productSelect) return;
 
   productSelect.value = state.productId;
+  //* The staged product may sit outside the active category filter (e.g. the
+  //* filter changed elsewhere) — fall back to "All categories" so a half-filled
+  //* form is never silently emptied by a repaint.
+  if (state.productId && productSelect.value !== state.productId) {
+    saleCategoryFilter = "";
+    const categorySelect = document.getElementById("saleCategorySelect");
+    if (categorySelect) categorySelect.value = "";
+    productSelect.innerHTML = `<option value="">Select product</option>${getProductOptionsHtml(state.productId)}`;
+    productSelect.value = state.productId;
+  }
+
   populateVariantSelect(document.getElementById("saleVariantSelect"));
   const variantSelect = document.getElementById("saleVariantSelect");
   if (variantSelect && state.variantIndex) variantSelect.value = state.variantIndex;
@@ -497,6 +828,7 @@ function restoreSaleFormState(state) {
   if (quantityInput) quantityInput.value = state.quantity;
   if (priceInput) priceInput.value = state.unitPrice;
   updateSalePreview();
+  paintStockHint();
 }
 
 //* Voiding a sale returns the units it took to stock on the server, inside the
