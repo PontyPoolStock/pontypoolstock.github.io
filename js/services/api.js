@@ -19,7 +19,7 @@ export const CATEGORY_EDIT_FIELDS = `${CATEGORY_LIST_FIELDS},imageUrl`;
 // One canonical projection for the stock-adjustment form dropdown, its save-time
 // validation lookup and the page-level prewarm — same string = same cache key,
 // so the modal always hits a warm cache.
-export const PRODUCT_ADJUSTMENT_FIELDS = "id,name,quantity,unit,variants";
+export const PRODUCT_ADJUSTMENT_FIELDS = "id,name,quantity,unit,variants,notStocked";
 
 const dataCache = new Map();
 const pendingRequests = new Map();

@@ -818,6 +818,8 @@ export default async function api(request: Request): Promise<Response> {
           newQuantity: "new_quantity",
           unitPrice: "unit_price",
           soldAt: "sold_at",
+          variantIndex: "variant_index",
+          notStocked: "not_stocked",
           createdAt: "created_at",
           updatedAt: "updated_at",
         };
