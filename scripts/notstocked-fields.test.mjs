@@ -3,6 +3,8 @@
 //* camelToSnake map must resolve it to the not_stocked column, otherwise
 //* the SELECT drops it, toCamel() defaults it to false and a restart
 //* repaints an On-order product as In stock.
+//* The frontend additionally treats an OMITTED flag as "unknown" (sticky
+//* true) so a not-yet-redeployed API can never clear a saved flag.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
@@ -26,6 +28,18 @@ assert.match(
   api,
   /PRODUCT_ADJUSTMENT_FIELDS\s*=\s*["'][^"']*notStocked[^"']*["']/,
   "PRODUCT_ADJUSTMENT_FIELDS must include notStocked",
+);
+
+// Sticky-flag guards: omitted !== false.
+assert.match(
+  api,
+  /omitted flag is "unknown"/,
+  "revalidateCollection must keep a known-true notStocked when the payload omits it",
+);
+assert.match(
+  api,
+  /omits notStocked/,
+  "revalidateInBackground must keep a known-true notStocked when the payload omits it",
 );
 
 console.log("notStocked projection regression test passed.");

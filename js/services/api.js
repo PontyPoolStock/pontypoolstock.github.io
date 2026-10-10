@@ -171,12 +171,18 @@ function mergeCachedRow(cachedRow, payload) {
   // projection never bloats with full image bytes — except notStocked, which
   // older cached rows predate and must still pick up so "just selling" shows
   // On order instantly instead of flashing Out of stock.
+  // A known-true flag is sticky: a slim GET from a not-yet-redeployed API
+  // silently drops notStocked (it arrives undefined, NOT false), and that
+  // must never clear a true we already saved/confirmed.
   const merged = { ...cachedRow };
   for (const field of Object.keys(merged)) {
     if (payload[field] !== undefined) merged[field] = payload[field];
   }
   if (merged.notStocked === undefined && payload.notStocked !== undefined) {
     merged.notStocked = payload.notStocked;
+  }
+  if (merged.notStocked === true && payload.notStocked === undefined) {
+    merged.notStocked = true;
   }
   return merged;
 }
@@ -261,6 +267,10 @@ function applyOptimisticMutation(collection, kind, payload, { revalidate = true 
 
 //* Pull server truth for a collection in the background after a write. Only
 //* overwrites the optimistic copy if no newer write landed meanwhile.
+//* A product already known as notStocked:true keeps that flag when the fresh
+//* payload omits it (slim ?fields= against a not-yet-redeployed API returns
+//* rows with no notStocked key at all) — an omitted flag is "unknown", never
+//* "back in stock". An explicit false from the server still clears it.
 function revalidateCollection(collection) {
   const keys = [...dataCache.keys()].filter((k) => collectionEndpoint(k) === collection);
   if (!keys.length) return;
@@ -271,8 +281,17 @@ function revalidateCollection(collection) {
         const response = await fetchWithFallback(key);
         const data = await response.json();
         if (version !== mutationVersion) return; // a newer write won
-        dataCache.set(key, data);
-        writePersistentCache(key, data);
+        const previous = dataCache.get(key);
+        const next =
+          collection === "products" && Array.isArray(data) && Array.isArray(previous)
+            ? data.map((row) => {
+                if (!row || typeof row !== "object" || row.notStocked !== undefined) return row;
+                const old = previous.find((p) => String(p?.id) === String(row.id));
+                return old?.notStocked === true ? { ...row, notStocked: true } : row;
+              })
+            : data;
+        dataCache.set(key, next);
+        writePersistentCache(key, next);
       } catch {
         // Keep the optimistically patched copy — closer to the truth than nothing.
       }
@@ -475,10 +494,20 @@ function revalidateInBackground(endpoint) {
       if (version !== mutationVersion) return; // a newer write won
       const previous = dataCache.get(endpoint);
       if (JSON.stringify(previous) === JSON.stringify(data)) return;
-      dataCache.set(endpoint, data);
-      writePersistentCache(endpoint, data);
+      // Same sticky-flag rule as revalidateCollection: a fresh products payload
+      // that omits notStocked (old deployed API) must not clear a known true.
+      const next =
+        collectionEndpoint(endpoint) === "products" && Array.isArray(data) && Array.isArray(previous)
+          ? data.map((row) => {
+              if (!row || typeof row !== "object" || row.notStocked !== undefined) return row;
+              const old = previous.find((p) => String(p?.id) === String(row.id));
+              return old?.notStocked === true ? { ...row, notStocked: true } : row;
+            })
+          : data;
+      dataCache.set(endpoint, next);
+      writePersistentCache(endpoint, next);
       document.dispatchEvent(
-        new CustomEvent("pontypool:data", { detail: { endpoint, data } }),
+        new CustomEvent("pontypool:data", { detail: { endpoint, data: next } }),
       );
     } catch {
       //* Offline or a dead session: the cached copy is still the best answer.
@@ -674,6 +703,21 @@ export async function updateData(endpoint, id, data, { optimistic = false } = {}
     const result = await response.json();
     if (collection !== "auth" && result && result.id !== undefined && !result.error) {
       applyOptimisticMutation(collection, "PUT", result);
+      //* A full single-record GET (no ?fields=) always carries every column the
+      //* deployed API knows — including notStocked on a fresh deploy. Merge it
+      //* into the cached lists so a slim GET from a stale cache key can never
+      //* hide a just-saved flag behind an "unknown" row.
+      if ((collection === "products" || collection === "categories") && result) {
+        try {
+          const verifyResponse = await fetchWithFallback(`${collection}/${id}`);
+          const verifyRow = await verifyResponse.json();
+          if (verifyRow && verifyRow.id !== undefined && !verifyRow.error) {
+            applyOptimisticMutation(collection, "PUT", verifyRow, { revalidate: false });
+          }
+        } catch {
+          // Verification is best-effort — the PUT already succeeded.
+        }
+      }
     } else {
       clearDataCache(endpoint);
     }
