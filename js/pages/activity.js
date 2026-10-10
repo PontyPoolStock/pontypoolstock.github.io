@@ -50,6 +50,9 @@ function renderActivities() {
         class="form-control form-control-sm border-0 shadow-none" style="flex:1; min-width:150px;">
       <select id="typeFilter" class="form-select form-select-sm border-0 shadow-none form-select-activity-type">
         <option value="">All Types</option>
+        <option value="SALE_RECORDED">Sales Recorded</option>
+        <option value="SALE_EDITED">Sales Edited</option>
+        <option value="SALE_DELETED">Sales Deleted</option>
         <option value="STOCK_ADJUSTMENT">Adjustments</option>
         <option value="CREATE_PRODUCT">Products Added</option>
         <option value="UPDATE_PRODUCT">Products Updated</option>
