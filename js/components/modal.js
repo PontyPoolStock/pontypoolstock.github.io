@@ -176,6 +176,14 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
           data.quantity = getVariantsTotalQuantity(ratings);
         }
 
+        //^ Order-based products (e.g. LED strips): no quantity on hand, still a
+        //^ permanent product under a category + still sellable in Record Sale.
+        data.notStocked = form.querySelector("#notStockedCheck")?.checked ? true : false;
+        if (data.notStocked) {
+          data.quantity = 0;
+          data.reorderLevel = 0;
+        }
+
         //^ only a name or a category is needed — empty optional fields become defaults
         data.name = String(data.name ?? "").trim();
         data.sku = String(data.sku ?? "").trim() || null;

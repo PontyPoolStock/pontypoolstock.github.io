@@ -11,7 +11,7 @@ import {
 } from "../config.js";
 
 // Canonical slim field projections for fast list views (~99.8% smaller payload)
-export const PRODUCT_LIST_FIELDS = "id,name,sku,categoryId,price,quantity,reorderLevel,unit,variants,createdAt,updatedAt";
+export const PRODUCT_LIST_FIELDS = "id,name,sku,categoryId,price,quantity,reorderLevel,unit,variants,notStocked,createdAt,updatedAt";
 // Full record needed only for editing (adds the image back, still no history bloat)
 export const PRODUCT_EDIT_FIELDS = `${PRODUCT_LIST_FIELDS},imageUrl`;
 export const CATEGORY_LIST_FIELDS = "id,name,description,parentId,createdAt,updatedAt";

@@ -22,6 +22,7 @@ import {
   getProductStatusCode,
   getVariantSuffix,
   getVariantPriceRange,
+  isNotStockedProduct,
   productThumbnailHtml,
   sortData,
   getProductDisplayName,
@@ -114,13 +115,14 @@ function getTableHtml(filteredProducts = products) {
   let tableData = paginated.map((p) => {
     const variants = getProductVariants(p);
     const priceRange = getVariantPriceRange(variants);
+    const onOrder = isNotStockedProduct(p);
     return {
       id: p.id,
       image: productThumbnailHtml(p.imageUrl, getProductDisplayName(p), {
         productId: p.id,
       }),
       sku: p.sku ? `<span class="sku-badge">${escapeHtml(p.sku)}</span>` : "-",
-      name: escapeHtml(getProductDisplayName(p)) + getRatingsHtml(variants),
+      name: escapeHtml(getProductDisplayName(p)) + (onOrder ? ' <span class="sku-badge">On order</span>' : "") + getRatingsHtml(variants),
       category: escapeHtml(getCategoryLabel(categories, p.categoryId)),
       //^ A single price stays a number (renderTable formats it); a range is
       //^ already formatted, like the price shown on the preview card
@@ -129,7 +131,7 @@ function getTableHtml(filteredProducts = products) {
           ? priceRange.min
           : `${formatCurrency(priceRange.min)} – ${formatCurrency(priceRange.max)}`)
         : p.price,
-      quantity: getProductStock(p),
+      quantity: onOrder ? "—" : getProductStock(p),
       unit: p.unit ? escapeHtml(p.unit) : "-",
       status: getProductStatus(p),
     };
@@ -373,8 +375,10 @@ function getRatingsHtml(variants) {
 }
 
 //* A product is low/out when any of its ratings reaches its own minimum —
-//* the badge and the status filter share getProductStatusCode so they agree
+//* the badge and the status filter share getProductStatusCode so they agree.
+//* Order-based products show On order instead of any stock badge.
 function getProductStatus(product) {
+  if (isNotStockedProduct(product)) return `<span class="status-badge status-in">On order</span>`;
   const code = getProductStatusCode(product);
   if (code === "out") return `<span class="status-badge status-out">Out of stock</span>`;
   if (code === "low") return `<span class="status-badge status-low">Low stock</span>`;

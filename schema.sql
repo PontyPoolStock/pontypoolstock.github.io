@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS products (
   unit TEXT NOT NULL,
   image_url TEXT,
   variants JSONB,
+  not_stocked BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

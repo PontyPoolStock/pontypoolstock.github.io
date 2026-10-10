@@ -17,6 +17,7 @@ import {
   getVariantName,
   getVariantPrice,
   getProductDisplayName,
+  isNotStockedProduct,
   productThumbnailHtml,
   describeApiError,
   debounce,
@@ -285,15 +286,17 @@ function getCategoryOptionsHtml() {
 
 //* Product photos for the picker — names alone cannot tell two pendants
 //* apart, so the selected product gets a large preview and the filtered
-//* category gets a tap-to-select thumbnail strip.
+//* category gets a tap-to-select thumbnail strip. Order-based products show
+//* "On order" instead of a stock count.
 function getSaleProductPreviewHtml(product = null) {
   if (!product) return "";
+  const onOrder = isNotStockedProduct(product);
   const variants = getProductVariants(product);
   const stock = variants.length
     ? getVariantsTotalQuantity(variants)
     : Number(product.quantity) || 0;
   const category = getCategoryLabel(categories, product.categoryId);
-  const meta = [category, `${stock} in stock`].filter(Boolean).join(" · ");
+  const meta = [category, onOrder ? "On order — not stocked" : `${stock} in stock`].filter(Boolean).join(" · ");
   return `
     ${productThumbnailHtml(product.imageUrl, getProductDisplayName(product), { productId: product.id })}
     <span class="sale-product-preview-info">
@@ -307,17 +310,19 @@ function getSaleProductGalleryHtml(selectedId = "") {
   if (!filtered.length) return "";
   return filtered
     .map((product) => {
+      const onOrder = isNotStockedProduct(product);
       const variants = getProductVariants(product);
       const stock = variants.length
         ? getVariantsTotalQuantity(variants)
         : Number(product.quantity) || 0;
+      const out = !onOrder && stock <= 0;
       const name = getProductDisplayName(product);
       const isSelected = String(product.id) === String(selectedId);
       return `
-        <button type="button" class="sale-photo-card${isSelected ? " is-selected" : ""}${stock <= 0 ? " is-out" : ""}" data-product-id="${escapeHtml(String(product.id))}" role="option" aria-selected="${isSelected ? "true" : "false"}" title="${escapeHtml(name)}" ${stock <= 0 ? "disabled" : ""}>
+        <button type="button" class="sale-photo-card${isSelected ? " is-selected" : ""}${out ? " is-out" : ""}" data-product-id="${escapeHtml(String(product.id))}" role="option" aria-selected="${isSelected ? "true" : "false"}" title="${escapeHtml(name)}" ${out ? "disabled" : ""}>
           ${productThumbnailHtml(product.imageUrl, name, { productId: product.id, sizeClass: "entity-thumbnail-sm" })}
           <span class="sale-photo-name">${escapeHtml(name)}</span>
-          <span class="sale-photo-stock">${stock <= 0 ? "Out" : `${stock} left`}</span>
+          <span class="sale-photo-stock">${onOrder ? "On order" : stock <= 0 ? "Out" : `${stock} left`}</span>
         </button>`;
     })
     .join("");
@@ -342,7 +347,8 @@ function paintSaleProductVisuals(selectedId = "") {
 }
 
 //* Product dropdown — filtered down to the chosen category, out-of-stock rows
-//* still disabled so nothing unsellable can be staged.
+//* still disabled so nothing unsellable can be staged. Order-based products
+//* are always enabled — they sell without any stock on hand.
 function getProductOptionsHtml(selectedId = "") {
   const filtered = getFilteredProducts();
   if (!filtered.length) {
@@ -350,13 +356,16 @@ function getProductOptionsHtml(selectedId = "") {
   }
   return filtered
     .map((product) => {
+      const onOrder = isNotStockedProduct(product);
       const variants = getProductVariants(product);
       const stock = variants.length
         ? getVariantsTotalQuantity(variants)
         : Number(product.quantity) || 0;
+      const out = !onOrder && stock <= 0;
       const name = escapeHtml(getProductDisplayName(product));
       const isSelected = String(product.id) === String(selectedId);
-      return `<option value="${product.id}" ${isSelected ? "selected" : ""} ${stock <= 0 ? "disabled" : ""}>${name} — ${stock} in stock</option>`;
+      const label = onOrder ? `${name} — On order` : `${name} — ${stock} in stock`;
+      return `<option value="${product.id}" ${isSelected ? "selected" : ""} ${out ? "disabled" : ""}>${label}</option>`;
     })
     .join("");
 }
@@ -611,12 +620,14 @@ function getSelectedProduct() {
   return products.find((product) => String(product.id) === select.value) || null;
 }
 
-//* Only in-stock ratings are offered, so an out-of-stock row can never be picked
+//* Only in-stock ratings are offered, so an out-of-stock row can never be picked.
+//* Order-based products offer every rating — they need no stock on hand.
 function populateVariantSelect(variantSelect) {
   if (!variantSelect) return;
   const wrapper = document.getElementById("saleVariantWrapper");
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
+  const onOrder = isNotStockedProduct(product);
 
   if (!product || !variants.length) {
     wrapper?.classList.add("d-none");
@@ -627,7 +638,7 @@ function populateVariantSelect(variantSelect) {
 
   const sellable = variants
     .map((variant, index) => ({ variant, index }))
-    .filter(({ variant }) => (Number(variant.quantity) || 0) > 0);
+    .filter(({ variant }) => onOrder || (Number(variant.quantity) || 0) > 0);
 
   if (!sellable.length) {
     wrapper?.classList.remove("d-none");
@@ -643,13 +654,16 @@ function populateVariantSelect(variantSelect) {
         .filter(Boolean)
         .join(" - ");
       const stock = Number(variant.quantity) || 0;
-      return `<option value="${index}">${escapeHtml(bits)} - ${stock} in stock</option>`;
+      const suffix = onOrder ? "On order" : `${stock} in stock`;
+      return `<option value="${index}">${escapeHtml(bits)} - ${suffix}</option>`;
     })
     .join("");
 
   const first = sellable[0].variant;
   updateStockHint(
-    `${Number(first.quantity) || 0} available in "${first.label || "this rating"}".`,
+    onOrder
+      ? `On order — not stocked, sell any quantity.`
+      : `${Number(first.quantity) || 0} available in "${first.label || "this rating"}".`,
   );
 }
 
@@ -812,6 +826,8 @@ async function handleRecordSale(event) {
 function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants }) {
   document.querySelectorAll(".errorMes").forEach((item) => { item.textContent = ""; });
   let valid = true;
+  //* Order-based products skip every stock cap — any quantity can be sold.
+  const onOrder = isNotStockedProduct(getSelectedProduct());
 
   if (!productId) {
     setSaleError("productId", "Product is required");
@@ -824,7 +840,7 @@ function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVari
   if (!Number.isInteger(quantity) || quantity <= 0) {
     setSaleError("quantity", "Quantity must be a whole number greater than 0");
     valid = false;
-  } else {
+  } else if (!onOrder) {
     const available = getSelectedStock();
     //* Units already waiting in the basket are spoken for — without this the
     //* form would happily stage more than the shelf holds.

@@ -282,6 +282,14 @@ export function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 //* Category name of a stock line — a product may sit outside every category
+//* Order-based products (e.g. LED strips you don't keep in store): permanent
+//* products under a category with no quantity on hand. They skip every stock
+//* check + deduction but still record sales + count in statistics.
+export function isNotStockedProduct(product) {
+  if (!product) return false;
+  const value = product.notStocked ?? product.not_stocked;
+  return value === true || value === 1 || value === "1" || value === "t" || value === "true";
+}
 export function getCategoryLabel(categories, id) {
   if (id === "" || id === null || id === undefined) return "-";
   const list = Array.isArray(categories) ? categories : [];
@@ -322,8 +330,10 @@ export function describeApiError(error, fallback = "Something went wrong.") {
   if (/^not found$/i.test(raw)) return "It no longer exists on the server.";
   return raw;
 }
-//* Shared by the Products status badge and the status filter so they always agree
+//* Shared by the Products status badge and the status filter so they always agree.
+//* Order-based products are never low/out — they sell without stock on hand.
 export function getProductStatusCode(product) {
+  if (isNotStockedProduct(product)) return "ok";
   const variants = getProductVariants(product);
   if (!variants.length) {
     const quantity = Number(product?.quantity) || 0;
@@ -338,7 +348,9 @@ export function getProductStatusCode(product) {
   return anyRatingLow ? "low" : "in";
 }
 export function getLowStockProducts(products) {
-  return expandProductsToStockLines(products)
+  return expandProductsToStockLines(
+    (products || []).filter((p) => !isNotStockedProduct(p)),
+  )
     .filter((p) => Number(p.quantity) <= Number(p.reorderLevel))
     .sort((a, b) => Number(a.quantity) - Number(b.quantity))
     //^ display-ready names, so a nameless product reads "-" like an empty SKU

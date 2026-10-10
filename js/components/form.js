@@ -5,6 +5,7 @@ import {
   getVariantPriceRange,
   RATING_COLOURS,
   getProductDisplayName,
+  isNotStockedProduct,
   UNIT_SUGGESTIONS,
 } from "../utils/helpers.js";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
@@ -64,7 +65,10 @@ export async function makeProductForm(id, categoryId = "", opts = {}) {
         <label class="text-secondary form-label" for="quantity">Quantity</label>
         <input type="number" class="form-control" name='quantity'  placeholder="0" value="${escAttr(id ? product.quantity : "")}">
         <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
-
+        <div class="form-check mt-2">
+          <input type="checkbox" class="form-check-input" name="notStocked" id="notStockedCheck" value="1" ${(id && (product.notStocked || product.not_stocked)) ? "checked" : ""}>
+          <label class="form-check-label small" for="notStockedCheck">Not in stock — just selling it (no quantity needed)</label>
+        </div>
       </div>
       <div class="col-6">
         <label class="text-secondary form-label" for="unit">Unit</label>
@@ -177,11 +181,27 @@ function variantRowHtml(variant = {}) {
   `;
 }
 
-//* Wire the ratings repeater: add / remove rows, keep Quantity and Price in sync
+//* Wire the ratings repeater: add / remove rows, keep Quantity and Price in sync.
+//* The "Not in stock" toggle below Quantity disables Quantity + the ratings
+//* block — order-based products need no amounts on hand to be sellable.
 export function setupProductVariants() {
   const list = document.getElementById("variantsList");
   const addBtn = document.getElementById("addVariantBtn");
-  if (!list || !addBtn) return;
+  const notStockedCheck = document.getElementById("notStockedCheck");
+  const quantityInput = document.querySelector("input[name='quantity']");
+
+  const applyNotStocked = () => {
+    const on = Boolean(notStockedCheck?.checked);
+    if (quantityInput) {
+      quantityInput.disabled = on;
+      if (on) quantityInput.value = "0";
+    }
+    list?.querySelectorAll("input, button").forEach((el) => {
+      el.disabled = on;
+    });
+    addBtn?.toggleAttribute("disabled", on);
+    document.querySelector(".errorMes-quantity")?.replaceChildren();
+  };
 
   const syncDerivedFields = () => {
     const totalInput = document.querySelector("input[name='quantity']");
@@ -204,6 +224,16 @@ export function setupProductVariants() {
     }
   };
 
+  notStockedCheck?.addEventListener("change", () => {
+    applyNotStocked();
+    syncDerivedFields();
+  });
+
+  if (!list || !addBtn) {
+    applyNotStocked();
+    return;
+  }
+
   addBtn.addEventListener("click", () => {
     list.insertAdjacentHTML("beforeend", variantRowHtml());
     syncDerivedFields();
@@ -218,6 +248,7 @@ export function setupProductVariants() {
 
   list.addEventListener("input", syncDerivedFields);
   syncDerivedFields();
+  applyNotStocked();
 }
 
 //* Read the ratings out of the form (no name attributes, so FormData stays clean)
@@ -335,7 +366,9 @@ function escAttr(s) {
 export async function makeStockAdjustmentForm(opts = {}) {
   //^ Slim list keeps the modal fast; images are never needed in the dropdown.
   //^ Shared projection = shared cache key, warmed by the Stock Adjustments page.
-  const products = opts.products || await fetchData(`products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`);
+  //^ Order-based products are skipped — there is no stock on hand to adjust.
+  const allProducts = opts.products || await fetchData(`products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`);
+  const products = (allProducts || []).filter((p) => !isNotStockedProduct(p));
   const productOptions = products
     .map((p) => {
       const variants = getProductVariants(p);

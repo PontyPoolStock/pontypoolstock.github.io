@@ -11,6 +11,7 @@ import {
   getProductVariants,
   getVariantPriceRange,
   getVariantSuffix,
+  isNotStockedProduct,
   productThumbnailHtml,
 } from "../utils/helpers.js";
 
@@ -182,7 +183,8 @@ function productCardHtml(product, categories) {
   const variants = getProductVariants(product);
   const name = getProductDisplayName(product);
   const unit = String(product.unit || "").trim();
-  const quantity = getProductStock(product);
+  const onOrder = isNotStockedProduct(product);
+  const quantity = onOrder ? "—" : getProductStock(product);
   const priceRange = getVariantPriceRange(variants);
   const price = priceRange
     ? priceRange.min === priceRange.max
@@ -209,13 +211,14 @@ function productCardHtml(product, categories) {
           <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
             ${statusBadge(product)}
             ${product.sku ? `<span class="sku-badge">${escapeHtml(product.sku)}</span>` : ""}
+            ${onOrder ? `<span class="sku-badge">On order</span>` : ""}
           </div>
           <div class="preview-detail-grid">
             ${detailHtml("bi-tags", "Category", escapeHtml(getCategoryLabel(categories, product.categoryId)))}
             ${detailHtml("bi-rulers", "Unit", unit ? escapeHtml(unit) : "—")}
-            ${detailHtml("bi-box-seam", "In stock", `${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}`)}
+            ${detailHtml("bi-box-seam", "In stock", onOrder ? "On order — not stocked" : `${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}`)}
             ${detailHtml("bi-cash-stack", "Price", price)}
-            ${detailHtml("bi-graph-up-arrow", "Stock value", formatCurrency(getProductStockValue(product)))}
+            ${detailHtml("bi-graph-up-arrow", "Stock value", onOrder ? "—" : formatCurrency(getProductStockValue(product)))}
             ${detailHtml("bi-list-ol", "Ratings", String(variants.length))}
           </div>
         </div>
@@ -394,29 +397,31 @@ function compactStatusBadge(product) {
 
 //* One line per rating: what it is, what it costs, how much is left and whether
 //* that is enough — the same status logic the Products table and filter use.
+//* Order-based products show On order instead of stock figures.
 function ratingsHtml(product, variants, unit) {
   if (!variants.length) {
     return `
       <div class="preview-ratings-empty">
         <i class="bi bi-info-circle"></i>
-        <span>No ratings — this product is stocked as a single item.</span>
+        <span>${isNotStockedProduct(product) ? "On order — not stocked, sell any quantity." : "No ratings — this product is stocked as a single item."}</span>
       </div>`;
   }
 
+  const onOrder = isNotStockedProduct(product);
   const rows = variants
     .map((variant, index) => {
       const quantity = Number(variant.quantity) || 0;
       const min = Number(variant.reorderLevel) || 0;
-      const tone = quantity <= 0 ? "status-out" : quantity <= min ? "status-low" : "";
+      const tone = onOrder ? "" : quantity <= 0 ? "status-out" : quantity <= min ? "status-low" : "";
       const label = getVariantSuffix(variant) || `Rating ${index + 1}`;
       const price = Number(variant.price) || 0;
       return `
         <tr>
           <td><span class="variant-chip ${tone}">${escapeHtml(label)}</span></td>
           <td class="text-end">${price > 0 ? formatCurrency(price) : "—"}</td>
-          <td class="text-end">${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}</td>
-          <td class="text-end">${min}</td>
-          <td>${ratingStatusBadge(quantity, min)}</td>
+          <td class="text-end">${onOrder ? "—" : `${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}`}</td>
+          <td class="text-end">${onOrder ? "—" : min}</td>
+          <td>${onOrder ? `<span class="status-badge status-in">On order</span>` : ratingStatusBadge(quantity, min)}</td>
         </tr>`;
     })
     .join("");
@@ -451,6 +456,7 @@ function detailHtml(icon, label, value) {
 }
 
 function statusBadge(product) {
+  if (isNotStockedProduct(product)) return `<span class="status-badge status-in">On order</span>`;
   const code = getProductStatusCode(product);
   if (code === "out") return `<span class="status-badge status-out">Out of stock</span>`;
   if (code === "low") return `<span class="status-badge status-low">Low stock</span>`;

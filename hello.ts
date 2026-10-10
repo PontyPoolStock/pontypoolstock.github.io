@@ -20,7 +20,7 @@ const tableNames = {
 
 const fieldMap = {
   users: ["name", "email", "password", "role"],
-  products: ["name", "sku", "category_id", "price", "quantity", "reorder_level", "unit", "image_url", "variants"],
+  products: ["name", "sku", "category_id", "price", "quantity", "reorder_level", "unit", "image_url", "variants", "not_stocked"],
   categories: ["name", "description", "parent_id", "image_url"],
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
@@ -40,6 +40,7 @@ const toCamel = (row: Record<string, unknown>) => ({
   unitPrice: row.unit_price,
   soldAt: row.sold_at,
   variantIndex: row.variant_index,
+  notStocked: row.not_stocked === true || row.not_stocked === 1 || row.not_stocked === "1" || row.not_stocked === "t",
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -184,6 +185,7 @@ function normalizeBody(body: Record<string, unknown>) {
     unitPrice: "unit_price",
     soldAt: "sold_at",
     variantIndex: "variant_index",
+    notStocked: "not_stocked",
   };
   const normalized = Object.fromEntries(
     Object.entries(body).map(([key, value]) => [aliases[key as keyof typeof aliases] || key, value]),
@@ -301,6 +303,13 @@ async function recordSale(body: Record<string, unknown>) {
     let productName = String(product.name || "");
     let nextQuantity = Number(product.quantity) || 0;
     let nextVariants: Record<string, unknown>[] | null = null;
+    //* Order-based products (e.g. LED strips you don't keep in store) skip
+    //* every stock check and deduction — the sale is still recorded + counted
+    //* in statistics, only the stock movement is skipped.
+    const notStocked = product.not_stocked === true
+      || (product.not_stocked as unknown) === 1
+      || (product.not_stocked as unknown) === "1"
+      || (product.not_stocked as unknown) === "t";
 
     if (variants.length) {
       const index = Number.parseInt(String(variantRaw ?? ""), 10);
@@ -310,26 +319,30 @@ async function recordSale(body: Record<string, unknown>) {
         return { error: "Select the rating being sold" };
       }
       const available = Number(variant.quantity) || 0;
-      if (available < quantity) {
+      if (!notStocked && available < quantity) {
         await client.query("ROLLBACK");
         return { error: `Only ${available} in stock for this rating` };
       }
 
-      nextVariants = variants.map((item, position) => (
-        position === index ? { ...item, quantity: available - quantity } : item
-      ));
-      nextQuantity = nextVariants.reduce(
-        (sum, item) => sum + (Number(item.quantity) || 0),
-        0,
-      );
+      if (notStocked) {
+        nextVariants = variants;
+      } else {
+        nextVariants = variants.map((item, position) => (
+          position === index ? { ...item, quantity: available - quantity } : item
+        ));
+        nextQuantity = nextVariants.reduce(
+          (sum, item) => sum + (Number(item.quantity) || 0),
+          0,
+        );
+      }
       productName = saleVariantName(productName, variant);
     } else {
       const available = nextQuantity;
-      if (available < quantity) {
+      if (!notStocked && available < quantity) {
         await client.query("ROLLBACK");
         return { error: `Only ${available} in stock` };
       }
-      nextQuantity = available - quantity;
+      if (!notStocked) nextQuantity = available - quantity;
     }
 
     await client.query(
@@ -513,7 +526,8 @@ async function resolveOriginalVariantIndex(
 }
 
 //* Move one product's stock by `delta` (positive = add, negative = remove),
-//* honouring the rating rows when the product has them.
+//* honouring the rating rows when the product has them. Order-based products
+//* (not_stocked) skip every stock touch — only the name is resolved.
 async function applyStockDelta(
   client: { query: (sql: string, values?: unknown[]) => Promise<any> },
   productId: unknown,
@@ -534,10 +548,31 @@ async function applyStockDelta(
     };
   }
 
+  const notStocked = product.not_stocked === true
+    || (product.not_stocked as unknown) === 1
+    || (product.not_stocked as unknown) === "1"
+    || (product.not_stocked as unknown) === "t";
+
   const variants: Record<string, unknown>[] = Array.isArray(product.variants)
     ? product.variants
     : [];
   let productName = String(product.name || "");
+  if (notStocked) {
+    if (variants.length) {
+      const index = Number.parseInt(String(variantIndex ?? ""), 10);
+      const variant = Number.isNaN(index) ? undefined : variants[index];
+      if (!variant) {
+        return {
+          error: isGiveBack
+            ? "The rating sold for this sale no longer exists, so its stock cannot be adjusted."
+            : "Select the rating being sold",
+        };
+      }
+      productName = saleVariantName(productName, variant);
+    }
+    return { productName };
+  }
+
   let nextQuantity = Number(product.quantity) || 0;
   let nextVariants: Record<string, unknown>[] | null = null;
 
