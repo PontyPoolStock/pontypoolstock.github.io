@@ -2402,14 +2402,6 @@ a:hover {
   color: #737373;
 }
 
-.sale-product-preview-empty {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #737373;
-  font-size: 0.82rem;
-}
-
 .sale-product-gallery {
   display: flex;
   gap: 0.55rem;

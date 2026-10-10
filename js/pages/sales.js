@@ -113,7 +113,7 @@ function renderSalesPage() {
               ${getProductOptionsHtml()}
             </select>
             <div class="text-danger fw-bold errorMes errorMes-productId"></div>
-            <div id="saleProductPreview" class="sale-product-preview" aria-live="polite"></div>
+            <div id="saleProductPreview" class="sale-product-preview d-none" aria-live="polite"></div>
             <div id="saleProductGallery" class="sale-product-gallery" role="listbox" aria-label="Product photos"></div>
           </div>
           <div class="col-12 col-lg-6 d-none" id="saleVariantWrapper">
@@ -287,9 +287,7 @@ function getCategoryOptionsHtml() {
 //* apart, so the selected product gets a large preview and the filtered
 //* category gets a tap-to-select thumbnail strip.
 function getSaleProductPreviewHtml(product = null) {
-  if (!product) {
-    return `<span class="sale-product-preview-empty"><i class="bi bi-image"></i> Pick a category to see product photos, then tap one to select it.</span>`;
-  }
+  if (!product) return "";
   const variants = getProductVariants(product);
   const stock = variants.length
     ? getVariantsTotalQuantity(variants)
@@ -331,7 +329,9 @@ function paintSaleProductVisuals(selectedId = "") {
     const product = selectedId
       ? products.find((item) => String(item.id) === String(selectedId))
       : getSelectedProduct();
-    preview.innerHTML = getSaleProductPreviewHtml(product || null);
+    const html = getSaleProductPreviewHtml(product || null);
+    preview.innerHTML = html;
+    preview.classList.toggle("d-none", !html);
   }
   const gallery = document.getElementById("saleProductGallery");
   if (gallery) {
