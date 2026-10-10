@@ -399,6 +399,7 @@ function getCartHtml() {
         .join(" · ");
       return `
         <div class="sale-cart-line">
+          ${productThumbnailHtml(product?.imageUrl, name, { productId: line.productId, sizeClass: "entity-thumbnail-sm" })}
           <div class="sale-cart-line-info">
             <span class="sale-cart-line-name">${escapeHtml(name)}</span>
             <small class="sale-cart-line-meta">${escapeHtml(meta)}</small>
@@ -415,6 +416,7 @@ function getCartHtml() {
 function renderCart() {
   const list = document.getElementById("saleCartList");
   if (list) list.innerHTML = getCartHtml();
+  hydrateEntityImages(document.getElementById("recordSaleForm"));
   updateCartSummary();
 }
 
