@@ -178,7 +178,12 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
         //^ Order-based products (e.g. LED strips): no quantity on hand, still a
         //^ permanent product under a category + still sellable in Record Sale.
-        data.notStocked = form.querySelector("#notStockedCheck")?.checked ? true : false;
+        //^ Read the checkbox directly (never FormData): a ticked box serialises
+        //^ as "1"/"on" and an unticked one vanishes — both must map to an
+        //^ explicit boolean or the DB keeps the old flag.
+        data.notStocked = form.querySelector("#notStockedCheck")?.checked === true;
+        //^ Drop any FormData echo of the checkbox so only the boolean above ships.
+        delete data.not_stocked;
         if (data.notStocked) {
           data.quantity = 0;
           data.reorderLevel = 0;

@@ -193,8 +193,12 @@ export function setupProductVariants() {
   const applyNotStocked = () => {
     const on = Boolean(notStockedCheck?.checked);
     if (quantityInput) {
-      quantityInput.disabled = on;
+      //^ readOnly (not disabled): a disabled input is dropped from FormData,
+      //^ the PUT then carries no quantity key and a stale API keeps the old
+      //^ stock row instead of the reset 0.
+      quantityInput.readOnly = on;
       if (on) quantityInput.value = "0";
+      else quantityInput.readOnly = false;
     }
     list?.querySelectorAll("input, button").forEach((el) => {
       el.disabled = on;
