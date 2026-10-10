@@ -168,10 +168,15 @@ async function deletePersistentKeysExcept(collection, keepKeys) {
 
 function mergeCachedRow(cachedRow, payload) {
   // Merge only the fields the cached row already tracks so a slim ?fields=
-  // projection never bloats with full image bytes.
+  // projection never bloats with full image bytes — except notStocked, which
+  // older cached rows predate and must still pick up so "just selling" shows
+  // On order instantly instead of flashing Out of stock.
   const merged = { ...cachedRow };
   for (const field of Object.keys(merged)) {
     if (payload[field] !== undefined) merged[field] = payload[field];
+  }
+  if (merged.notStocked === undefined && payload.notStocked !== undefined) {
+    merged.notStocked = payload.notStocked;
   }
   return merged;
 }

@@ -186,10 +186,17 @@ function normalizeBody(body: Record<string, unknown>) {
     soldAt: "sold_at",
     variantIndex: "variant_index",
     notStocked: "not_stocked",
+    not_stocked: "not_stocked",
   };
   const normalized = Object.fromEntries(
     Object.entries(body).map(([key, value]) => [aliases[key as keyof typeof aliases] || key, value]),
   );
+  //^ A ticked checkbox arrives as "1"/"on"/true — the column is a real
+  //^ boolean, so anything else would 500 or store the wrong flag.
+  if (normalized.not_stocked !== undefined) {
+    const value = normalized.not_stocked as unknown;
+    normalized.not_stocked = value === true || value === 1 || value === "1" || value === "t" || value === "true" || value === "on";
+  }
   //^ empty optional fields become NULL / 0 so NOT NULL + CHECK columns accept them
   if (normalized.sku === "") normalized.sku = null;
   if (normalized.category_id === "") normalized.category_id = null;
@@ -221,9 +228,14 @@ function sqlColumn(field: string) {
 }
 
 function getDatabaseValues(fields: string[], body: Record<string, unknown>) {
-  //^ the variants column is jsonb, so arrays/objects must be serialised to JSON text
+  //^ the variants column is jsonb, so arrays/objects must be serialised to JSON text.
+  //^ the not_stocked column is a real boolean — a "1" string would 500.
   return fields.map((field) => {
     const value = body[field];
+    if (field === "not_stocked") {
+      if (value === true || value === 1 || value === "1" || value === "t" || value === "true" || value === "on") return true;
+      return false;
+    }
     if (field !== "variants" || typeof value === "string") return value;
     return JSON.stringify(value);
   });
