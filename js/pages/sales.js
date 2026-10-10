@@ -4,6 +4,7 @@ import {
   postData,
   updateData,
   deleteData,
+  hydrateEntityImages,
   PRODUCT_LIST_FIELDS,
   CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
@@ -16,6 +17,7 @@ import {
   getVariantName,
   getVariantPrice,
   getProductDisplayName,
+  productThumbnailHtml,
   describeApiError,
   debounce,
 } from "../utils/helpers.js";
@@ -111,6 +113,8 @@ function renderSalesPage() {
               ${getProductOptionsHtml()}
             </select>
             <div class="text-danger fw-bold errorMes errorMes-productId"></div>
+            <div id="saleProductPreview" class="sale-product-preview" aria-live="polite"></div>
+            <div id="saleProductGallery" class="sale-product-gallery" role="listbox" aria-label="Product photos"></div>
           </div>
           <div class="col-12 col-lg-6 d-none" id="saleVariantWrapper">
             <label class="form-label" for="saleVariantSelect">Rating *</label>
@@ -279,6 +283,64 @@ function getCategoryOptionsHtml() {
   return `${allOption}${categoryOptions}${uncatOption}`;
 }
 
+//* Product photos for the picker — names alone cannot tell two pendants
+//* apart, so the selected product gets a large preview and the filtered
+//* category gets a tap-to-select thumbnail strip.
+function getSaleProductPreviewHtml(product = null) {
+  if (!product) {
+    return `<span class="sale-product-preview-empty"><i class="bi bi-image"></i> Pick a category to see product photos, then tap one to select it.</span>`;
+  }
+  const variants = getProductVariants(product);
+  const stock = variants.length
+    ? getVariantsTotalQuantity(variants)
+    : Number(product.quantity) || 0;
+  const category = getCategoryLabel(categories, product.categoryId);
+  const meta = [category, `${stock} in stock`].filter(Boolean).join(" · ");
+  return `
+    ${productThumbnailHtml(product.imageUrl, getProductDisplayName(product), { productId: product.id })}
+    <span class="sale-product-preview-info">
+      <strong>${escapeHtml(getProductDisplayName(product))}</strong>
+      ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+    </span>`;
+}
+
+function getSaleProductGalleryHtml(selectedId = "") {
+  const filtered = getFilteredProducts().slice(0, 24);
+  if (!filtered.length) return "";
+  return filtered
+    .map((product) => {
+      const variants = getProductVariants(product);
+      const stock = variants.length
+        ? getVariantsTotalQuantity(variants)
+        : Number(product.quantity) || 0;
+      const name = getProductDisplayName(product);
+      const isSelected = String(product.id) === String(selectedId);
+      return `
+        <button type="button" class="sale-photo-card${isSelected ? " is-selected" : ""}${stock <= 0 ? " is-out" : ""}" data-product-id="${escapeHtml(String(product.id))}" role="option" aria-selected="${isSelected ? "true" : "false"}" title="${escapeHtml(name)}" ${stock <= 0 ? "disabled" : ""}>
+          ${productThumbnailHtml(product.imageUrl, name, { productId: product.id, sizeClass: "entity-thumbnail-sm" })}
+          <span class="sale-photo-name">${escapeHtml(name)}</span>
+          <span class="sale-photo-stock">${stock <= 0 ? "Out" : `${stock} left`}</span>
+        </button>`;
+    })
+    .join("");
+}
+
+function paintSaleProductVisuals(selectedId = "") {
+  const preview = document.getElementById("saleProductPreview");
+  if (preview) {
+    const product = selectedId
+      ? products.find((item) => String(item.id) === String(selectedId))
+      : getSelectedProduct();
+    preview.innerHTML = getSaleProductPreviewHtml(product || null);
+  }
+  const gallery = document.getElementById("saleProductGallery");
+  if (gallery) {
+    const current = selectedId || document.getElementById("saleProductSelect")?.value || "";
+    gallery.innerHTML = getSaleProductGalleryHtml(current);
+  }
+  hydrateEntityImages(document.getElementById("recordSaleForm"));
+}
+
 //* Product dropdown — filtered down to the chosen category, out-of-stock rows
 //* still disabled so nothing unsellable can be staged.
 function getProductOptionsHtml(selectedId = "") {
@@ -397,6 +459,7 @@ function handleCategoryChange() {
     populateVariantSelect(document.getElementById("saleVariantSelect"));
     updatePriceDefault(document.getElementById("saleUnitPrice"));
   }
+  paintSaleProductVisuals(productSelect.value);
   updateSalePreview();
 }
 
@@ -456,7 +519,18 @@ function setupEventListeners() {
   productSelect?.addEventListener("change", () => {
     populateVariantSelect(variantSelect);
     updatePriceDefault(priceInput);
+    paintSaleProductVisuals(productSelect.value);
     updateSalePreview();
+  });
+  //* Tapping a photo picks the same product as the dropdown — both stay in
+  //* sync so the correct pendant is always what gets recorded.
+  document.getElementById("saleProductGallery")?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-product-id]");
+    if (!card || card.disabled) return;
+    const select = document.getElementById("saleProductSelect");
+    if (!select) return;
+    select.value = card.dataset.productId;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
   });
   variantSelect?.addEventListener("change", () => {
     updatePriceDefault(priceInput);
@@ -522,6 +596,7 @@ function setupEventListeners() {
   });
 
   populateVariantSelect(variantSelect);
+  paintSaleProductVisuals(productSelect?.value || "");
   updateSalePreview();
   //* Paint the basket state (count, button label, Clear all) on every render —
   //* failed lines survive a re-render and must show up right away.
