@@ -122,7 +122,7 @@ function getTableHtml(filteredProducts = products) {
         productId: p.id,
       }),
       sku: p.sku ? `<span class="sku-badge">${escapeHtml(p.sku)}</span>` : "-",
-      name: escapeHtml(getProductDisplayName(p)) + (onOrder ? ' <span class="sku-badge">On order</span>' : "") + getRatingsHtml(variants),
+      name: escapeHtml(getProductDisplayName(p)) + getRatingsHtml(variants),
       category: escapeHtml(getCategoryLabel(categories, p.categoryId)),
       //^ A single price stays a number (renderTable formats it); a range is
       //^ already formatted, like the price shown on the preview card

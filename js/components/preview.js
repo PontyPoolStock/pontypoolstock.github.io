@@ -211,7 +211,6 @@ function productCardHtml(product, categories) {
           <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
             ${statusBadge(product)}
             ${product.sku ? `<span class="sku-badge">${escapeHtml(product.sku)}</span>` : ""}
-            ${onOrder ? `<span class="sku-badge">On order</span>` : ""}
           </div>
           <div class="preview-detail-grid">
             ${detailHtml("bi-tags", "Category", escapeHtml(getCategoryLabel(categories, product.categoryId)))}
