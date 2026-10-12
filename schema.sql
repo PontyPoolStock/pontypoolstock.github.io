@@ -71,6 +71,23 @@ CREATE TABLE IF NOT EXISTS sales (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Shop-bought stock for resale ("Not in stock — just selling" items).
+-- Each row records one purchase from another shop. Reseller stock on hand is
+-- derived: SUM(purchases.quantity) - SUM(sales.quantity) per product/variant,
+-- so it never mixes with the products.quantity own-stock column.
+CREATE TABLE IF NOT EXISTS reseller_purchases (
+  id BIGSERIAL PRIMARY KEY,
+  product_id BIGINT REFERENCES products(id) ON DELETE SET NULL,
+  product_name TEXT NOT NULL,
+  variant_index INTEGER,
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  unit_cost NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (unit_cost >= 0),
+  total_cost NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (total_cost >= 0),
+  purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS products_category_id_idx ON products(category_id);
 CREATE INDEX IF NOT EXISTS products_updated_at_idx ON products(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS categories_updated_at_idx ON categories(updated_at DESC, id DESC);
@@ -78,6 +95,8 @@ CREATE INDEX IF NOT EXISTS categories_parent_id_idx ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS stock_adjustments_product_id_idx ON stock_adjustments(product_id);
 CREATE INDEX IF NOT EXISTS activity_log_timestamp_idx ON activity_log(timestamp DESC);
 CREATE INDEX IF NOT EXISTS sales_sold_at_idx ON sales(sold_at DESC);
+CREATE INDEX IF NOT EXISTS reseller_purchases_product_id_idx ON reseller_purchases(product_id);
+CREATE INDEX IF NOT EXISTS reseller_purchases_purchased_at_idx ON reseller_purchases(purchased_at DESC);
 
 -- Seed admin account with scrypt-hashed password (admin123)
 INSERT INTO users (name, email, password, role)

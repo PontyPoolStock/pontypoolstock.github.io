@@ -11,6 +11,8 @@ import {
   getProductStockValue,
   getLowStockProducts,
   getTotalInventoryValue,
+  getResellerTotals,
+  isNotStockedProduct,
 } from "../utils/helpers.js";
 
 let statisticsData = {
@@ -18,15 +20,17 @@ let statisticsData = {
   categories: [],
   adjustments: [],
   sales: [],
+  resellerPurchases: [],
 };
 let selectedPeriod = "month";
 
 export async function loadStatistics() {
-  const [products, categories, adjustments, sales] = await Promise.all([
+  const [products, categories, adjustments, sales, resellerPurchases] = await Promise.all([
     fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`),
     fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
     fetchData("stockAdjustments"),
     fetchData("sales"),
+    fetchData("resellerPurchases"),
   ]);
 
   statisticsData = {
@@ -34,16 +38,23 @@ export async function loadStatistics() {
     categories: Array.isArray(categories) ? categories : [],
     adjustments: Array.isArray(adjustments) ? adjustments : [],
     sales: Array.isArray(sales) ? sales : [],
+    resellerPurchases: Array.isArray(resellerPurchases) ? resellerPurchases : [],
   };
   renderStatistics();
 }
 
 function renderStatistics() {
-  const { products, categories, adjustments, sales } = statisticsData;
+  const { products, categories, adjustments, sales, resellerPurchases } = statisticsData;
   const periodAdjustments = filterByPeriod(adjustments, selectedPeriod);
   const periodSales = filterByPeriod(sales, selectedPeriod, "soldAt");
   const salesToday = filterByPeriod(sales, "day", "soldAt");
   const dailySales = groupSalesByDay(periodSales);
+  //* Bought-for-resale is fully separate from own stock: bought units + spent
+  //* from the purchase ledger, reseller sales = On-order product sales only.
+  const periodPurchases = filterByPeriod(resellerPurchases, selectedPeriod, "purchasedAt");
+  const resellerPeriod = getResellerTotals(periodPurchases, periodSales, products);
+  const resellerAll = getResellerTotals(resellerPurchases, sales, products);
+  const resellerRows = getResellerRows(products, resellerPurchases, sales);
   const lowStock = getLowStockProducts(products);
   const totalUnits = products.reduce(
     (sum, product) => sum + getProductStock(product),
@@ -201,6 +212,29 @@ function renderStatistics() {
           </section>
         </div>
       </div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-12">
+          <section class="statistics-panel">
+            <div class="statistics-panel-header">
+              <div>
+                <span class="statistics-kicker">Bought for resale — separate from your own stock</span>
+                <h4>Shop purchases</h4>
+              </div>
+              <i class="bi bi-bag"></i>
+            </div>
+            <div class="row g-3 statistics-grid mb-3">
+              ${renderStatCard({ label: "Bought (period)", value: resellerPeriod.boughtUnits.toLocaleString("en-US"), detail: `${resellerPeriod.purchaseCount} purchase${resellerPeriod.purchaseCount === 1 ? "" : "s"} in selected period`, icon: "bi-bag-plus", tone: "blue" })}
+              ${renderStatCard({ label: "Spent (period)", value: formatCurrency(resellerPeriod.spent), detail: "Buy cost in selected period", icon: "bi-wallet2", tone: "purple" })}
+              ${renderStatCard({ label: "Reseller sales (period)", value: formatCurrency(resellerPeriod.revenue), detail: `${resellerPeriod.soldUnits.toLocaleString("en-US")} units · ${resellerPeriod.saleCount} sale${resellerPeriod.saleCount === 1 ? "" : "s"}`, icon: "bi-cash-stack", tone: "yellow" })}
+              ${renderStatCard({ label: "Reseller profit (period)", value: formatCurrency(resellerPeriod.profit), detail: "Sales minus buy cost", icon: "bi-graph-up-arrow", tone: resellerPeriod.profit < 0 ? "red" : "green" })}
+              ${renderStatCard({ label: "Reseller stock left", value: resellerAll.onHand.toLocaleString("en-US"), detail: `${resellerAll.boughtUnits.toLocaleString("en-US")} bought − ${resellerAll.soldUnits.toLocaleString("en-US")} sold (all time)`, icon: "bi-box-seam", tone: "ink" })}
+              ${renderStatCard({ label: "Reseller profit (all time)", value: formatCurrency(resellerAll.profit), detail: `${formatCurrency(resellerAll.revenue)} sales − ${formatCurrency(resellerAll.spent)} spent`, icon: "bi-trophy", tone: resellerAll.profit < 0 ? "red" : "green" })}
+            </div>
+            ${renderResellerTable(resellerRows)}
+          </section>
+        </div>
+      </div>
     </section>
   `;
 
@@ -233,6 +267,70 @@ function filterByPeriod(items, period, dateField = "date") {
 
 function getSalesTotal(sales) {
   return sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+}
+
+//* Per-product bought-for-resale breakdown: bought units + spent from the
+//* purchase ledger vs reseller sales (On-order sales) + reseller stock left.
+function getResellerRows(products, purchases, sales) {
+  const list = Array.isArray(purchases) ? purchases : [];
+  const saleList = Array.isArray(sales) ? sales : [];
+  const onOrderIds = new Set(
+    (Array.isArray(products) ? products : [])
+      .filter((product) => isNotStockedProduct(product))
+      .map((product) => String(product.id)),
+  );
+  const byProduct = new Map();
+  for (const item of list) {
+    const key = String(item.productId ?? "");
+    if (!key) continue;
+    const current = byProduct.get(key) || { productId: key, name: item.productName || "Product", bought: 0, spent: 0, sold: 0, revenue: 0 };
+    current.bought += Number(item.quantity) || 0;
+    const line = Number(item.totalCost ?? item.total_cost);
+    current.spent += Number.isFinite(line) && line > 0 ? line : (Number(item.quantity) || 0) * (Number(item.unitCost ?? item.unit_cost) || 0);
+    if (item.productName && current.name === "Product") current.name = item.productName;
+    byProduct.set(key, current);
+  }
+  for (const sale of saleList) {
+    const key = String(sale.productId ?? "");
+    if (!key || !onOrderIds.has(key)) continue;
+    const current = byProduct.get(key) || { productId: key, name: sale.productName || "Product", bought: 0, spent: 0, sold: 0, revenue: 0 };
+    current.sold += Number(sale.quantity) || 0;
+    current.revenue += Number(sale.total) || 0;
+    if (sale.productName && current.name === "Product") current.name = sale.productName;
+    byProduct.set(key, current);
+  }
+  return [...byProduct.values()]
+    .map((row) => ({ ...row, left: row.bought - row.sold, profit: row.revenue - row.spent }))
+    .sort((first, second) => second.profit - first.profit);
+}
+
+function renderResellerTable(rows) {
+  if (!rows.length) {
+    return `<div class="statistics-empty"><i class="bi bi-bag"></i><span>No shop purchases yet.</span></div>`;
+  }
+
+  return `
+    <div class="table-responsive">
+      <table class="table statistics-table align-middle mb-0">
+        <thead>
+          <tr><th>Product</th><th>Bought</th><th>Spent</th><th>Sold</th><th class="text-end">Sales</th><th>Stock left</th><th class="text-end">Profit</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <td><strong>${escapeHtml(row.name)}</strong></td>
+              <td>${row.bought.toLocaleString("en-US")}</td>
+              <td>${formatCurrency(row.spent)}</td>
+              <td>${row.sold.toLocaleString("en-US")}</td>
+              <td class="text-end fw-semibold">${formatCurrency(row.revenue)}</td>
+              <td>${row.left.toLocaleString("en-US")}</td>
+              <td class="text-end fw-semibold">${formatCurrency(row.profit)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function groupSalesByDay(sales) {

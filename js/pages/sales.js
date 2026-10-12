@@ -27,6 +27,7 @@ import { showToast, confirmAction } from "../components/toast.js";
 let sales = [];
 let products = [];
 let categories = [];
+let resellerPurchases = [];
 let lastFiltered = [];
 let currentPage = 1;
 let PAGE_SIZE = 5;
@@ -50,16 +51,19 @@ export async function loadSales() {
 //* `freshSales` bypasses the local cache — used when the list on screen has
 //* just been proved wrong by the server, so we must ask it directly.
 async function loadData({ freshSales = false, freshProducts = false } = {}) {
-  const [saleData, productData, categoryData] = await Promise.all([
+  const [saleData, productData, categoryData, resellerData] = await Promise.all([
     fetchData("sales", freshSales ? { fresh: true } : undefined),
     fetchData(`products?fields=${PRODUCT_LIST_FIELDS}`, freshProducts ? { fresh: true } : undefined),
     //^ Slim projection — the Category dropdown only needs id + name, and the
     //^ shared cache key means it is already warm from Products/Categories.
     fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
+    //^ Reseller ledger for the On-order stock hint — bought vs sold, never own stock.
+    fetchData("resellerPurchases"),
   ]);
   sales = sortSales(Array.isArray(saleData) ? saleData : []);
   products = Array.isArray(productData) ? productData : [];
   categories = Array.isArray(categoryData) ? categoryData : [];
+  resellerPurchases = Array.isArray(resellerData) ? resellerData : [];
 }
 
 //* Newest first — shared with the background refresh so a repaint caused by
@@ -287,7 +291,33 @@ function getCategoryOptionsHtml() {
 //* Product photos for the picker — names alone cannot tell two pendants
 //* apart, so the selected product gets a large preview and the filtered
 //* category gets a tap-to-select thumbnail strip. Order-based products show
-//* "On order" instead of a stock count.
+//* reseller stock (bought minus sold) instead of an own-stock count.
+function resellerLeftFor(productId, variantIndex = "") {
+  let bought = 0;
+  let sold = 0;
+  const key = `${String(productId ?? "")}::${variantIndex === null || variantIndex === undefined || variantIndex === "" ? "" : String(variantIndex)}`;
+  for (const item of resellerPurchases) {
+    const itemKey = `${String(item.productId ?? "")}::${item.variantIndex === null || item.variantIndex === undefined || item.variantIndex === "" ? "" : String(item.variantIndex)}`;
+    if (itemKey === key) bought += Number(item.quantity) || 0;
+  }
+  for (const sale of sales) {
+    const saleKey = `${String(sale.productId ?? "")}::${sale.variantIndex === null || sale.variantIndex === undefined || sale.variantIndex === "" ? "" : String(sale.variantIndex)}`;
+    if (saleKey === key) sold += Number(sale.quantity) || 0;
+  }
+  return { bought, sold, left: bought - sold };
+}
+
+function resellerProductLeft(product) {
+  if (!isNotStockedProduct(product)) return null;
+  const variants = getProductVariants(product);
+  if (!variants.length) return resellerLeftFor(product.id, "").left;
+  let left = 0;
+  for (let index = 0; index < variants.length; index++) {
+    left += resellerLeftFor(product.id, index).left;
+  }
+  return left;
+}
+
 function getSaleProductPreviewHtml(product = null) {
   if (!product) return "";
   const onOrder = isNotStockedProduct(product);
@@ -296,7 +326,7 @@ function getSaleProductPreviewHtml(product = null) {
     ? getVariantsTotalQuantity(variants)
     : Number(product.quantity) || 0;
   const category = getCategoryLabel(categories, product.categoryId);
-  const meta = [category, onOrder ? "On order — not stocked" : `${stock} in stock`].filter(Boolean).join(" · ");
+  const meta = [category, onOrder ? `On order — ${resellerProductLeft(product)} reseller left` : `${stock} in stock`].filter(Boolean).join(" · ");
   return `
     ${productThumbnailHtml(product.imageUrl, getProductDisplayName(product), { productId: product.id })}
     <span class="sale-product-preview-info">
@@ -322,7 +352,7 @@ function getSaleProductGalleryHtml(selectedId = "") {
         <button type="button" class="sale-photo-card${isSelected ? " is-selected" : ""}${out ? " is-out" : ""}" data-product-id="${escapeHtml(String(product.id))}" role="option" aria-selected="${isSelected ? "true" : "false"}" title="${escapeHtml(name)}" ${out ? "disabled" : ""}>
           ${productThumbnailHtml(product.imageUrl, name, { productId: product.id, sizeClass: "entity-thumbnail-sm" })}
           <span class="sale-photo-name">${escapeHtml(name)}</span>
-          <span class="sale-photo-stock">${onOrder ? "On order" : stock <= 0 ? "Out" : `${stock} left`}</span>
+          <span class="sale-photo-stock">${onOrder ? `On order · ${resellerProductLeft(product)} left` : stock <= 0 ? "Out" : `${stock} left`}</span>
         </button>`;
     })
     .join("");
@@ -654,7 +684,7 @@ function populateVariantSelect(variantSelect) {
         .filter(Boolean)
         .join(" - ");
       const stock = Number(variant.quantity) || 0;
-      const suffix = onOrder ? "On order" : `${stock} in stock`;
+      const suffix = onOrder ? `On order · ${resellerLeftFor(product?.id, index).left} reseller left` : `${stock} in stock`;
       return `<option value="${index}">${escapeHtml(bits)} - ${suffix}</option>`;
     })
     .join("");
@@ -662,7 +692,7 @@ function populateVariantSelect(variantSelect) {
   const first = sellable[0].variant;
   updateStockHint(
     onOrder
-      ? `On order — not stocked, sell any quantity.`
+      ? resellerHintFor(product?.id, sellable[0].index)
       : `${Number(first.quantity) || 0} available in "${first.label || "this rating"}".`,
   );
 }
@@ -684,6 +714,25 @@ function getSelectedStock() {
 //* staged-units note so the note can be re-painted after every basket change
 //* without re-deriving the whole sentence.
 let stockHintBase = "";
+
+//* On-order hint backed by the reseller ledger: bought minus sold per
+//* product/variant, always separate from products.quantity own-stock.
+function resellerHintFor(productId, variantIndex) {
+  let bought = 0;
+  let sold = 0;
+  const key = `${String(productId ?? "")}::${variantIndex === null || variantIndex === undefined || variantIndex === "" ? "" : String(variantIndex)}`;
+  for (const item of resellerPurchases) {
+    const itemKey = `${String(item.productId ?? "")}::${item.variantIndex === null || item.variantIndex === undefined || item.variantIndex === "" ? "" : String(item.variantIndex)}`;
+    if (itemKey === key) bought += Number(item.quantity) || 0;
+  }
+  for (const sale of sales) {
+    const saleKey = `${String(sale.productId ?? "")}::${sale.variantIndex === null || sale.variantIndex === undefined || sale.variantIndex === "" ? "" : String(sale.variantIndex)}`;
+    if (saleKey === key) sold += Number(sale.quantity) || 0;
+  }
+  const left = bought - sold;
+  if (!bought) return "On order — no shop purchases recorded yet. Add them under Shop Purchases.";
+  return `On order — reseller stock: ${left} left (${bought} bought − ${sold} sold).`;
+}
 
 function updateStockHint(text) {
   stockHintBase = String(text ?? "");

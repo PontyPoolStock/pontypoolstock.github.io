@@ -1096,5 +1096,6 @@
       "id": "UO4R7HvggvA"
     }
   ],
+  "resellerPurchases": [],
   "$schema": "./node_modules/json-server/schema.json"
 }

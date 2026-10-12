@@ -12,6 +12,7 @@ import { loadActivityLog } from "./pages/activity.js";
 import { loadDashboard } from "./pages/dashboard.js";
 import { loadStockAdjustments } from "./pages/stockadjustment.js";
 import { loadSales } from "./pages/sales.js";
+import { loadResellerPurchases } from "./pages/reseller.js";
 import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 import { prewarmAppCache } from "./services/api.js";
@@ -112,6 +113,9 @@ function navigateTo(text) {
       break;
     case "Record Sale":
       loadSales();
+      break;
+    case "Shop Purchases":
+      loadResellerPurchases();
       break;
     case "Stock Adjustments":
       loadStockAdjustments();

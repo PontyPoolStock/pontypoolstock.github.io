@@ -37,7 +37,8 @@ try {
       (SELECT count(*) FROM categories) AS categories,
       (SELECT count(*) FROM stock_adjustments) AS adjustments,
       (SELECT count(*) FROM activity_log) AS activity,
-      (SELECT count(*) FROM sales) AS sales
+      (SELECT count(*) FROM sales) AS sales,
+      (SELECT count(*) FROM reseller_purchases) AS reseller_purchases
   `);
 
   console.log(`Connected to ${host}`);

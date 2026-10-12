@@ -32,6 +32,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 - 🏷️ **Categories** — Manage product categories with product count tracking
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries
 - 🛒 **Record Sale** — Pick a category to narrow the product list, add as many lines as you like to the sale basket (mixing categories freely), then record them all in one click; stock, sales totals, and the activity log update together
+- 🛍️ **Shop Purchases** — Record what you bought from other shops to sell on (On-order products only): quantity bought + buy price each; reseller stock (bought minus sold) stays fully separate from your own stock, with its own section in Statistics showing bought units, spent, sales, stock left, and profit
 - ✏️ **Edit Sale** — Correct a mis-keyed sale (product, rating, quantity, price); the original stock is returned and re-deducted atomically
 - 🗑️ **Delete Sale** — Void a sale outright; the units it consumed are returned to the same rating in the same transaction, so revenue and stock never drift apart
 - 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking (no sales revenue)
@@ -141,7 +142,7 @@ The Neon API URL lives in `js/config.js`, so every page — locally or hosted �
 | `npm run db:schema` | Re-applies `schema.sql` to Neon: creates missing tables and adds columns the live database is missing |
 | `npm run db:migrate` | Copies `data/db.json` into Neon (prints a dry run; add `--apply` to write) |
 | `npm run server` | Offline-only JSON Server on `http://localhost:3000` using `data/db.json` |
-| `npm test` | Runs the automated test suites in `scripts/*.test.mjs` — API cache, sale delete, and the Record Sale basket (needs `npm install` for jsdom) |
+| `npm test` | Runs the automated test suites in `scripts/*.test.mjs` — API cache, sale delete, the Record Sale basket, the not-stocked flag, and bought-for-resale tracking (needs `npm install` for jsdom) |
 
 ---
 
@@ -166,6 +167,9 @@ Base URL: `js/config.js` → `https://br-blue-base-b451rqwn-api.compute.c-6.us-e
 | POST | `/activityLog` | Log an action |
 | GET | `/sales` | Get sales |
 | POST | `/sales` | Record a sale (transactionally: validates stock, deducts it, writes the sale + activity log) |
+| GET | `/resellerPurchases` | Get shop purchases (bought-for-resale ledger: quantity + buy price, separate from own stock) |
+| POST | `/resellerPurchases` | Record a shop purchase for an On-order product |
+| DELETE | `/resellerPurchases/:id` | Delete a shop purchase (sales stay as recorded) |
 | PUT | `/sales/:id` | Edit a sale (transactionally: returns the original stock, takes the corrected amount, logs `SALE_EDITED`) |
 | DELETE | `/sales/:id` | Void a sale and return its stock to the same rating |
 | POST | `/auth/login` | Validate email and password — returns the user, a signed session token and its `expiresAt` |

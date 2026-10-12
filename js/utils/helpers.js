@@ -290,6 +290,76 @@ export function isNotStockedProduct(product) {
   const value = product.notStocked ?? product.not_stocked;
   return value === true || value === 1 || value === "1" || value === "t" || value === "true";
 }
+
+//* Bought-for-resale tracking (On-order products only):
+//* reseller stock on hand is derived per product/variant, never touching
+//* products.quantity — bought = SUM(purchases.quantity), sold = SUM(sales.quantity).
+export function getResellerKey(productId, variantIndex) {
+  const normalizedVariant = variantIndex === null || variantIndex === undefined || variantIndex === ""
+    ? ""
+    : String(variantIndex);
+  return `${String(productId ?? "")}::${normalizedVariant}`;
+}
+
+export function normalizeResellerVariantIndex(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : "";
+}
+
+export function getResellerStockMap(purchases, sales) {
+  const bought = new Map();
+  for (const purchase of Array.isArray(purchases) ? purchases : []) {
+    const key = getResellerKey(purchase.productId ?? purchase.product_id, purchase.variantIndex ?? purchase.variant_index);
+    bought.set(key, (bought.get(key) || 0) + (Number(purchase.quantity) || 0));
+  }
+  const sold = new Map();
+  for (const sale of Array.isArray(sales) ? sales : []) {
+    const key = getResellerKey(sale.productId ?? sale.product_id, sale.variantIndex ?? sale.variant_index);
+    sold.set(key, (sold.get(key) || 0) + (Number(sale.quantity) || 0));
+  }
+  const stock = new Map();
+  for (const [key, qty] of bought) {
+    stock.set(key, qty - (sold.get(key) || 0));
+  }
+  return { bought, sold, stock };
+}
+
+export function getResellerOnHand(purchases, sales, productId, variantIndex) {
+  const { stock } = getResellerStockMap(purchases, sales);
+  return stock.get(getResellerKey(productId, variantIndex)) || 0;
+}
+
+export function getResellerTotals(purchases, sales, products = []) {
+  const list = Array.isArray(purchases) ? purchases : [];
+  const saleList = Array.isArray(sales) ? sales : [];
+  const onOrderIds = new Set(
+    (Array.isArray(products) ? products : [])
+      .filter((product) => isNotStockedProduct(product))
+      .map((product) => String(product.id)),
+  );
+  //* Only On-order sales count as reseller sales: an On-order product flipped
+  //* back to stocked keeps its old sales out of the reseller maths.
+  const resellerSales = saleList.filter((sale) => onOrderIds.has(String(sale.productId ?? sale.product_id ?? "")));
+  const boughtUnits = list.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const spent = list.reduce((sum, item) => {
+    const line = Number(item.totalCost ?? item.total_cost);
+    if (Number.isFinite(line) && line > 0) return sum + line;
+    return sum + (Number(item.quantity) || 0) * (Number(item.unitCost ?? item.unit_cost) || 0);
+  }, 0);
+  const soldUnits = resellerSales.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const revenue = resellerSales.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  return {
+    boughtUnits,
+    spent,
+    soldUnits,
+    revenue,
+    profit: revenue - spent,
+    onHand: boughtUnits - soldUnits,
+    purchaseCount: list.length,
+    saleCount: resellerSales.length,
+  };
+}
 export function getCategoryLabel(categories, id) {
   if (id === "" || id === null || id === undefined) return "-";
   const list = Array.isArray(categories) ? categories : [];

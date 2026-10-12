@@ -16,6 +16,7 @@ const tableNames = {
   stockAdjustments: "stock_adjustments",
   activityLog: "activity_log",
   sales: "sales",
+  resellerPurchases: "reseller_purchases",
 };
 
 const fieldMap = {
@@ -25,6 +26,7 @@ const fieldMap = {
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
   sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "sold_at"],
+  resellerPurchases: ["product_id", "product_name", "variant_index", "quantity", "unit_cost", "total_cost", "purchased_at"],
 };
 
 const toCamel = (row: Record<string, unknown>) => ({
@@ -38,6 +40,9 @@ const toCamel = (row: Record<string, unknown>) => ({
   oldQuantity: row.old_quantity,
   newQuantity: row.new_quantity,
   unitPrice: row.unit_price,
+  unitCost: row.unit_cost,
+  totalCost: row.total_cost,
+  purchasedAt: row.purchased_at,
   soldAt: row.sold_at,
   variantIndex: row.variant_index,
   notStocked: row.not_stocked === true || row.not_stocked === 1 || row.not_stocked === "1" || row.not_stocked === "t",
@@ -183,6 +188,9 @@ function normalizeBody(body: Record<string, unknown>) {
     oldQuantity: "old_quantity",
     newQuantity: "new_quantity",
     unitPrice: "unit_price",
+    unitCost: "unit_cost",
+    totalCost: "total_cost",
+    purchasedAt: "purchased_at",
     soldAt: "sold_at",
     variantIndex: "variant_index",
     notStocked: "not_stocked",
@@ -213,6 +221,8 @@ function normalizeBody(body: Record<string, unknown>) {
     "new_quantity",
     "unit_price",
     "total",
+    "unit_cost",
+    "total_cost",
   ];
   for (const field of numericFields) {
     const value = normalized[field];

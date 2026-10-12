@@ -54,6 +54,7 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
     return json(sale, 201);
   }
   if (u.includes("/sales")) return json(serverSales);
+  if (u.includes("/resellerPurchases")) return json([]);
   if (u.includes("/products")) return json(products);
   if (u.includes("/categories")) return json(categories);
   return json({ error: `unmocked ${method} ${u}` }, 500);

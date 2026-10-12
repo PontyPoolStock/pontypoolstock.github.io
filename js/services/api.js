@@ -649,6 +649,7 @@ export function prewarmAppCache() {
     `products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`,
     "stockAdjustments",
     "sales",
+    "resellerPurchases",
     "activityLog",
   ];
   return Promise.allSettled(prewarmEndpoints.map((ep) => fetchData(ep)));
