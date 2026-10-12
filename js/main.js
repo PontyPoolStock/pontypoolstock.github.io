@@ -118,15 +118,19 @@ function navigateTo(text) {
       break;
     case "Shop Purchases":
       //* Lazy import with a visible error: a fault here must only break this
-      //* page, never the boot sequence that every other page shares.
-      import("./pages/reseller.js").then(
-        (module) => module.loadResellerPurchases(),
-        (error) => {
+      //* page, never the boot sequence that every other page shares. The ?v=
+      //* query busts a stale cached copy of reseller.js (a browser that saw
+      //* the earlier broken build would otherwise keep reusing it). .catch —
+      //* not the second argument of .then — so runtime failures inside
+      //* loadResellerPurchases() surface here too, not as an unhandled
+      //* rejection with a blank page.
+      import("./pages/reseller.js?v=20261012-1")
+        .then((module) => module.loadResellerPurchases())
+        .catch((error) => {
           console.error("Shop Purchases failed to load:", error);
           document.getElementById("pageContent").innerHTML =
             '<div class="alert alert-danger">Shop Purchases could not be loaded. Please refresh and try again.</div>';
-        },
-      );
+        });
       break;
     case "Stock Adjustments":
       loadStockAdjustments();

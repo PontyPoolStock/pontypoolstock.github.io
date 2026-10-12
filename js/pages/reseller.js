@@ -84,6 +84,14 @@ function renderPage() {
   for (let i = 0; i < products.length; i++) {
     options += '<option value="' + products[i].id + '">' + escapeHtml(displayName(products[i])) + "</option>";
   }
+  //* The dropdown only lists On-order products on purpose: Shop Purchases
+  //* tracks bought-for-resale stock that is separate from products.quantity.
+  //* Say so when the list is empty instead of showing a mysteriously blank
+  //* select — the checkbox lives on the Products add/edit form.
+  const emptyListHint = products.length
+    ? ""
+    : '<div class="form-text text-warning">No products are marked "Not in stock — just selling" yet. '
+      + "Go to Products, add or edit a product, and tick that box — it will then appear here.</div>";
   let html = "";
   html += '<section class="sale-hero"><div class="sale-hero-text">';
   html += '<span class="statistics-kicker">Bought for resale</span><h3>Shop purchases</h3>';
@@ -97,6 +105,7 @@ function renderPage() {
   html += '<form id="resellerPurchaseForm" novalidate><div class="row g-2 align-items-end">';
   html += '<div class="col-12 col-md-4"><label class="form-label small text-muted" for="resellerProductSelect">Product (On order only)</label>';
   html += '<select id="resellerProductSelect" class="form-select">' + options + "</select>";
+  html += emptyListHint;
   html += '<div class="text-danger small errorMes-product"></div></div>';
   html += '<div class="col-12 col-md-3 d-none" id="resellerVariantWrapper"><label class="form-label small text-muted" for="resellerVariantSelect">Rating</label>';
   html += '<select id="resellerVariantSelect" class="form-select"></select></div>';
