@@ -1,6 +1,10 @@
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { fetchData, postData, deleteData, PRODUCT_LIST_FIELDS } from "../services/api.js";
-import { escapeHtml, formatCurrency, GetCurrentDate } from "../utils/helpers.js";
+//* debounce is required by setupEventListeners below — forgetting it here
+//* loaded the page and then threw ReferenceError, which the router showed as
+//* "Shop Purchases could not be loaded". scripts/reseller-page.test.mjs now
+//* executes this module in jsdom so that failure mode can't ship again.
+import { escapeHtml, formatCurrency, GetCurrentDate, debounce } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
 
 let purchases = [];
