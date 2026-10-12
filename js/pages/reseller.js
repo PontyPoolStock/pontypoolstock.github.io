@@ -354,16 +354,3 @@ async function handleDelete(id) {
   showToast("Purchase deleted — reseller stock updated.", "success");
 }
 
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString("en-CA");
-}
-
-  html += '<div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">';
-  html += '<i class="bi bi-search text-muted d-none d-sm-block"></i>';
-  html += '<input type="text" id="searchReseller" placeholder="Search purchases..." class="form-control form-control-sm border-0 shadow-none" style="flex:1; min-width:150px;">';
-  html += '<div id="resellerTableContainer" class="w-100 mt-2">' + getTableHtml() + "</div></div>";
-  html += '<div id="searchStats" class="mb-2 small text-muted"></div>';
-  document.getElementById("pageContent").innerHTML = html;
-  paintStockHint();
-}
-

@@ -12,7 +12,9 @@ import { loadActivityLog } from "./pages/activity.js";
 import { loadDashboard } from "./pages/dashboard.js";
 import { loadStockAdjustments } from "./pages/stockadjustment.js";
 import { loadSales } from "./pages/sales.js";
-import { loadResellerPurchases } from "./pages/reseller.js";
+//* Shop Purchases loads lazily (see the router below): a static import would
+//* run its module at boot, so any fault in that one page would blank the
+//* entire app — including Dashboard on a fresh login.
 import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 import { prewarmAppCache } from "./services/api.js";
@@ -115,7 +117,16 @@ function navigateTo(text) {
       loadSales();
       break;
     case "Shop Purchases":
-      loadResellerPurchases();
+      //* Lazy import with a visible error: a fault here must only break this
+      //* page, never the boot sequence that every other page shares.
+      import("./pages/reseller.js").then(
+        (module) => module.loadResellerPurchases(),
+        (error) => {
+          console.error("Shop Purchases failed to load:", error);
+          document.getElementById("pageContent").innerHTML =
+            '<div class="alert alert-danger">Shop Purchases could not be loaded. Please refresh and try again.</div>';
+        },
+      );
       break;
     case "Stock Adjustments":
       loadStockAdjustments();
