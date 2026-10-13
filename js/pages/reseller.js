@@ -1,10 +1,10 @@
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { fetchData, postData, deleteData, PRODUCT_LIST_FIELDS } from "../services/api.js";
+import { fetchData, postData, deleteData, hydrateEntityImages, PRODUCT_LIST_FIELDS } from "../services/api.js";
 //* debounce is required by setupEventListeners below — forgetting it here
 //* loaded the page and then threw ReferenceError, which the router showed as
 //* "Shop Purchases could not be loaded". scripts/reseller-page.test.mjs now
 //* executes this module in jsdom so that failure mode can't ship again.
-import { escapeHtml, formatCurrency, GetCurrentDate, debounce } from "../utils/helpers.js";
+import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
 
 let purchases = [];
@@ -110,7 +110,10 @@ function renderPage() {
   html += '<div class="col-12 col-md-4"><label class="form-label small text-muted" for="resellerProductSelect">Product (On order only)</label>';
   html += '<select id="resellerProductSelect" class="form-select">' + options + "</select>";
   html += emptyListHint;
-  html += '<div class="text-danger small errorMes-product"></div></div>';
+  html += '<div class="text-danger small errorMes-product"></div>';
+  //* Same "summary pic" as Record Sale — a thumbnail + name card under the
+  //* dropdown so the right product is obvious before money changes hands.
+  html += '<div id="resellerProductPreview" class="sale-product-preview d-none" aria-live="polite"></div></div>';
   html += '<div class="col-12 col-md-3 d-none" id="resellerVariantWrapper"><label class="form-label small text-muted" for="resellerVariantSelect">Rating</label>';
   html += '<select id="resellerVariantSelect" class="form-select"></select></div>';
   html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerQuantity">Qty bought</label>';
@@ -129,6 +132,7 @@ function renderPage() {
   html += '<div id="searchStats" class="mb-2 small text-muted"></div>';
   document.getElementById("pageContent").innerHTML = html;
   paintStockHint();
+  paintProductPreview();
 }
 
 function variantList(product) {
@@ -199,9 +203,9 @@ function setupEventListeners() {
   const search = document.getElementById("searchReseller");
   if (search) search.addEventListener("input", debounce(filterPurchases, 120));
   const prodSel = document.getElementById("resellerProductSelect");
-  if (prodSel) prodSel.addEventListener("change", function () { fillVariants(); paintStockHint(); });
+  if (prodSel) prodSel.addEventListener("change", function () { fillVariants(); paintStockHint(); paintProductPreview(); });
   const varSel = document.getElementById("resellerVariantSelect");
-  if (varSel) varSel.addEventListener("change", paintStockHint);
+  if (varSel) varSel.addEventListener("change", function () { paintStockHint(); paintProductPreview(); });
   const form = document.getElementById("resellerPurchaseForm");
   if (form) form.addEventListener("submit", handleSave);
   const box = document.getElementById("resellerTableContainer");
@@ -263,6 +267,40 @@ function paintStockHint() {
   const maps = stockMap();
   const k = resellerKey(pid, vIdx);
   hint.textContent = "Reseller stock: " + (maps.bought[k] || 0) + " bought minus " + (maps.sold[k] || 0) + " sold = " + (maps.left[k] || 0) + " left. Your own stock is untouched.";
+}
+
+//* The "summary pic" under the product dropdown — the same sale-product-preview
+//* card Record Sale shows, so both pages identify products the same way. The
+//* slim product list carries no imageUrl, so productThumbnailHtml emits a lazy
+//* placeholder that hydrateEntityImages fills from the server in the background.
+function paintProductPreview() {
+  const box = document.getElementById("resellerProductPreview");
+  if (!box) return;
+  const pid = document.getElementById("resellerProductSelect")
+    ? document.getElementById("resellerProductSelect").value : "";
+  let product = null;
+  for (let i = 0; i < products.length; i++) {
+    if (String(products[i].id) === String(pid)) product = products[i];
+  }
+  if (!product) {
+    box.innerHTML = "";
+    box.classList.add("d-none");
+    return;
+  }
+  const varSel = document.getElementById("resellerVariantSelect");
+  const list = variantList(product);
+  const vIdx = list.length && varSel && varSel.value !== "" ? varSel.value : "";
+  const maps = stockMap();
+  const k = resellerKey(pid, vIdx);
+  const bits = [];
+  if (list.length && vIdx !== "") bits.push(variantLabel(product, vIdx));
+  bits.push((maps.bought[k] || 0) + " bought − " + (maps.sold[k] || 0) + " sold = " + (maps.left[k] || 0) + " left");
+  box.innerHTML =
+    productThumbnailHtml(product.imageUrl, displayName(product), { productId: product.id }) +
+    '<span class="sale-product-preview-info"><strong>' + escapeHtml(displayName(product)) +
+    "</strong><small>" + escapeHtml(bits.join(" · ")) + "</small></span>";
+  box.classList.remove("d-none");
+  hydrateEntityImages(box);
 }
 
 async function handleSave(event) {

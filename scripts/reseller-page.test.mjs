@@ -91,6 +91,15 @@ await settle(200);
 document.getElementById("resellerProductSelect").value = "13";
 document.getElementById("resellerProductSelect")
   .dispatchEvent(new window.Event("change", { bubbles: true }));
+
+//* The "summary pic" — same sale-product-preview card Record Sale uses — must
+//* appear once a product is picked, showing the product name and reseller stock.
+const preview = document.getElementById("resellerProductPreview");
+assert.ok(preview, "product preview box exists in the form");
+assert.ok(!preview.classList.contains("d-none"), "preview shows once a product is selected");
+assert.match(preview.textContent, /Glass Panels/, "preview names the selected product");
+assert.match(preview.textContent, /20 bought/, "preview shows the reseller stock bought figure");
+
 document.getElementById("resellerQuantity").value = "5";
 document.getElementById("resellerUnitCost").value = "70";
 document.getElementById("resellerPurchaseForm")
