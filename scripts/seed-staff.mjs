@@ -1,17 +1,17 @@
 //* Creates (or repairs) the staff account on the linked Neon branch.
 //^ Usage: npm run db:seed-staff   (reads DATABASE_URL from .env.local, .env, or the shell)
 //*
-//* The staff account signs in with staff@pontypool.com / staff123 and gets the
-//* staff side of the app only (Products, Categories, Record Sale — see
-//* js/utils/role.js). The password is stored in the same scrypt$ format
-//* hello.ts verifies; re-running this script resets the password to staff123
-//* and keeps the role pinned to 'staff'.
+//* The staff account signs in with the plain username "staff" (password
+//* staff123) and gets the staff side of the app only (Products, Categories,
+//* Record Sale — see js/utils/role.js). The password is stored in the same
+//* scrypt$ format hello.ts verifies; re-running this script resets the
+//* password to staff123 and keeps the role pinned to 'staff'.
 import fs from "node:fs";
 import { randomBytes, scryptSync } from "node:crypto";
 import pg from "pg";
 
 const EMAIL = "staff@pontypool.com";
-const NAME = "Staff User";
+const NAME = "staff";
 const ROLE = "staff";
 const PASSWORD = "staff123";
 

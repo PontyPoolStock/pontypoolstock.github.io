@@ -98,13 +98,15 @@ CREATE INDEX IF NOT EXISTS sales_sold_at_idx ON sales(sold_at DESC);
 CREATE INDEX IF NOT EXISTS reseller_purchases_product_id_idx ON reseller_purchases(product_id);
 CREATE INDEX IF NOT EXISTS reseller_purchases_purchased_at_idx ON reseller_purchases(purchased_at DESC);
 
--- Seed admin account with scrypt-hashed password (admin123)
+-- Seed admin account with scrypt-hashed password (pontypool1964). The owner
+-- signs in with the plain username "admin".
 INSERT INTO users (name, email, password, role)
-VALUES ('Admin User', 'admin@pontypool.com', 'scrypt$d25239f12218f98724cea7861c09cef5$9774a97c7800a1861dbf98ab1e16ec468d6e7631af9a732cff113cd6c69b187b479d913537cb63ad9335c86421b056f1c158ee848d68562f1fecad9c4d8d1514', 'admin')
+VALUES ('admin', 'admin@pontypool.com', 'scrypt$98ff5558225e1f0feebc955b55e0fafa$206461644729649e18420cfc8e1bfe4102da119915c286e165a3e41a13f7134b8a8bd59441aaccd23f33284959f44ad628f3e4e6b6c132ea4018b6c2380c99cd', 'admin')
 ON CONFLICT (email) DO NOTHING;
 
 -- Seed staff account with scrypt-hashed password (staff123): the staff side
 -- shows Products, Categories and Record Sale only (js/utils/role.js).
+-- Staff sign in with the plain username "staff".
 INSERT INTO users (name, email, password, role)
-VALUES ('Staff User', 'staff@pontypool.com', 'scrypt$10db62577faf0a27b433bced392b71cb$bf9b250cbfe00a5fcf0788cb63d03f7c6a133c430be55df86b96e1416510f6f9a465460ee63eecaf6658b13e3a60865f428f3d237274b8f53d5d7010e1621ae2', 'staff')
+VALUES ('staff', 'staff@pontypool.com', 'scrypt$826dcc74dd4c01653d7ee94f1ffe052a$905ef3c24f709178d4c8b66f82fadca7727588177d9238299e4d823b6a3d0bba1d540011c25bbc2ba64502f55cbf3aab956674b81908a9de52c8c26ab0aa5f68', 'staff')
 ON CONFLICT (email) DO NOTHING;

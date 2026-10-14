@@ -44,18 +44,18 @@
             <div id="loginError" class="alert alert-danger d-none"
                 role="alert"></div>
 
-            <form id="loginForm" class="d-grid gap-3" method="post" autocomplete="on">
+            <form id="loginForm" class="d-grid gap-3" method="post" autocomplete="off">
                 <div>
-                    <label for="loginEmail" class="form-label">Email or username</label>
+                    <label for="loginEmail" class="form-label">User</label>
                     <div class="input-icon-group">
-                        <i class="bi bi-envelope input-icon"></i>
+                        <i class="bi bi-person input-icon"></i>
                         <input
                             type="text"
                             id="loginEmail"
                             name="username"
                             class="form-control"
-                            placeholder="staff or staff@pontypool.com"
-                            autocomplete="username"
+                            placeholder="User"
+                            autocomplete="off"
                             autocapitalize="off"
                             autocorrect="off"
                             spellcheck="false"
@@ -72,10 +72,10 @@
                         <input
                             type="password"
                             id="loginPassword"
-                            name="current-password"
+                            name="new-password"
                             class="form-control"
-                            placeholder="Enter your password"
-                            autocomplete="current-password"
+                            placeholder="Password"
+                            autocomplete="off"
                             autocapitalize="off"
                             autocorrect="off"
                             spellcheck="false"

@@ -78,13 +78,13 @@ export async function initLogin() {
 async function handleLogin(event) {
   event.preventDefault();
 
-  const email = document.getElementById("loginEmail")?.value.trim();
+  const username = document.getElementById("loginEmail")?.value.trim();
   const password = document.getElementById("loginPassword")?.value;
   const rememberMe = document.getElementById("rememberMe")?.checked !== false;
   const submitBtn = document.getElementById("loginSubmitBtn");
 
-  if (!email || !password) {
-    showError("Please enter both email and password.");
+  if (!username || !password) {
+    showError("Please enter both username and password.");
     return;
   }
 
@@ -97,7 +97,9 @@ async function handleLogin(event) {
   try {
     //* "Keep me signed in" rides along so the server can mint the long-lived
     //* session token; unchecked asks for a session-only one.
-    let user = await postData("auth/login", { email, password, rememberMe });
+    //* Sent as `username` (with `email` kept as a fallback key so the same
+    //* request works against an older deployed API).
+    let user = await postData("auth/login", { username, email: username, password, rememberMe });
 
     //* A stale saved URL must not lock the user out of the Neon database
     if ((!user || user.error) && getConfiguredApiUrl() !== DEFAULT_API_URL) {
