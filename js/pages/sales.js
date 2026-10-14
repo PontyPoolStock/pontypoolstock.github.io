@@ -23,6 +23,7 @@ import {
   debounce,
 } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
+import { isStaffView } from "../utils/role.js";
 
 let sales = [];
 let products = [];
@@ -58,7 +59,11 @@ async function loadData({ freshSales = false, freshProducts = false } = {}) {
     //^ shared cache key means it is already warm from Products/Categories.
     fetchData(`categories?fields=${CATEGORY_LIST_FIELDS}`),
     //^ Reseller ledger for the On-order stock hint — bought vs sold, never own stock.
-    fetchData("resellerPurchases"),
+    //^ The hint only reads quantities, so a staff session asks for exactly those
+    //^ columns: the buy-cost ledger never lands in a staff browser.
+    fetchData(isStaffView()
+      ? "resellerPurchases?fields=id,productId,variantIndex,quantity"
+      : "resellerPurchases"),
   ]);
   sales = sortSales(Array.isArray(saleData) ? saleData : []);
   products = Array.isArray(productData) ? productData : [];
@@ -76,6 +81,10 @@ function sortSales(list) {
 
 function renderSalesPage() {
   const today = getSalesForLocalDay(sales);
+  //* Staff run the till but never see the money statistics: the owner-only
+  //* hero figures (today / all time) and the filtered KSh total line are
+  //* simply not rendered for them (see js/utils/role.js).
+  const staffView = isStaffView();
 
   document.getElementById("pageContent").innerHTML = `
     <section class="sale-hero">
@@ -84,6 +93,7 @@ function renderSalesPage() {
         <h3>Record a sale</h3>
         <p>Pick a category, choose products, add as many lines as you like — then record the whole basket in one step.</p>
       </div>
+      ${staffView ? "" : `
       <div class="sale-hero-stats">
         <div class="sale-hero-stat">
           <span>Sales today</span>
@@ -97,7 +107,7 @@ function renderSalesPage() {
           <span>All time</span>
           <strong id="salesAllTimeTotal">${formatCurrency(getSalesTotal(sales))}</strong>
         </div>
-      </div>
+      </div>`}
     </section>
 
     <section class="sale-form-card">
@@ -178,7 +188,7 @@ function renderSalesPage() {
       </select>
     </div>
 
-    <div id="salesHistoryStats" class="mb-2 small text-muted"></div>
+    <div id="salesHistoryStats" class="mb-2 small text-muted${staffView ? " d-none" : ""}"></div>
     <div id="salesTableContainer">${getTableHtml(lastFiltered)}</div>
   `;
 
@@ -730,7 +740,12 @@ function resellerHintFor(productId, variantIndex) {
     if (saleKey === key) sold += Number(sale.quantity) || 0;
   }
   const left = bought - sold;
-  if (!bought) return "On order — no shop purchases recorded yet. Add them under Shop Purchases.";
+  if (!bought) {
+    //* Staff cannot open Shop Purchases, so don't point them there.
+    return isStaffView()
+      ? "On order — no shop purchases recorded yet."
+      : "On order — no shop purchases recorded yet. Add them under Shop Purchases.";
+  }
   return `On order — reseller stock: ${left} left (${bought} bought − ${sold} sold).`;
 }
 
@@ -1246,10 +1261,15 @@ function filterSales() {
   });
   currentPage = 1;
   document.getElementById("salesTableContainer").innerHTML = getTableHtml(lastFiltered);
-  document.getElementById("salesHistoryStats").textContent =
-    term || period
-      ? `${lastFiltered.length} sale${lastFiltered.length === 1 ? "" : "s"} — ${formatCurrency(getSalesTotal(lastFiltered))}`
-      : "";
+  //* The running-totals line is owner-only: it never carries a figure for
+  //* staff (the element hides with d-none in renderSalesPage).
+  const historyStats = document.getElementById("salesHistoryStats");
+  if (historyStats && !isStaffView()) {
+    historyStats.textContent =
+      term || period
+        ? `${lastFiltered.length} sale${lastFiltered.length === 1 ? "" : "s"} — ${formatCurrency(getSalesTotal(lastFiltered))}`
+        : "";
+  }
 }
 
 function isWithinPeriod(dateValue, period) {

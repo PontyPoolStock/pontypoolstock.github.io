@@ -641,17 +641,25 @@ export function hydrateEntityImages(container = document) {
 
 /**
  * Background prewarm: fetch primary slim endpoints on boot/login
+ *
+ * Staff only ever open Products / Categories / Record Sale, so their boot warms
+ * just what those pages read — the adjustment rows, the reseller cost ledger
+ * and the activity log stay off this browser entirely.
  */
-export function prewarmAppCache() {
+export function prewarmAppCache({ forRole = "staff" } = {}) {
   const prewarmEndpoints = [
     `products?fields=${PRODUCT_LIST_FIELDS}`,
     `categories?fields=${CATEGORY_LIST_FIELDS}`,
-    `products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`,
-    "stockAdjustments",
     "sales",
-    "resellerPurchases",
-    "activityLog",
   ];
+  if (forRole === "admin") {
+    prewarmEndpoints.push(
+      `products?fields=${PRODUCT_ADJUSTMENT_FIELDS}`,
+      "stockAdjustments",
+      "resellerPurchases",
+      "activityLog",
+    );
+  }
   return Promise.allSettled(prewarmEndpoints.map((ep) => fetchData(ep)));
 }
 

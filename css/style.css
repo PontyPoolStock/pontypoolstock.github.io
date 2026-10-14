@@ -3184,3 +3184,19 @@ a:focus-visible,
     animation: none !important;
   }
 }
+
+/* ── Staff side ───────────────────────────────────────────────────────────
+   <html data-role> is stamped by the inline script in index.html before
+   first paint. A staff account keeps Products, Categories and Record Sale;
+   every owner-only sidebar row below is removed from layout entirely so
+   there is no flash and no dead click target. The page lists must match
+   STAFF_PAGES / ADMIN_PAGES in js/utils/role.js (asserted by
+   scripts/staff-role.test.mjs). */
+html[data-role="staff"] .nav-item[data-page="Dashboard"],
+html[data-role="staff"] .nav-item[data-page="Statistics"],
+html[data-role="staff"] .nav-item[data-page="Shop Purchases"],
+html[data-role="staff"] .nav-item[data-page="Stock Adjustments"],
+html[data-role="staff"] .nav-item[data-page="Reports"],
+html[data-role="staff"] .nav-item[data-page="Activity Log"] {
+  display: none !important;
+}

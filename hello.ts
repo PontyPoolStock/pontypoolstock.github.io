@@ -168,6 +168,71 @@ function readTokenClaims(token: string) {
   }
 }
 
+//* ===== Staff (till-only) server enforcement =================================
+//* The staff screens hide every owner-only page, but hiding UI is never enough:
+//* a signed-in staff token must also be refused by the server itself. A staff
+//* account may read Products / Categories / Sales (the till needs them) and
+//* record new sales (POST sales). Everything else — users, stock adjustments,
+//* activity log, reseller costs, product/category writes, sale edits/deletes —
+//* is refused here with 403, so even a hand-crafted request cannot reach it.
+type StaffResource = keyof typeof tableNames;
+
+const STAFF_READ_RESOURCES: ReadonlySet<string> = new Set([
+  "products",
+  "categories",
+  "sales",
+  "resellerPurchases",
+]);
+
+const STAFF_WRITE_RESOURCES: ReadonlySet<string> = new Set([
+  "sales",
+]);
+
+async function tokenRole(token: string): Promise<string> {
+  const claims = readTokenClaims(token);
+  if (!claims) return "";
+  try {
+    const account = await pool.query(`SELECT role FROM users WHERE id = $1 LIMIT 1`, [claims.u]);
+    return String(account.rows[0]?.role || "");
+  } catch {
+    return "";
+  }
+}
+
+function staffBlocked(
+  role: string,
+  method: string,
+  typedResource: StaffResource,
+  id: string,
+): { blocked: boolean; error?: string } {
+  if (role === "admin") return { blocked: false };
+  const resource = String(typedResource);
+  if (method === "GET") {
+    if (STAFF_READ_RESOURCES.has(resource)) return { blocked: false };
+    return { blocked: true, error: "Not available for staff accounts" };
+  }
+  if (method === "POST" && !id && STAFF_WRITE_RESOURCES.has(resource)) return { blocked: false };
+  return { blocked: true, error: "Not available for staff accounts" };
+}
+
+//* Staff browsers need the reseller quantities for the On-order hint, but the
+//* buy-cost ledger (unit_cost / total_cost) must never land in their browser —
+//* strip those columns from every staff read of reseller data.
+function stripStaffFields(
+  typedResource: StaffResource,
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  if (typedResource !== "resellerPurchases") return rows;
+  return rows.map((row) => {
+    const cleaned = { ...row };
+    delete cleaned.unit_cost;
+    delete cleaned.unitCost;
+    delete cleaned.total_cost;
+    delete cleaned.totalCost;
+    return cleaned;
+  });
+}
+
 function getRoute(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
   return { resource: parts[0] || "", id: parts[1] || "" };
@@ -732,7 +797,11 @@ export default async function api(request: Request): Promise<Response> {
   try {
     if (resource === "auth" && id === "login" && request.method === "POST") {
       const body = await readBody(request);
-      const email = String(body.email || "").trim();
+      //* The till signs in with the short username ("staff"); the owner still
+      //* uses the full email. Accept both: match against the email column, the
+      //* part before the @, or the account's display name.
+      const identifier = String(body.email || body.username || "").trim();
+      const email = identifier;
       const password = String(body.password || "");
 
       if (!registerLoginAttempt(request)) {
@@ -740,12 +809,16 @@ export default async function api(request: Request): Promise<Response> {
       }
 
       const result = await pool.query(
-        `SELECT id, name, email, role, password FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+        `SELECT id, name, email, role, password FROM users
+         WHERE LOWER(email) = LOWER($1)
+            OR LOWER(SPLIT_PART(email, '@', 1)) = LOWER($1)
+            OR LOWER(name) = LOWER($1)
+         LIMIT 1`,
         [email],
       );
       const user = result.rows[0];
       if (!user || !passwordMatches(password, String(user.password))) {
-        return json({ error: "Invalid email or password" }, 401);
+        return json({ error: "Invalid username or password" }, 401);
       }
 
       //* Upgrade plain-text password to scrypt hash on first successful login
@@ -810,6 +883,13 @@ export default async function api(request: Request): Promise<Response> {
     const table = tableNames[resource as keyof typeof tableNames];
     const typedResource = resource as keyof typeof fieldMap;
 
+    //* Till-only gate: staff tokens are refused on every owner-only read/write
+    //* before any query runs, so hiding the pages in the UI is backed by the
+    //* server itself (a hand-crafted request gets the same 403).
+    const requesterRole = String(await tokenRole(token));
+    const gate = staffBlocked(requesterRole, request.method, typedResource, id);
+    if (gate.blocked) return json({ error: gate.error || "Not available for staff accounts" }, 403);
+
     if (request.method === "GET") {
       // Optional ?fields=id,name,price projection to avoid transferring megabytes of inline images on list views
       const requestedFields = new URL(request.url).searchParams.get("fields");
@@ -851,6 +931,16 @@ export default async function api(request: Request): Promise<Response> {
         ? await pool.query(`SELECT ${selectClause} FROM ${table} WHERE id = $1`, [id])
         : await pool.query(`SELECT ${selectClause} FROM ${table} ORDER BY updated_at DESC, id DESC`);
       if (id && !result.rows[0]) return json({ error: "Not found" }, 404);
+      //* Staff need the reseller quantities for the On-order hint, but the
+      //* buy-cost ledger must never reach their browser — strip it here even
+      //* if an explicit ?fields= asked for it.
+      if (requesterRole !== "admin" && typedResource === "resellerPurchases") {
+        const stripped = stripStaffFields(
+          typedResource,
+          (id ? [result.rows[0]] : result.rows).map(toCamel),
+        );
+        return json(id ? stripped[0] : stripped);
+      }
       return json(id ? toCamel(result.rows[0]) : result.rows.map(toCamel));
     }
 

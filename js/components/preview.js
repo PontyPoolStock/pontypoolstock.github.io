@@ -14,6 +14,7 @@ import {
   isNotStockedProduct,
   productThumbnailHtml,
 } from "../utils/helpers.js";
+import { isStaffView } from "../utils/role.js";
 
 //* The cards behind a click on a list row: a product card (picture + the numbers
 //* a reorder decision needs + one line per rating) and a category card (what is
@@ -217,7 +218,7 @@ function productCardHtml(product, categories) {
             ${detailHtml("bi-rulers", "Unit", unit ? escapeHtml(unit) : "—")}
             ${detailHtml("bi-box-seam", "In stock", onOrder ? "On order — not stocked" : `${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}`)}
             ${detailHtml("bi-cash-stack", "Price", price)}
-            ${detailHtml("bi-graph-up-arrow", "Stock value", onOrder ? "—" : formatCurrency(getProductStockValue(product)))}
+            ${isStaffView() ? "" : detailHtml("bi-graph-up-arrow", "Stock value", onOrder ? "—" : formatCurrency(getProductStockValue(product)))}
             ${detailHtml("bi-list-ol", "Ratings", String(variants.length))}
           </div>
         </div>
@@ -244,9 +245,10 @@ function cardShell(modalId, icon, title, actionLabel, bodyHtml) {
           </div>
           <div class="modal-body">${bodyHtml}</div>
           <div class="modal-footer">
+            ${isStaffView() ? "" : `
             <button type="button" class="btn btn-primary" data-preview-edit>
               <i class="bi bi-pencil"></i> ${actionLabel}
-            </button>
+            </button>`}
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
           </div>
         </div>
@@ -290,7 +292,7 @@ function categoryCardHtml(category, items) {
           </div>
           <div class="preview-detail-grid">
             ${detailHtml("bi-box-seam", "Total stock", `${units} unit${units === 1 ? "" : "s"}`)}
-            ${detailHtml("bi-graph-up-arrow", "Stock value", formatCurrency(value))}
+            ${isStaffView() ? "" : detailHtml("bi-graph-up-arrow", "Stock value", formatCurrency(value))}
             ${detailHtml("bi-arrow-repeat", "Needs reorder", `${low + out}`)}
             ${
               range

@@ -18,6 +18,7 @@ import { loadSales } from "./pages/sales.js";
 import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 import { prewarmAppCache } from "./services/api.js";
+import { canViewPage, landingPageFor } from "./utils/role.js";
 
 //^ jQuery arrives on a deferred <script defer> tag in index.html, and module
 //^ scripts have no spec-guaranteed position relative to deferred classic
@@ -35,11 +36,17 @@ $(document).ready(function () {
 
   initLogoutButton();
 
-  // Pre-warm API cache in the background right after boot
-  prewarmAppCache();
+  // Pre-warm API cache in the background right after boot. Staff never touch
+  // the owner-only collections, so their boot skips the adjustment / reseller
+  // cost / activity prewarms instead of pulling private rows into this browser.
+  prewarmAppCache({ forRole: currentUser.role });
 
-  const savedPage = localStorage.getItem("currentPage") || "Dashboard";
-  navigateTo(savedPage);
+  //^ A page saved by another account on this browser (or a stale link) must
+  //^ not open for a role that is not allowed to see it.
+  const savedPage = localStorage.getItem("currentPage");
+  navigateTo(savedPage && canViewPage(savedPage, currentUser.role)
+    ? savedPage
+    : landingPageFor(currentUser.role));
 
   $(".nav-item").on("click", function () {
     const text = $(this).data("page");
@@ -57,6 +64,12 @@ $(document).ready(function () {
 let renderedPage = null;
 
 function navigateTo(text) {
+  //* Role gate: a staff account that lands here with an owner-only page name
+  //* (saved page, hand-typed link, stale bookmark) is bounced to its own
+  //* landing page instead of loading private data. Re-checked on every
+  //* navigation because callers include delegated click handlers.
+  if (!canViewPage(text)) text = landingPageFor();
+
   // Re-tapping the row you're already on: settle scroll to the top instead of
   // blanking the page and replaying every entrance animation.
   if (text === renderedPage && $("#pageContent").children().length > 0) {

@@ -102,3 +102,9 @@ CREATE INDEX IF NOT EXISTS reseller_purchases_purchased_at_idx ON reseller_purch
 INSERT INTO users (name, email, password, role)
 VALUES ('Admin User', 'admin@pontypool.com', 'scrypt$d25239f12218f98724cea7861c09cef5$9774a97c7800a1861dbf98ab1e16ec468d6e7631af9a732cff113cd6c69b187b479d913537cb63ad9335c86421b056f1c158ee848d68562f1fecad9c4d8d1514', 'admin')
 ON CONFLICT (email) DO NOTHING;
+
+-- Seed staff account with scrypt-hashed password (staff123): the staff side
+-- shows Products, Categories and Record Sale only (js/utils/role.js).
+INSERT INTO users (name, email, password, role)
+VALUES ('Staff User', 'staff@pontypool.com', 'scrypt$10db62577faf0a27b433bced392b71cb$bf9b250cbfe00a5fcf0788cb63d03f7c6a133c430be55df86b96e1416510f6f9a465460ee63eecaf6658b13e3a60865f428f3d237274b8f53d5d7010e1621ae2', 'staff')
+ON CONFLICT (email) DO NOTHING;

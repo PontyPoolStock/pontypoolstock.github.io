@@ -5,6 +5,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pontypool Stock Management System</title>
+    <script>
+      // Stamp the signed-in role on <html> before first paint so css/style.css
+      // can hide the owner-only sidebar rows for a staff account with no flash.
+      // Keep in sync with js/utils/role.js (scripts/staff-role.test.mjs checks).
+      (function () {
+        var role = "";
+        try {
+          var raw = localStorage.getItem("currentUser") || sessionStorage.getItem("currentUser");
+          role = raw ? (JSON.parse(raw).role || "") : "";
+        } catch (error) {}
+        var staff = role !== "admin";
+        document.documentElement.setAttribute("data-role", staff ? "staff" : "admin");
+        //^ The static heading says "Dashboard"; land staff on their own page
+        //^ name before main.js (a deferred module) gets a chance to paint it.
+        document.addEventListener("DOMContentLoaded", function () {
+          if (!staff) return;
+          var title = document.getElementById("pageTitle");
+          if (title && title.textContent === "Dashboard") title.textContent = "Record Sale";
+        });
+      })();
+    </script>
     <meta name="description"
       content="Pontypool stock management system for products, categories, sales, stock adjustments, low-stock reports, and activity tracking." />
     <meta name="robots" content="index, follow" />

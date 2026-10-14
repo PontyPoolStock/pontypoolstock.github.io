@@ -12,6 +12,7 @@ import { openCategoryPreview } from "../components/preview.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml, describeApiError } from "../utils/helpers.js";
+import { isStaffView } from "../utils/role.js";
 
 let products = [];
 let categories = [];
@@ -37,14 +38,18 @@ async function loadData() {
 
 //* Retrieve Categories
 function renderCategories() {
+  //* Staff browse categories read-only — no Add Category button for them
+  //* (its click handler below is optional-chained for that case).
+  const staffView = isStaffView();
   let html = `
   <div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">
       <i class="bi bi-search text-muted d-none d-sm-block"></i>
       <input type="text" id="searchCat" placeholder="Search categories..."
         class="form-control form-control-sm border-0 shadow-none" style="flex:1; min-width:150px;">
+      ${staffView ? "" : `
       <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addCategoryBtn">
         <i class="bi bi-plus-lg"></i> Add Category
-      </button>
+      </button>`}
     </div>
     <div id="searchStats" class="mb-2 small text-muted"></div>
     <div id="categoriesTableContainer">
@@ -69,7 +74,8 @@ function getTableHtml(filteredCategories = categories) {
   }));
   let columns = ["image", "name", "products"];
   return (
-    renderTable(tableData, columns)
+    //^ Staff get no ACTIONS column: read-only rows, clicks open the preview card.
+    renderTable(tableData, columns, !isStaffView())
     + renderPagination(filteredCategories.length, currentPage, PAGE_SIZE)
   );
 }
@@ -174,10 +180,10 @@ function setupEventListeners() {
       }
     });
 
-  //& handle Category Creation
+  //& handle Category Creation (staff have no button — hence the optional chain)
   document
     .querySelector("#addCategoryBtn")
-    .addEventListener("click", () => handleAdd());
+    ?.addEventListener("click", () => handleAdd());
 }
 
 //* Filter

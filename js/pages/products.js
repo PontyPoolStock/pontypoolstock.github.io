@@ -29,6 +29,7 @@ import {
   describeApiError,
   debounce,
 } from "../utils/helpers.js";
+import { isStaffView } from "../utils/role.js";
 
 let products = [];
 let categories = [];
@@ -78,6 +79,9 @@ function renderProducts() {
   let categoryOptions = categories
     .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
     .join("");
+  //* Staff browse stock read-only: no Add Product button for them (the
+  //* click handlers below are optional-chained so a missing button is fine).
+  const staffView = isStaffView();
 
   let html = `
       <div class="mb-3 p-3 bg-white rounded border">
@@ -95,9 +99,10 @@ function renderProducts() {
           <option value="low">Low Stock</option>
           <option value="out">Out of Stock</option>
         </select>
+        ${staffView ? "" : `
         <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addProductBtn">
           <i class="bi bi-plus-lg"></i> Add Product
-        </button>
+        </button>`}
       </div>
     </div>
 
@@ -147,7 +152,8 @@ function getTableHtml(filteredProducts = products) {
     "status",
   ];
   return (
-    renderTable(tableData, columns)
+    //^ Staff get no ACTIONS column: read-only rows, clicks open the preview card.
+    renderTable(tableData, columns, !isStaffView())
     + renderPagination(filteredProducts.length, currentPage, PAGE_SIZE)
   );
 }
@@ -223,10 +229,10 @@ function setupEventListeners() {
         paintRows(container);
       }
     });
-  //& Add product
+  //& Add product (staff have no button — hence the optional chain)
   document
     .querySelector("#addProductBtn")
-    .addEventListener("click", () => handleAdd());
+    ?.addEventListener("click", () => handleAdd());
 }
 
 //* Filter function for search and filters
