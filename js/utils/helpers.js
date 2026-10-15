@@ -386,7 +386,8 @@ export function productThumbnailHtml(
 }
 export function formatCurrency(amount) {
   const num = Math.round((Number(amount) || 0) * 100) / 100;
-  return `KSh ${num.toLocaleString("en-US")}`;
+  const whole = Math.floor(num);
+  return `KSh ${whole.toLocaleString("en-US")}`;
 }
 
 //* The API's failures arrive as "Request failed with status 404: Not found" —
