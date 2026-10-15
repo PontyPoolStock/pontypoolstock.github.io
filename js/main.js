@@ -19,7 +19,6 @@ import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 import { prewarmAppCache } from "./services/api.js";
 import { canViewPage, landingPageFor } from "./utils/role.js";
-import { initAccountSwitcher } from "./utils/account-switcher.js";
 import { getSavedBranch, BRANCHES, saveBranch } from "./config.js";
 
 //^ jQuery arrives on a deferred <script defer> tag in index.html, and module
@@ -37,8 +36,6 @@ $(document).ready(function () {
   if (!currentUser) return;
 
   initLogoutButton();
-
-  initAccountSwitcher();
 
   //* Restore the saved branch and render the branch selector options.
   const branchSelect = document.getElementById("branchSelect");

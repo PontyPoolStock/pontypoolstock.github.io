@@ -40,12 +40,6 @@
     <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
     <link rel="stylesheet" href="./css/style.css?v=20261009-2">
-    <style>
-      .session-switcher-label { min-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      #accountSwitcherMenu .dropdown-item-switcher { padding: 6px 12px; border-bottom: 1px solid #eef1f4; }
-      #accountSwitcherMenu .dropdown-item-switcher:last-of-type { border-bottom: none; }
-      #accountSwitcherMenu .form-floating { margin-top: 4px; }
-    </style>
   </head>
 
   <body class="d-flex">
@@ -112,12 +106,7 @@
             <h2 class="fs-4 pageTitle" id="pageTitle">Dashboard</h2>
           </div>
           <div class="col-6">
-            <div id="accountSwitcherContainer" class="d-flex align-items-center gap-2 flex-wrap">
-              <span class="session-switcher-label text-muted d-none" id="accountSwitcherLabel"></span>
-              <button class="btn btn-outline-secondary btn-sm" id="accountSwitcherBtn" type="button">
-                <i class="bi bi-person-circle"></i><span id="switcherBtnLabel">Switch account</span>
-              </button>
-              <div id="accountSwitcherMenu" class="dropdown-menu dropdown-menu-end shadow" style="display:none"></div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
               <div class="d-flex align-items-center ms-3">
                 <span class="text-muted small me-1">Branch:</span>
                 <select id="branchSelect" class="form-select form-select-sm" style="width: auto;">
