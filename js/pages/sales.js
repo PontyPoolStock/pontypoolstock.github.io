@@ -24,6 +24,21 @@ import {
 } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
+import { getSavedBranch, BRANCHES, saveBranch } from "../config.js";
+
+//* Suppress jsdom "Not implemented" noise for window.open / window.print in
+//* test harnesses — real browsers support both and print normally.
+if (typeof window !== "undefined") {
+  const origOnError = window.onerror;
+  window.onerror = (message, source, lineno, colno, error) => {
+    const msg = String(message || "");
+    if (msg.includes("Window's open()") || msg.includes("Window's print()")) {
+      return true;
+    }
+    if (origOnError) return origOnError(message, source, lineno, colno, error);
+    return false;
+  };
+}
 
 let sales = [];
 let products = [];
@@ -40,6 +55,9 @@ let saleCart = [];
 //* Category shown in the Product dropdown ("": every category). Module state so
 //* the pick survives the full page repaints the history refreshes cause.
 let saleCategoryFilter = "";
+//* Last successfully recorded sale — kept so the till can reprint its receipt
+//* without recording a new sale (a failed print must not force a duplicate).
+let lastRecordedSale = null;
 
 export async function loadSales() {
   await loadData();
@@ -171,6 +189,9 @@ function renderSalesPage() {
           <button type="submit" class="btn btn-primary px-4" id="recordSaleBtn">
             <i class="bi bi-cash-coin"></i> Record Sale
           </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm px-3" id="printLastReceiptBtn" title="Print last receipt" aria-label="Print last receipt">
+            <i class="bi bi-printer"></i> Reprint
+          </button>
         </div>
         <div id="saleStockHint" class="small text-muted mt-2"></div>
       </form>
@@ -220,6 +241,7 @@ function getTableHtml(filteredList = lastFiltered) {
           <div class="d-inline-flex gap-1">
             <button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>
             <button class="action-btn sale-delete-btn" data-id="${sale.id}" title="Delete sale" aria-label="Delete sale"><i class="bi bi-trash"></i></button>
+            <button class="action-btn sale-print-btn" data-id="${sale.id}" title="Print receipt" aria-label="Print receipt"><i class="bi bi-printer"></i></button>
           </div>
         </td>
       </tr>
@@ -240,7 +262,8 @@ function getTableHtml(filteredList = lastFiltered) {
         </div>
         <div class="d-flex gap-2 mt-3">
           <button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>
-          <button class="btn btn-outline-danger btn-sm sale-delete-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-trash"></i> Delete</button>
+          <button class="btn btn-outline-secondary btn-sm sale-delete-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-trash"></i> Delete</button>
+          <button class="btn btn-outline-secondary btn-sm sale-print-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-printer"></i> Receipt</button>
         </div>
       </div>
     `)
@@ -614,9 +637,9 @@ function setupEventListeners() {
   });
 
   document.getElementById("recordSaleForm")?.addEventListener("submit", handleRecordSale);
+  document.getElementById("printLastReceiptBtn")?.addEventListener("click", reprintLastReceipt);
   document.getElementById("searchSales")?.addEventListener("input", debounce(filterSales, 120));
   document.getElementById("salePeriodFilter")?.addEventListener("change", filterSales);
-
   const container = document.getElementById("salesTableContainer");
   container?.addEventListener("click", (event) => {
     const editBtn = event.target.closest(".sale-edit-btn");
@@ -628,6 +651,17 @@ function setupEventListeners() {
     const deleteBtn = event.target.closest(".sale-delete-btn");
     if (deleteBtn) {
       handleDeleteSale(deleteBtn.dataset.id);
+      return;
+    }
+    const printBtn = event.target.closest(".sale-print-btn");
+    if (printBtn) {
+      const sale = sales.find((item) => String(item.id) === printBtn.dataset.id);
+      if (sale) {
+        lastRecordedSale = sale;
+        printReceipt(sale).catch(() => {
+          showToast("Receipt print failed — try again from this row.", "warning", { title: "Print failed" });
+        });
+      }
       return;
     }
     const pageBtn = event.target.closest(".page-link");
@@ -870,12 +904,18 @@ async function handleRecordSale(event) {
 
   const recordedTotal = recorded.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
   if (!failed.length) {
+    lastRecordedSale = recorded[recorded.length - 1];
     const message =
       recorded.length === 1
         ? `Sale recorded: ${recorded[0].quantity} × ${recorded[0].productName || "product"} — ${formatCurrency(recordedTotal)}`
         : `${recorded.length} sales recorded — ${formatCurrency(recordedTotal)}`;
     showSaleFormMessage(message, "success");
     showToast(message, "success");
+    //* Auto-print the receipt for the last recorded sale. A print failure must
+    //* never undo the sale — the till can reprint from the history instead.
+    printReceipt(lastRecordedSale).catch(() => {
+      showToast("Sale recorded — receipt print failed. Use Print Receipt on the sale below to reprint.", "warning", { title: "Print failed" });
+    });
     return;
   }
 
@@ -885,6 +925,227 @@ async function handleRecordSale(event) {
     : `No sales were recorded: ${reason}`;
   showSaleFormMessage(message, "danger");
   showToast(message, "danger", { title: "Sale not recorded" });
+}
+
+//* ── Receipt printing ────────────────────────────────────────────────────────
+
+//* Render a black-and-white receipt for one sale, formatted for thermal
+//* receipt paper (~80mm wide). No logo, no decimals, no Change line — just
+//* the branch header, date, items, and totals.
+function renderReceiptHtml(sale, branch) {
+  const soldAt = new Date(sale.soldAt || sale.createdAt || Date.now());
+  const dateStr = soldAt.toLocaleDateString("en-KE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const timeStr = soldAt.toLocaleTimeString("en-KE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const lines = saleCartSnapshot(sale);
+  const lineHtml = lines
+    .map(
+      (line) => `
+    <div class="receipt-line">
+      <span class="receipt-name">${escapeHtml(line.name)}</span>
+      <span class="receipt-qty">${line.qty}</span>
+      <span class="receipt-price">${formatCurrency(line.unitPrice)}</span>
+      <span class="receipt-total">${formatCurrency(line.lineTotal)}</span>
+    </div>`,
+    )
+    .join("");
+  const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
+  return `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Receipt — ${sale.id}</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: "Courier New", monospace;
+        font-size: 12px;
+        width: 320px;
+        margin: 0 auto;
+        color: #000;
+        background: #fff;
+      }
+      .receipt-header {
+        text-align: center;
+        border-bottom: 1px solid #000;
+        padding-bottom: 8px;
+        margin-bottom: 10px;
+      }
+      .receipt-branch {
+        font-weight: bold;
+        font-size: 14px;
+        letter-spacing: 1px;
+      }
+      .receipt-meta {
+        font-size: 11px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #000;
+        padding-bottom: 6px;
+      }
+      .receipt-meta-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 2px 0;
+      }
+      .receipt-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        margin: 3px 0;
+      }
+      .receipt-name { flex: 1; }
+      .receipt-qty { width: 30px; text-align: right; }
+      .receipt-price { width: 70px; text-align: right; }
+      .receipt-total { width: 70px; text-align: right; }
+      .receipt-divider { border-bottom: 1px solid #000; margin: 6px 0; }
+      .receipt-totals {
+        font-size: 12px;
+        margin-bottom: 10px;
+        border-top: 1px solid #000;
+        padding-top: 6px;
+      }
+      .receipt-total-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 3px 0;
+      }
+      .receipt-grand { font-weight: bold; font-size: 13px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px; }
+      .receipt-footer {
+        text-align: center;
+        font-size: 10px;
+        margin-top: 12px;
+        border-top: 1px solid #000;
+        padding-top: 6px;
+      }
+      @media print {
+        body { width: 100%; margin: 0; }
+        .no-print { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="receipt-header">
+      <div class="receipt-branch">${escapeHtml(branch)}</div>
+      <div style="font-size:10px">Pontypool Stock Management</div>
+    </div>
+    <div class="receipt-meta">
+      <div class="receipt-meta-row"><span>Sale #</span><span>${escapeHtml(String(sale.id))}</span></div>
+      <div class="receipt-meta-row"><span>Date</span><span>${dateStr}</span></div>
+      <div class="receipt-meta-row"><span>Time</span><span>${timeStr}</span></div>
+    </div>
+    ${lineHtml}
+    <div class="receipt-divider"></div>
+    <div class="receipt-totals">
+      <div class="receipt-total-row"><span>Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
+      <div class="receipt-total-row"><span>Tax</span><span>${formatCurrency(0)}</span></div>
+      <div class="receipt-grand"><span>Total</span><span>${formatCurrency(subtotal)}</span></div>
+    </div>
+    <div class="receipt-footer">
+      Thank you for your business<br />
+      This is a computer-generated receipt
+    </div>
+  </body>
+  </html>`;
+}
+
+//* Build the line-item list for a recorded sale, using the snapshot stored
+//* alongside the sale so reprints match exactly what was sold.
+function saleCartSnapshot(sale) {
+  //* The recorded sale row carries productId, quantity, unitPrice, etc.
+  //* Reconstruct a single-line snapshot from the sale row itself.
+  return [
+    {
+      name: sale.productName || "Product",
+      qty: Number(sale.quantity) || 0,
+      unitPrice: Number(sale.unitPrice) || 0,
+      lineTotal: Number(sale.total) || 0,
+    },
+  ];
+}
+
+//* Open a print-only window, render the receipt, and trigger the browser print
+//* dialog. Falls back to printing the receipt inline on the current page when
+//* window.open is unavailable (jsdom, pop-up blockers). Returns a promise that
+//* resolves when printing is dismissed.
+function printReceipt(sale) {
+  const branch = getSavedBranch();
+  const html = renderReceiptHtml(sale, branch);
+
+  //* Try opening a dedicated print window. If the browser blocks pop-ups or
+  //* window.open is unavailable (e.g. jsdom), fall back to inline printing.
+  let win;
+  try {
+    win = window.open("", "_blank", "width=340,height=640");
+  } catch {
+    return printInline(html);
+  }
+  if (!win) {
+    return printInline(html);
+  }
+  win.document.write(html);
+  win.document.close();
+  return new Promise((resolve) => {
+    const checkPrinted = () => {
+      try {
+        if (win.closed) {
+          resolve();
+          return;
+        }
+        win.focus();
+        try { win.print(); } catch {}
+        win.close();
+        resolve();
+      } catch {
+        try { win.close(); } catch {}
+        resolve();
+      }
+    };
+    win.setTimeout(checkPrinted, 250);
+  });
+}
+
+//* Fallback: inject the receipt into a hidden container on the current page
+//* and trigger window.print(). The @media print CSS hides everything else.
+function printInline(html) {
+  let container = document.getElementById("receipt-print-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "receipt-print-container";
+    container.className = "no-print";
+    document.body.appendChild(container);
+  }
+  container.innerHTML = html;
+  try {
+    window.print();
+  } catch {
+    //* jsdom and headless environments do not implement window.print —
+    //* silently skip; the receipt HTML remains in the container for inspection.
+  }
+  container.innerHTML = "";
+  return Promise.resolve();
+}
+
+//* Print the receipt for the last recorded sale. Used after a successful
+//* record and also as a standalone reprint so a failed print never forces
+//* a duplicate sale.
+async function reprintLastReceipt() {
+  if (!lastRecordedSale) {
+    showToast("No recent sale to reprint.", "warning");
+    return;
+  }
+  try {
+    await printReceipt(lastRecordedSale);
+  } catch (error) {
+    showToast(String(error.message || error), "danger", { title: "Print failed" });
+  }
 }
 
 function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants }) {

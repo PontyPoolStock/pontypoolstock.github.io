@@ -52,6 +52,34 @@ export function saveApiUrl(url) {
 export const AUTH_TOKEN_STORAGE_KEY = "pontypool_token";
 export const USER_STORAGE_KEY = "currentUser";
 
+export const BRANCH_STORAGE_KEY = "pontypool_branch";
+export const BRANCHES = ["Ambala Road", "Duruma Road"];
+
+//* Which register branch this desktop belongs to — picked once at the till
+//* and stored so every receipt prints the right branch header. Defaults to the
+//* first branch until the operator chooses.
+export function getSavedBranch() {
+  if (typeof localStorage !== "undefined") {
+    try {
+      return localStorage.getItem(BRANCH_STORAGE_KEY) || BRANCHES[0];
+    } catch {}
+  }
+  return BRANCHES[0];
+}
+
+export function saveBranch(branch) {
+  if (!BRANCHES.includes(branch)) return;
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(BRANCH_STORAGE_KEY, branch);
+    } catch {}
+  }
+  if (typeof window !== "undefined") {
+    window.__PONTYPOOL_CONFIG__ = window.__PONTYPOOL_CONFIG__ || {};
+    window.__PONTYPOOL_CONFIG__.branch = branch;
+  }
+}
+
 //* How long before its real end a token counts as already gone, so a request is
 //* never fired with a token that expires mid-flight.
 export const AUTH_TOKEN_SKEW_MS = 60 * 1000;

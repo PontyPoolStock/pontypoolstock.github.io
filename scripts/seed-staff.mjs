@@ -63,7 +63,7 @@ try {
 
   console.log(`Connected to ${host}`);
   console.log(`Staff account ready: ${result.rows[0].email} (role ${result.rows[0].role}, id ${result.rows[0].id})`);
-  console.log(`Sign in with ${EMAIL} / ${PASSWORD}`);
+  console.log(`Sign in with username "${NAME}" / ${PASSWORD}`);
 } catch (error) {
   console.error("Seed failed:", error.message);
   process.exitCode = 1;

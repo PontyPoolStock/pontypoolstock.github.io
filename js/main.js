@@ -19,6 +19,8 @@ import { loadStatistics } from "./pages/statistics.js";
 import { checkAuth, initLogoutButton } from "./pages/login.js";
 import { prewarmAppCache } from "./services/api.js";
 import { canViewPage, landingPageFor } from "./utils/role.js";
+import { initAccountSwitcher } from "./utils/account-switcher.js";
+import { getSavedBranch, BRANCHES, saveBranch } from "./config.js";
 
 //^ jQuery arrives on a deferred <script defer> tag in index.html, and module
 //^ scripts have no spec-guaranteed position relative to deferred classic
@@ -35,6 +37,20 @@ $(document).ready(function () {
   if (!currentUser) return;
 
   initLogoutButton();
+
+  initAccountSwitcher();
+
+  //* Restore the saved branch and render the branch selector options.
+  const branchSelect = document.getElementById("branchSelect");
+  if (branchSelect) {
+    const saved = getSavedBranch();
+    Array.from(branchSelect.options).forEach((option) => {
+      option.selected = option.value === saved;
+    });
+    branchSelect.addEventListener("change", (event) => {
+      saveBranch(event.target.value);
+    });
+  }
 
   // Pre-warm API cache in the background right after boot. Staff never touch
   // the owner-only collections, so their boot skips the adjustment / reseller

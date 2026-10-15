@@ -134,7 +134,7 @@ async function handleLogin(event) {
 //* Store the signed-in user plus its token. "Keep me signed in" writes to
 //* localStorage so the session survives a browser restart; unchecked keeps it in
 //* sessionStorage, so closing the browser ends it.
-function saveSession(user, rememberMe) {
+export function saveSession(user, rememberMe) {
   const expiresAt = Number(user.expiresAt) || readAuthTokenExpiry(user.token);
   const session = {
     id: user.id,
