@@ -46,7 +46,6 @@ function renderCategories() {
       <i class="bi bi-search text-muted d-none d-sm-block"></i>
       <input type="text" id="searchCat" placeholder="Search categories..."
         class="form-control form-control-sm border-0 shadow-none" style="flex:1; min-width:150px;">
-      ${staffView ? "" : `
       <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addCategoryBtn">
         <i class="bi bi-plus-lg"></i> Add Category
       </button>`}
@@ -75,7 +74,7 @@ function getTableHtml(filteredCategories = categories) {
   let columns = ["image", "name", "products"];
   return (
     //^ Staff get no ACTIONS column: read-only rows, clicks open the preview card.
-    renderTable(tableData, columns, !isStaffView())
+    renderTable(tableData, columns, true)
     + renderPagination(filteredCategories.length, currentPage, PAGE_SIZE)
   );
 }

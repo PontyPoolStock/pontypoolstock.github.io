@@ -99,7 +99,6 @@ function renderProducts() {
           <option value="low">Low Stock</option>
           <option value="out">Out of Stock</option>
         </select>
-        ${staffView ? "" : `
         <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addProductBtn">
           <i class="bi bi-plus-lg"></i> Add Product
         </button>`}
@@ -153,7 +152,7 @@ function getTableHtml(filteredProducts = products) {
   ];
   return (
     //^ Staff get no ACTIONS column: read-only rows, clicks open the preview card.
-    renderTable(tableData, columns, !isStaffView())
+    renderTable(tableData, columns, true)
     + renderPagination(filteredProducts.length, currentPage, PAGE_SIZE)
   );
 }
