@@ -3194,7 +3194,6 @@ a:focus-visible,
    scripts/staff-role.test.mjs). */
 html[data-role="staff"] .nav-item[data-page="Dashboard"],
 html[data-role="staff"] .nav-item[data-page="Statistics"],
-html[data-role="staff"] .nav-item[data-page="Shop Purchases"],
 html[data-role="staff"] .nav-item[data-page="Stock Adjustments"],
 html[data-role="staff"] .nav-item[data-page="Reports"],
 html[data-role="staff"] .nav-item[data-page="Activity Log"] {

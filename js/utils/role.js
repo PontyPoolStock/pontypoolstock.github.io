@@ -21,8 +21,9 @@ export const ADMIN_PAGES = [
   "Activity Log",
 ];
 
-//* What a staff account may open — the stock it sells and the till it runs.
-export const STAFF_PAGES = ["Products", "Categories", "Record Sale"];
+//* What a staff account may open — the stock it sells, the till it runs, and
+//* shop purchases for recording reseller stock.
+export const STAFF_PAGES = ["Products", "Categories", "Record Sale", "Shop Purchases"];
 
 //* Where each role lands when there is no usable saved page.
 const ADMIN_LANDING = "Dashboard";
