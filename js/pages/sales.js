@@ -646,9 +646,10 @@ function setupEventListeners() {
     if (printBtn) {
       const sale = sales.find((item) => String(item.id) === printBtn.dataset.id);
       if (sale) {
-        lastRecordedSale = sale;
+        //* Old history rows are single lines — wrap into the combined receipt shape.
+        lastRecordedSale = toCombinedReceipt([sale]);
         lastPrintedSaleId = null; //* manual reprint from the row always works
-        printReceipt(sale).catch(() => {
+        printReceipt(lastRecordedSale).catch(() => {
           showToast("Receipt print failed — try again from this row.", "warning", { title: "Print failed" });
         });
       }
@@ -839,6 +840,26 @@ function updateSalePreview() {
   preview.classList.add("bump");
 }
 
+//* Wrap recorded sale rows into one combined receipt object the printer expects.
+//* Used for the fresh basket AND for reprinting old single-line history rows.
+function toCombinedReceipt(recorded) {
+  const list = Array.isArray(recorded) ? recorded : [recorded];
+  const last = list[list.length - 1] || {};
+  const total = list.reduce((s, sale) => s + (Number(sale.total) || 0), 0);
+  return {
+    id: last.id,
+    receiptNo: String(last.id),
+    soldAt: last.soldAt || last.createdAt || new Date().toISOString(),
+    total,
+    lines: list.map((sale) => ({
+      name: sale.productName || "Product",
+      qty: Number(sale.quantity) || 0,
+      unitPrice: Number(sale.unitPrice) || 0,
+      lineTotal: Number(sale.total) || 0,
+    })),
+  };
+}
+
 async function handleRecordSale(event) {
   event.preventDefault();
   if (isSubmitting) return;
@@ -894,7 +915,9 @@ async function handleRecordSale(event) {
 
   const recordedTotal = recorded.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
   if (!failed.length) {
-    lastRecordedSale = recorded[recorded.length - 1];
+    //* One receipt for the whole basket — all lines + one total + one barcode.
+    //* No confirm, no dialog, no popup: it fires by itself on Record Sale.
+    lastRecordedSale = toCombinedReceipt(recorded);
     lastPrintedSaleId = null; //* allow printing the new sale (dedup reset)
     const message =
       recorded.length === 1
@@ -902,10 +925,10 @@ async function handleRecordSale(event) {
         : `${recorded.length} sales recorded — ${formatCurrency(recordedTotal)}`;
     showSaleFormMessage(message, "success");
     showToast(message, "success");
-    //* Auto-print the receipt for the last recorded sale. A print failure must
-    //* never undo the sale — the till can reprint from the history instead.
+    //* Silent auto-print: no confirm, no dialog. Fire-and-forget so the till
+    //* never waits — a failed print only shows a small Reprint hint, never blocks.
     printReceipt(lastRecordedSale).catch(() => {
-      showToast("Sale recorded — receipt print failed. Use Print Receipt on the sale below to reprint.", "warning", { title: "Print failed" });
+      showToast("Sale recorded — printer quiet? Press Reprint to try again.", "warning", { title: "Print check" });
     });
     return;
   }
@@ -1072,7 +1095,8 @@ async function printReceipt(sale) {
 
   //* Dedup: never print the same sale twice, even if Record Sale is clicked
   //* twice or the request is retried.
-  if (lastPrintedSaleId === String(sale.id)) {
+  const key = String(sale.receiptNo != null ? sale.receiptNo : sale.id);
+  if (lastPrintedSaleId === key) {
     return { ok: true, branch, saleId: sale.id, target: "skipped-duplicate" };
   }
 
@@ -1080,21 +1104,27 @@ async function printReceipt(sale) {
   let lastError;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const response = await fetch(`${printAgentUrl}/print`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      let response, result;
+      try {
+        response = await fetch(`${printAgentUrl}/print`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: ctrl.signal,
+        });
+        result = await response.json();
+      } finally { clearTimeout(timer); }
       if (!response.ok || result.error) throw new Error(result.error || `HTTP ${response.status}`);
-      lastPrintedSaleId = String(sale.id);
+      lastPrintedSaleId = key;
       return { ok: true, branch, saleId: sale.id, target: result.target || "unknown" };
     } catch (err) {
       lastError = err;
-      if (attempt === 1) await new Promise((r) => setTimeout(r, 800));
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 400));
     }
   }
-  throw lastError || new Error("Print agent unreachable — is scripts/print-agent.mjs running?");
+  throw lastError || new Error("Print agent unreachable — run npm run print on the till.");
 }
 
 //* Reprint the receipt for the last recorded sale — standalone retry that does

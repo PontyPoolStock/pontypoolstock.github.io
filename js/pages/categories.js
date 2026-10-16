@@ -12,7 +12,6 @@ import { openCategoryPreview } from "../components/preview.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml, describeApiError } from "../utils/helpers.js";
-import { isStaffView } from "../utils/role.js";
 
 let products = [];
 let categories = [];
@@ -38,9 +37,7 @@ async function loadData() {
 
 //* Retrieve Categories
 function renderCategories() {
-  //* Staff browse categories read-only — no Add Category button for them
-  //* (its click handler below is optional-chained for that case).
-  const staffView = isStaffView();
+  //* Staff manage categories like admin: same Add / edit / delete on this page.
   let html = `
   <div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">
       <i class="bi bi-search text-muted d-none d-sm-block"></i>
@@ -73,7 +70,7 @@ function getTableHtml(filteredCategories = categories) {
   }));
   let columns = ["image", "name", "products"];
   return (
-    //^ Staff get no ACTIONS column: read-only rows, clicks open the preview card.
+    //^ Staff get the same ACTIONS column as admin: edit + delete on every row.
     renderTable(tableData, columns, true)
     + renderPagination(filteredCategories.length, currentPage, PAGE_SIZE)
   );

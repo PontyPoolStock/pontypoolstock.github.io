@@ -29,7 +29,6 @@ import {
   describeApiError,
   debounce,
 } from "../utils/helpers.js";
-import { isStaffView } from "../utils/role.js";
 
 let products = [];
 let categories = [];
@@ -79,10 +78,7 @@ function renderProducts() {
   let categoryOptions = categories
     .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
     .join("");
-  //* Staff browse stock read-only: no Add Product button for them (the
-  //* click handlers below are optional-chained so a missing button is fine).
-  const staffView = isStaffView();
-
+  //* Staff manage stock like admin: same Add / edit / delete on this page.
   let html = `
       <div class="mb-3 p-3 bg-white rounded border">
       <div class="d-flex align-items-center gap-2 flex-wrap page-filter-bar">
@@ -151,7 +147,7 @@ function getTableHtml(filteredProducts = products) {
     "status",
   ];
   return (
-    //^ Staff get no ACTIONS column: read-only rows, clicks open the preview card.
+    //^ Staff get the same ACTIONS column as admin: edit + delete on every row.
     renderTable(tableData, columns, true)
     + renderPagination(filteredProducts.length, currentPage, PAGE_SIZE)
   );

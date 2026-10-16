@@ -12,7 +12,10 @@
     "db:check": "node scripts/db-check.mjs",
     "db:schema": "node scripts/migrate-schema.mjs",
     "db:seed-staff": "node scripts/seed-staff.mjs",
-    "db:migrate": "node scripts/migrate-db-json-to-neon.mjs"
+    "db:migrate": "node scripts/migrate-db-json-to-neon.mjs",
+    "print": "node scripts/print-agent.mjs",
+    "print:windows": "node scripts/print-agent.mjs",
+    "till": "node scripts/static-server.mjs"
   },
   "repository": {
     "type": "git",

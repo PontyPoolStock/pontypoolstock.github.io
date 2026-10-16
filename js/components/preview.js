@@ -245,10 +245,9 @@ function cardShell(modalId, icon, title, actionLabel, bodyHtml) {
           </div>
           <div class="modal-body">${bodyHtml}</div>
           <div class="modal-footer">
-            ${isStaffView() ? "" : `
             <button type="button" class="btn btn-primary" data-preview-edit>
               <i class="bi bi-pencil"></i> ${actionLabel}
-            </button>`}
+            </button>
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
           </div>
         </div>

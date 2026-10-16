@@ -168,13 +168,12 @@ function readTokenClaims(token: string) {
   }
 }
 
-//* ===== Staff (till-only) server enforcement =================================
-//* The staff screens hide every owner-only page, but hiding UI is never enough:
-//* a signed-in staff token must also be refused by the server itself. A staff
-//* account may read Products / Categories / Sales (the till needs them) and
-//* record new sales (POST sales). Everything else — users, stock adjustments,
-//* activity log, reseller costs, product/category writes, sale edits/deletes —
-//* is refused here with 403, so even a hand-crafted request cannot reach it.
+//* ===== Staff server enforcement ============================================
+//* A staff account may read Products / Categories / Sales (the till needs them)
+//* and fully manage them: record sales AND add / edit / delete products,
+//* categories and sales — just like admin. Everything else — users, stock
+//* adjustments, activity log reads, reseller costs — is refused here with 403,
+//* so even a hand-crafted request cannot reach it.
 type StaffResource = keyof typeof tableNames;
 
 const STAFF_READ_RESOURCES: ReadonlySet<string> = new Set([
