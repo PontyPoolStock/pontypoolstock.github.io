@@ -169,6 +169,7 @@ Base URL: `js/config.js` → `https://br-blue-base-b451rqwn-api.compute.c-6.us-e
 | POST | `/sales` | Record a sale (transactionally: validates stock, deducts it, writes the sale + activity log) |
 | GET | `/resellerPurchases` | Get shop purchases (bought-for-resale ledger: quantity + buy price, separate from own stock) |
 | POST | `/resellerPurchases` | Record a shop purchase for an On-order product |
+| PUT | `/resellerPurchases/:id` | Edit a shop purchase (correct the quantity, buy price, rating or product) |
 | DELETE | `/resellerPurchases/:id` | Delete a shop purchase (sales stay as recorded) |
 | PUT | `/sales/:id` | Edit a sale (transactionally: returns the original stock, takes the corrected amount, logs `SALE_EDITED`) |
 | DELETE | `/sales/:id` | Void a sale and return its stock to the same rating |

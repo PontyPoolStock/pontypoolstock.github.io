@@ -1,5 +1,5 @@
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { fetchData, postData, deleteData, hydrateEntityImages, PRODUCT_LIST_FIELDS } from "../services/api.js";
+import { fetchData, postData, updateData, deleteData, hydrateEntityImages, PRODUCT_LIST_FIELDS } from "../services/api.js";
 //* debounce is required by setupEventListeners below — forgetting it here
 //* loaded the page and then threw ReferenceError, which the router showed as
 //* "Shop Purchases could not be loaded". scripts/reseller-page.test.mjs now
@@ -13,6 +13,9 @@ let sales = [];
 let lastFiltered = [];
 let currentPage = 1;
 let PAGE_SIZE = 5;
+//* While a purchase row is being edited, its id is held here and the form at
+//* the top doubles as the edit form — the submit handler PUTs instead of POSTs.
+let editingId = null;
 
 export async function loadResellerPurchases() {
   await loadData();
@@ -122,7 +125,8 @@ function renderPage() {
   html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerUnitCost">Buy price (each)</label>';
   html += '<input type="number" id="resellerUnitCost" class="form-control" min="0" step="0.01" placeholder="0.00">';
   html += '<div class="text-danger small errorMes-unitCost"></div></div>';
-  html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button></div>';
+  html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button>'
+    + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
   html += '</div><div class="small text-muted mt-2" id="resellerStockHint"></div><div id="resellerFormAlert" class="mt-2"></div>';
   html += "</form></div></div>";
   html += '<div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">';
@@ -181,7 +185,10 @@ function getTableHtml(list) {
     body += "<td>" + formatCurrency(item.unitCost !== undefined ? item.unitCost : item.unit_cost) + "</td>";
     body += "<td class='text-end fw-semibold'>" + formatCurrency(purchaseTotalCost(item)) + "</td>";
     body += "<td><span class='status-badge " + badge + "'>" + left + "</span></td>";
-    body += "<td class='text-end'><button class='btn btn-sm btn-outline-danger reseller-delete' data-id='" + item.id + "'>Delete</button></td></tr>";
+    body += "<td class='text-end'><div class='d-flex gap-1 justify-content-end'>"
+      + "<button class='btn btn-sm btn-outline-primary reseller-edit' data-id='" + item.id + "'>Edit</button>"
+      + "<button class='btn btn-sm btn-outline-danger reseller-delete' data-id='" + item.id + "'>Delete</button>"
+      + "</div></td></tr>";
   }
   if (!body) {
     return '<div class="statistics-empty"><span>No shop purchases yet — record what you bought above.</span></div>' + renderPagination(0, 1, PAGE_SIZE);
@@ -199,6 +206,79 @@ function dateOnly(value) {
   return d.toLocaleDateString("en-CA");
 }
 
+//* Put a recorded purchase back into the form for editing. The same form adds
+//* new purchases, so entering edit mode just swaps the button label and shows
+//* Cancel — handleSave then PUTs the change instead of POSTing a new row.
+function handleEdit(id) {
+  let item = null;
+  for (let i = 0; i < purchases.length; i++) {
+    if (String(purchases[i].id) === String(id)) item = purchases[i];
+  }
+  if (!item) {
+    showToast("That purchase is no longer in the list.", "warning");
+    return;
+  }
+  //* The dropdown only lists On-order products, so an edit can only target a
+  //* product still in it — otherwise the form would silently save a different
+  //* product id than the row being edited.
+  const pid = String(item.productId || "");
+  let product = null;
+  for (let i = 0; i < products.length; i++) {
+    if (String(products[i].id) === pid) product = products[i];
+  }
+  if (!product) {
+    showToast("This purchase's product is no longer marked \"Not in stock — just selling\", so the purchase cannot be edited.", "warning");
+    return;
+  }
+  editingId = item.id;
+  const prodSel = document.getElementById("resellerProductSelect");
+  if (prodSel) prodSel.value = pid;
+  fillVariants();
+  const varSel = document.getElementById("resellerVariantSelect");
+  if (varSel && item.variantIndex !== null && item.variantIndex !== undefined) {
+    for (let i = 0; i < varSel.options.length; i++) {
+      if (varSel.options[i].value === String(item.variantIndex)) { varSel.selectedIndex = i; break; }
+    }
+  }
+  const qtyInput = document.getElementById("resellerQuantity");
+  if (qtyInput) qtyInput.value = String(item.quantity === undefined || item.quantity === null ? "" : item.quantity);
+  const unitVal = item.unitCost !== undefined ? item.unitCost : item.unit_cost;
+  const unitInput = document.getElementById("resellerUnitCost");
+  if (unitInput) unitInput.value = unitVal === undefined || unitVal === null ? "" : String(unitVal);
+  const errs = document.querySelectorAll("#resellerPurchaseForm .errorMes-product, #resellerPurchaseForm .errorMes-quantity, #resellerPurchaseForm .errorMes-unitCost");
+  for (let i = 0; i < errs.length; i++) errs[i].textContent = "";
+  const alertBox = document.getElementById("resellerFormAlert");
+  if (alertBox) {
+    alertBox.innerHTML = '<div class="alert alert-info py-2 mb-0">Editing this purchase — press Save to apply the changes, or Cancel to keep it as it is.</div>';
+  }
+  const btn = document.getElementById("resellerSaveBtn");
+  if (btn) btn.textContent = "Save";
+  const cancel = document.getElementById("resellerCancelEdit");
+  if (cancel) cancel.classList.remove("d-none");
+  paintStockHint();
+  paintProductPreview();
+  const form = document.getElementById("resellerPurchaseForm");
+  if (form && form.scrollIntoView) form.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (qtyInput) qtyInput.focus();
+}
+
+//* Leave edit mode without touching the server — the form resets to its
+//* add-a-purchase state (label back to Add, Cancel hidden).
+function resetEditState() {
+  editingId = null;
+  const form = document.getElementById("resellerPurchaseForm");
+  if (form) form.reset();
+  const btn = document.getElementById("resellerSaveBtn");
+  if (btn) btn.textContent = "Add";
+  const cancel = document.getElementById("resellerCancelEdit");
+  if (cancel) cancel.classList.add("d-none");
+  const alertBox = document.getElementById("resellerFormAlert");
+  if (alertBox) alertBox.innerHTML = "";
+  fillVariants();
+  paintStockHint();
+  paintProductPreview();
+}
+
 function setupEventListeners() {
   const search = document.getElementById("searchReseller");
   if (search) search.addEventListener("input", debounce(filterPurchases, 120));
@@ -208,6 +288,8 @@ function setupEventListeners() {
   if (varSel) varSel.addEventListener("change", function () { paintStockHint(); paintProductPreview(); });
   const form = document.getElementById("resellerPurchaseForm");
   if (form) form.addEventListener("submit", handleSave);
+  const cancel = document.getElementById("resellerCancelEdit");
+  if (cancel) cancel.addEventListener("click", resetEditState);
   const box = document.getElementById("resellerTableContainer");
   if (box) {
     box.addEventListener("click", function (event) {
@@ -221,6 +303,8 @@ function setupEventListeners() {
         }
         return;
       }
+      const edit = event.target.closest ? event.target.closest(".reseller-edit") : null;
+      if (edit) { handleEdit(edit.dataset.id); return; }
       const del = event.target.closest ? event.target.closest(".reseller-delete") : null;
       if (del) handleDelete(del.dataset.id);
     });
@@ -321,31 +405,45 @@ async function handleSave(event) {
   for (let i = 0; i < products.length; i++) {
     if (String(products[i].id) === String(pid)) product = products[i];
   }
+  if (!product) {
+    document.querySelector("#resellerPurchaseForm .errorMes-product").textContent = "Choose a product.";
+    return;
+  }
   const list = variantList(product);
   const varSel = document.getElementById("resellerVariantSelect");
   const vIdx = list.length ? Number(varSel ? varSel.value : 0) : null;
   const total = Math.round(qty * (unit || 0) * 100) / 100;
-  const btn = document.getElementById("resellerSaveBtn");
-  if (btn) btn.disabled = true;
-  const result = await postData("resellerPurchases", {
+  const body = {
     productId: product.id,
     productName: String(product.name || "Product"),
     variantIndex: list.length ? vIdx : null,
-    quantity: qty, unitCost: unit || 0, totalCost: total, purchasedAt: GetCurrentDate(),
-  });
+    quantity: qty, unitCost: unit || 0, totalCost: total,
+  };
+  //* Editing sends only the fields the form shows — the original purchase
+  //* date stays as recorded; adding stamps today's date on the new row.
+  const wasEditing = editingId !== null && editingId !== undefined;
+  const btn = document.getElementById("resellerSaveBtn");
+  if (btn) btn.disabled = true;
+  const result = wasEditing
+    ? await updateData("resellerPurchases", editingId, body)
+    : await postData("resellerPurchases", { ...body, purchasedAt: GetCurrentDate() });
   if (btn) btn.disabled = false;
   if (!result || result.error || result.id === undefined) {
-    const reason = String((result && result.error) || "Unable to record this purchase.");
+    const reason = String((result && result.error) || (wasEditing
+      ? "Unable to save the changes to this purchase."
+      : "Unable to record this purchase."));
     if (alertBox) alertBox.innerHTML = '<div class="alert alert-danger py-2 mb-0">' + escapeHtml(reason) + "</div>";
     showToast(reason, "danger");
     return;
   }
+  editingId = null;
   await loadData({ fresh: true });
   lastFiltered = [...purchases];
   currentPage = 1;
   renderPage();
   setupEventListeners();
-  showToast("Purchase recorded: " + qty + " x " + displayName(product) + " — " + formatCurrency(total) + " spent.", "success");
+  showToast((wasEditing ? "Purchase updated: " : "Purchase recorded: ")
+    + qty + " x " + displayName(product) + " — " + formatCurrency(total) + " spent.", "success");
 }
 
 function filterPurchases() {

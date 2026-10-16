@@ -766,10 +766,9 @@ function resellerHintFor(productId, variantIndex) {
   }
   const left = bought - sold;
   if (!bought) {
-    //* Staff cannot open Shop Purchases, so don't point them there.
-    return isStaffView()
-      ? "On order — no shop purchases recorded yet."
-      : "On order — no shop purchases recorded yet. Add them under Shop Purchases.";
+    //* Both roles can open Shop Purchases (see STAFF_PAGES in js/utils/role.js),
+    //* so both get pointed there.
+    return "On order — no shop purchases recorded yet. Add them under Shop Purchases.";
   }
   return `On order — reseller stock: ${left} left (${bought} bought − ${sold} sold).`;
 }

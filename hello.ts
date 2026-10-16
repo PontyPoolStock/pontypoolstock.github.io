@@ -169,11 +169,11 @@ function readTokenClaims(token: string) {
 }
 
 //* ===== Staff server enforcement ============================================
-//* A staff account may read Products / Categories / Sales (the till needs them)
-//* and fully manage them: record sales AND add / edit / delete products,
-//* categories and sales — just like admin. Everything else — users, stock
-//* adjustments, activity log reads, reseller costs — is refused here with 403,
-//* so even a hand-crafted request cannot reach it.
+//* A staff account may read Products / Categories / Sales / Shop Purchases
+//* (the till needs them) and fully manage them: record sales AND add / edit /
+//* delete products, categories, sales AND shop purchases — just like admin.
+//* Everything else — users, stock adjustments, activity log reads — is
+//* refused here with 403, so even a hand-crafted request cannot reach it.
 type StaffResource = keyof typeof tableNames;
 
 const STAFF_READ_RESOURCES: ReadonlySet<string> = new Set([
@@ -188,6 +188,7 @@ const STAFF_WRITE_RESOURCES: ReadonlySet<string> = new Set([
   "products",
   "categories",
   "activityLog",
+  "resellerPurchases",
 ]);
 
 async function tokenRole(token: string): Promise<string> {
@@ -219,23 +220,8 @@ function staffBlocked(
   return { blocked: true, error: "Not available for staff accounts" };
 }
 
-//* Staff browsers need the reseller quantities for the On-order hint, but the
-//* buy-cost ledger (unit_cost / total_cost) must never land in their browser —
-//* strip those columns from every staff read of reseller data.
-function stripStaffFields(
-  typedResource: StaffResource,
-  rows: Record<string, unknown>[],
-): Record<string, unknown>[] {
-  if (typedResource !== "resellerPurchases") return rows;
-  return rows.map((row) => {
-    const cleaned = { ...row };
-    delete cleaned.unit_cost;
-    delete cleaned.unitCost;
-    delete cleaned.total_cost;
-    delete cleaned.totalCost;
-    return cleaned;
-  });
-}
+//* Staff manage shop purchases in full (add / edit / delete), so the buy
+//* price travels both ways — they see the same ledger the form edits.
 
 function getRoute(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
@@ -935,16 +921,6 @@ export default async function api(request: Request): Promise<Response> {
         ? await pool.query(`SELECT ${selectClause} FROM ${table} WHERE id = $1`, [id])
         : await pool.query(`SELECT ${selectClause} FROM ${table} ORDER BY updated_at DESC, id DESC`);
       if (id && !result.rows[0]) return json({ error: "Not found" }, 404);
-      //* Staff need the reseller quantities for the On-order hint, but the
-      //* buy-cost ledger must never reach their browser — strip it here even
-      //* if an explicit ?fields= asked for it.
-      if (requesterRole !== "admin" && typedResource === "resellerPurchases") {
-        const stripped = stripStaffFields(
-          typedResource,
-          (id ? [result.rows[0]] : result.rows).map(toCamel),
-        );
-        return json(id ? stripped[0] : stripped);
-      }
       return json(id ? toCamel(result.rows[0]) : result.rows.map(toCamel));
     }
 
