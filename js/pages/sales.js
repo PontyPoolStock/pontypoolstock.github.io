@@ -24,21 +24,7 @@ import {
 } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
-import { getSavedBranch, BRANCHES, saveBranch } from "../config.js";
-
-//* Suppress jsdom "Not implemented" noise for window.open / window.print in
-//* test harnesses — real browsers support both and print normally.
-if (typeof window !== "undefined") {
-  const origOnError = window.onerror;
-  window.onerror = (message, source, lineno, colno, error) => {
-    const msg = String(message || "");
-    if (msg.includes("Window's open()") || msg.includes("Window's print()")) {
-      return true;
-    }
-    if (origOnError) return origOnError(message, source, lineno, colno, error);
-    return false;
-  };
-}
+import { getSavedBranch, BRANCHES, saveBranch, getSavedPrintAgentUrl } from "../config.js";
 
 let sales = [];
 let products = [];
@@ -58,6 +44,9 @@ let saleCategoryFilter = "";
 //* Last successfully recorded sale — kept so the till can reprint its receipt
 //* without recording a new sale (a failed print must not force a duplicate).
 let lastRecordedSale = null;
+//* id of the sale whose receipt was last sent to the print agent — blocks
+//* double prints when Record Sale is clicked twice or a request is retried.
+let lastPrintedSaleId = null;
 
 export async function loadSales() {
   await loadData();
@@ -658,6 +647,7 @@ function setupEventListeners() {
       const sale = sales.find((item) => String(item.id) === printBtn.dataset.id);
       if (sale) {
         lastRecordedSale = sale;
+        lastPrintedSaleId = null; //* manual reprint from the row always works
         printReceipt(sale).catch(() => {
           showToast("Receipt print failed — try again from this row.", "warning", { title: "Print failed" });
         });
@@ -905,6 +895,7 @@ async function handleRecordSale(event) {
   const recordedTotal = recorded.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
   if (!failed.length) {
     lastRecordedSale = recorded[recorded.length - 1];
+    lastPrintedSaleId = null; //* allow printing the new sale (dedup reset)
     const message =
       recorded.length === 1
         ? `Sale recorded: ${recorded[0].quantity} × ${recorded[0].productName || "product"} — ${formatCurrency(recordedTotal)}`
@@ -1071,78 +1062,52 @@ function saleCartSnapshot(sale) {
   ];
 }
 
-//* Open a print-only window, render the receipt, and trigger the browser print
-//* dialog. Falls back to printing the receipt inline on the current page when
-//* window.open is unavailable (jsdom, pop-up blockers). Returns a promise that
-//* resolves when printing is dismissed.
-function printReceipt(sale) {
+//* Send the receipt to the local print agent — no browser print dialog, no
+//* Ctrl+P, no pop-up. The agent (scripts/print-agent.mjs) runs on the till
+//* desktop and pushes ESC-POS straight to the cable-connected thermal printer.
+//* Returns { ok, branch, saleId, target } on success; throws on failure.
+async function printReceipt(sale) {
   const branch = getSavedBranch();
-  const html = renderReceiptHtml(sale, branch);
+  const printAgentUrl = getSavedPrintAgentUrl();
 
-  //* Try opening a dedicated print window. If the browser blocks pop-ups or
-  //* window.open is unavailable (e.g. jsdom), fall back to inline printing.
-  let win;
-  try {
-    win = window.open("", "_blank", "width=340,height=640");
-  } catch {
-    return printInline(html);
+  //* Dedup: never print the same sale twice, even if Record Sale is clicked
+  //* twice or the request is retried.
+  if (lastPrintedSaleId === String(sale.id)) {
+    return { ok: true, branch, saleId: sale.id, target: "skipped-duplicate" };
   }
-  if (!win) {
-    return printInline(html);
+
+  const payload = { branch, sale };
+  let lastError;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(`${printAgentUrl}/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || `HTTP ${response.status}`);
+      lastPrintedSaleId = String(sale.id);
+      return { ok: true, branch, saleId: sale.id, target: result.target || "unknown" };
+    } catch (err) {
+      lastError = err;
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 800));
+    }
   }
-  win.document.write(html);
-  win.document.close();
-  return new Promise((resolve) => {
-    const checkPrinted = () => {
-      try {
-        if (win.closed) {
-          resolve();
-          return;
-        }
-        win.focus();
-        try { win.print(); } catch {}
-        win.close();
-        resolve();
-      } catch {
-        try { win.close(); } catch {}
-        resolve();
-      }
-    };
-    win.setTimeout(checkPrinted, 250);
-  });
+  throw lastError || new Error("Print agent unreachable — is scripts/print-agent.mjs running?");
 }
 
-//* Fallback: inject the receipt into a hidden container on the current page
-//* and trigger window.print(). The @media print CSS hides everything else.
-function printInline(html) {
-  let container = document.getElementById("receipt-print-container");
-  if (!container) {
-    container = document.createElement("div");
-    container.id = "receipt-print-container";
-    container.className = "no-print";
-    document.body.appendChild(container);
-  }
-  container.innerHTML = html;
-  try {
-    window.print();
-  } catch {
-    //* jsdom and headless environments do not implement window.print —
-    //* silently skip; the receipt HTML remains in the container for inspection.
-  }
-  container.innerHTML = "";
-  return Promise.resolve();
-}
-
-//* Print the receipt for the last recorded sale. Used after a successful
-//* record and also as a standalone reprint so a failed print never forces
-//* a duplicate sale.
+//* Reprint the receipt for the last recorded sale — standalone retry that does
+//* not record a new sale or deduct stock again.
 async function reprintLastReceipt() {
   if (!lastRecordedSale) {
     showToast("No recent sale to reprint.", "warning");
     return;
   }
+  lastPrintedSaleId = null; //* allow a genuine reprint of the last sale
   try {
     await printReceipt(lastRecordedSale);
+    showToast("Receipt reprinted.", "success");
   } catch (error) {
     showToast(String(error.message || error), "danger", { title: "Print failed" });
   }
