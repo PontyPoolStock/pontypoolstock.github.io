@@ -188,6 +188,7 @@ const STAFF_WRITE_RESOURCES: ReadonlySet<string> = new Set([
   "sales",
   "products",
   "categories",
+  "activityLog",
 ]);
 
 async function tokenRole(token: string): Promise<string> {
@@ -215,6 +216,7 @@ function staffBlocked(
   }
   if (method === "POST" && !id && STAFF_WRITE_RESOURCES.has(resource)) return { blocked: false };
   if (method === "PUT" && id && STAFF_WRITE_RESOURCES.has(resource)) return { blocked: false };
+  if (method === "DELETE" && id && STAFF_WRITE_RESOURCES.has(resource)) return { blocked: false };
   return { blocked: true, error: "Not available for staff accounts" };
 }
 
