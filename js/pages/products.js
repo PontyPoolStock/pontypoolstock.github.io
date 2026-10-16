@@ -101,7 +101,7 @@ function renderProducts() {
         </select>
         <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addProductBtn">
           <i class="bi bi-plus-lg"></i> Add Product
-        </button>`}
+        </button>
       </div>
     </div>
 

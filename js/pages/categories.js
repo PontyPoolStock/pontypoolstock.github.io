@@ -48,7 +48,7 @@ function renderCategories() {
         class="form-control form-control-sm border-0 shadow-none" style="flex:1; min-width:150px;">
       <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addCategoryBtn">
         <i class="bi bi-plus-lg"></i> Add Category
-      </button>`}
+      </button>
     </div>
     <div id="searchStats" class="mb-2 small text-muted"></div>
     <div id="categoriesTableContainer">
