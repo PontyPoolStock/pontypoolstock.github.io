@@ -10,7 +10,7 @@ import assert from "node:assert";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM(
-  '<!doctype html><html><body><h2 id="pageTitle">Dashboard</h2><div id="pageContent"></div><div id="receipt-print-container"></div></body></html>',
+  '<!doctype html><html><body><h2 id="pageTitle">Dashboard</h2><div id="pageContent"></div></body></html>',
   { url: "https://pontypoolstock.github.io/index.html", pretendToBeVisual: true },
 );
 const { window } = dom;
@@ -19,8 +19,14 @@ for (const key of ["window", "document", "localStorage", "sessionStorage", "Even
   globalThis[key] = window[key] ?? window;
 }
 globalThis.window = window;
-let printCount = 0;
-window.print = () => { printCount += 1; };
+const tokenExpiry = Date.now() + 60 * 60 * 1000;
+const tokenPayload = Buffer.from(JSON.stringify({ e: tokenExpiry })).toString("base64url");
+window.localStorage.setItem("pontypool_token", `${tokenPayload}.test-signature`);
+window.localStorage.setItem("currentUser", JSON.stringify({
+  name: "Till Operator",
+  role: "staff",
+  expiresAt: tokenExpiry,
+}));
 
 const categories = [
   { id: "c-bulbs", name: "Bulbs" },
@@ -33,12 +39,17 @@ const products = [
 ];
 let serverSales = [];
 const posts = [];
+const printJobs = [];
 
 globalThis.fetch = window.fetch = async (url, opts = {}) => {
   const u = String(url);
   const method = opts.method || "GET";
   const json = (body, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  if (method === "POST" && u.endsWith("/print")) {
+    printJobs.push(JSON.parse(opts.body));
+    return json({ ok: true, target: "test" });
+  }
   if (method === "POST" && u.endsWith("/sales")) {
     const body = JSON.parse(opts.body);
     posts.push(body);
@@ -89,6 +100,8 @@ const submit = () =>
 
 const { loadSales } = await import("../js/pages/sales.js");
 await loadSales();
+assert.strictEqual(document.getElementById("saleSoldBy").value, "Till Operator",
+  "seller field defaults to the logged-in name");
 
 // 1. Every category is offered; the product list starts unfiltered.
 assert.ok(document.getElementById("saleCategorySelect"), "category dropdown rendered");
@@ -155,6 +168,7 @@ assert.match(
 //    from step 5 is still sitting in the quantity box — clear it so only the
 //    basket goes up (a valid-but-unstaged line would be added automatically).
 setField("saleQuantity", "");
+document.getElementById("saleSoldBy").value = "Jane Cashier";
 posts.length = 0;
 submit();
 await settle(120);
@@ -166,14 +180,16 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(serverSales.length, 2, "server holds both sales");
 assert.strictEqual(lines().length, 0, "basket emptied after a clean record");
-assert.strictEqual(printCount, 1, "successful Record Sale opens the native print dialog once");
-const receipt = document.getElementById("receipt-print-container").textContent;
-assert.match(receipt, /PontyPool Enterprises Limited/, "receipt uses the supplied company layout");
-assert.match(receipt, /Ambala Road/, "receipt uses the selected branch");
-assert.match(receipt, /A60 Bulb/, "receipt includes the first sold item");
-assert.match(receipt, /G95 Bulb/, "receipt includes the second sold item");
-assert.match(receipt, /KSH 200\.00/, "receipt includes item line amounts");
-assert.match(receipt, /KSH 350\.00/, "receipt includes the recorded total");
+assert.strictEqual(printJobs.length, 1, "successful sale submits one direct-print job");
+assert.strictEqual(printJobs[0].branch, "Ambala Road", "print job uses the selected branch");
+assert.deepStrictEqual(
+  printJobs[0].sale.lines.map((line) => line.name),
+  ["A60 Bulb", "G95 Bulb"],
+  "print job contains the recorded basket",
+);
+assert.strictEqual(printJobs[0].sale.total, 350, "print job carries the combined sale total");
+assert.ok(posts.every((post) => post.soldBy === "Jane Cashier"),
+  "each sale row is submitted with the entered seller name");
 assert.match(
   document.getElementById("saleFormAlert")?.textContent || "",
   /2 sales recorded/,
@@ -229,11 +245,13 @@ await settle(120);
 assert.strictEqual(posts.length, 2, "both lines attempted in the partial-failure case");
 assert.strictEqual(lines().length, 1, "refused line kept in the basket");
 assert.match(lines()[0].textContent, /G95 Bulb/, "only the refused line remains staged");
-assert.strictEqual(printCount, 2, "partial success also opens one receipt");
-const partialReceipt = document.getElementById("receipt-print-container").textContent;
-assert.match(partialReceipt, /A60 Bulb/, "partial receipt includes the accepted sale");
-assert.doesNotMatch(partialReceipt, /G95 Bulb/, "partial receipt excludes the refused line");
-assert.match(partialReceipt, /KSH 100\.00/, "partial receipt total matches accepted sales");
+assert.strictEqual(printJobs.length, 2, "partial success also submits one print job");
+assert.deepStrictEqual(
+  printJobs[1].sale.lines.map((line) => line.name),
+  ["A60 Bulb"],
+  "partial receipt contains only the accepted sale",
+);
+assert.strictEqual(printJobs[1].sale.total, 100, "partial receipt total matches accepted sales");
 assert.match(
   document.getElementById("saleFormAlert")?.textContent || "",
   /Not enough stock/,

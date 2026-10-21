@@ -276,8 +276,8 @@ const server = http.createServer(async (req, res) => {
   res.end("not found");
 });
 
-server.listen(PORT, () => {
-  console.log(`[print-agent] listening on http://localhost:${PORT}`);
+server.listen(PORT, "127.0.0.1", () => {
+  console.log(`[print-agent] listening on http://127.0.0.1:${PORT}`);
   console.log(`[print-agent] target=${TARGET}` + (PRINTER_NAME ? ` printer="${PRINTER_NAME}"` : "") + (SERIAL_PORT ? ` port=${SERIAL_PORT}` : ""));
   console.log(`[print-agent] branches=${BRANCHES.join(", ")}`);
   console.log(`[print-agent] logo=${fs.existsSync(LOGO_PATH) ? LOGO_PATH : "MISSING - save assets/pontypool-logo-bw.png"}`);

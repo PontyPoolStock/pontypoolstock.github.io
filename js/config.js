@@ -80,18 +80,19 @@ export function saveBranch(branch) {
   }
 }
 
-//* Local silent-print agent that prints ESC-POS receipts directly to the
-//* cable-connected thermal printer with no browser print dialog.
-//* Start it on the till desktop:  node scripts/print-agent.mjs
-//* Then point this browser at it:  PRINT_AGENT_URL=http://localhost:5501
+//* Local silent-print agent running on the till PC.
 export const PRINT_AGENT_STORAGE_KEY = "pontypool_print_agent_url";
-export const DEFAULT_PRINT_AGENT_URL = "http://localhost:5501";
+export const DEFAULT_PRINT_AGENT_URL = "http://127.0.0.1:5501";
 
 export function getSavedPrintAgentUrl() {
   if (typeof localStorage !== "undefined") {
     try {
       const value = localStorage.getItem(PRINT_AGENT_STORAGE_KEY);
-      if (value) return value;
+      if (value) {
+        const parsed = new URL(value);
+        if (parsed.hostname === "localhost") parsed.hostname = "127.0.0.1";
+        return parsed.href.replace(/\/$/, "");
+      }
     } catch {}
   }
   return DEFAULT_PRINT_AGENT_URL;
@@ -189,4 +190,3 @@ export function clearSession() {
     } catch {}
   }
 }
-

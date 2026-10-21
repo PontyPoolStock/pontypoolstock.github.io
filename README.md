@@ -401,27 +401,25 @@ sale**, all inside one transaction, so stock and revenue can never disagree.
 
 ### Receipt printing
 
-1. Point-of-sale operator selects the items and enters the sale price.
+1. Point-of-sale operator selects the items, enters the sale price, and confirms the
+   prefilled (editable) **Sold by** name. That name is saved on every line in the basket.
 2. The sale is recorded in `POST /sales`. The API deducts stock + writes the `sales` row
    in one transaction.
-3. After a successful sale, the browser automatically opens its native print dialog
-   with the selected branch's receipt template, logo, date, item quantities, unit prices,
-   line amounts, and total. Choose the register's thermal printer in the browser dialog.
+3. After a successful sale, the till's local print agent sends the selected branch's
+   receipt (logo, date, actual item quantities, prices, and total) directly to its
+   configured Windows printer without opening a browser preview.
 4. If the customer returns an item, the till restores the stock and a `SALE_EDITED` entry
    is written (see `PUT /sales/:id`); the original stock movement is reversed first.
 
 ### Receipt printer notes
 
-The browser's normal print API cannot silently print without an administrator-configured
-kiosk policy or a local print service, so this workflow uses the browser's native print
-dialog and needs no extra printing software. Set the printer's paper width to 80 mm and
-disable browser headers/footers in the print dialog if they are enabled.
+Direct printing requires the app's included local print agent on the till PC. It uses
+the existing Windows printer configuration and does not require extra printer software.
+Start it from a copy of this project on the till PC with `npm run print` and leave its
+console running while using the till. The agent defaults to the Windows default printer;
+set `PRINTER_NAME` if needed.
 
-The optional `npm run print` local agent remains available for a register that already
-uses it, but it is not required by the normal browser print flow.
-
-1. **Printer driver** — Configure the thermal printer in the operating system and choose
-   it in the browser print dialog.
+1. **Printer driver** — Configure the thermal printer as the Windows default printer.
 2. **Return reason** — Stock adjustments default to `Manual adjustment`; use `incorrect sale`
    or `customer return` where the reason matters so the activity log stays clear.
 3. **Runbook** — Keep a short note near the register: `DB check = npm run db:check`, `logs =

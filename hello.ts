@@ -364,6 +364,7 @@ async function recordSale(body: Record<string, unknown>, token: string) {
   const quantity = Number(body.quantity);
   const unitPrice = Number(body.unitPrice);
   const variantRaw = body.variantIndex;
+  const requestedSeller = String(body.soldBy ?? "").trim();
 
   if (!productId) return { error: "Product is required" };
   if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -372,8 +373,12 @@ async function recordSale(body: Record<string, unknown>, token: string) {
   if (!Number.isFinite(unitPrice) || unitPrice < 0) {
     return { error: "Selling price must be 0 or more" };
   }
+  if (requestedSeller.length > 100) {
+    return { error: "Sold by name must be 100 characters or fewer" };
+  }
 
   const total = Math.round(unitPrice * quantity * 100) / 100;
+  const soldBy = requestedSeller || await tokenUserName(token);
   const parsedSoldAt = body.soldAt ? new Date(String(body.soldAt)) : new Date();
   const soldAt = isNaN(parsedSoldAt.getTime()) ? new Date() : parsedSoldAt;
   const client = await pool.connect();
@@ -462,7 +467,7 @@ async function recordSale(body: Record<string, unknown>, token: string) {
         quantity,
         unitPrice,
         total,
-        await tokenUserName(token),
+        soldBy,
         soldAt,
       ],
     );
@@ -472,7 +477,7 @@ async function recordSale(body: Record<string, unknown>, token: string) {
       [
         "SALE_RECORDED",
         `Sale recorded: ${quantity} × ${productName} — KSh ${total}`,
-        "admin",
+        soldBy,
         soldAt,
       ],
     );
