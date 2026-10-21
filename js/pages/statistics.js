@@ -90,6 +90,7 @@ function renderStatistics() {
       detail: `${salesToday.length} transaction${salesToday.length === 1 ? "" : "s"}`,
       icon: "bi-graph-up-arrow",
       tone: "yellow",
+      group: "sales",
     },
     {
       label: "Total Sales",
@@ -97,6 +98,7 @@ function renderStatistics() {
       detail: `${periodSales.length} in selected period`,
       icon: "bi-cash-stack",
       tone: "purple",
+      group: "sales",
     },
     {
       label: "Inventory Value",
@@ -104,6 +106,7 @@ function renderStatistics() {
       detail: "Current stock value",
       icon: "bi-wallet2",
       tone: "green",
+      group: "stock",
     },
     {
       label: "Stock Units",
@@ -111,6 +114,7 @@ function renderStatistics() {
       detail: "Units currently tracked",
       icon: "bi-box-seam",
       tone: "blue",
+      group: "stock",
     },
     {
       label: "Products",
@@ -118,6 +122,7 @@ function renderStatistics() {
       detail: `${categories.length} categories`,
       icon: "bi-boxes",
       tone: "ink",
+      group: "stock",
     },
     {
       label: "Low Stock",
@@ -125,8 +130,8 @@ function renderStatistics() {
       detail: lowStock.length ? "Needs attention" : "Everything is stocked",
       icon: "bi-exclamation-triangle",
       tone: lowStock.length ? "red" : "green",
-      //* Marked cards are buttons that open the shared low-stock list
       action: "lowStock",
+      group: "stock",
     },
   ];
 
@@ -154,8 +159,17 @@ function renderStatistics() {
         </label>
       </div>
 
-      <div class="row g-3 statistics-grid">
-        ${cards.map(renderStatCard).join("")}
+      <div class="statistics-section">
+        <h4 class="statistics-section-title"><i class="bi bi-cash-stack me-1"></i> Sales Statistics</h4>
+        <div class="row g-3 statistics-grid">
+          ${cards.filter((c) => c.group === "sales").map(renderStatCard).join("")}
+        </div>
+      </div>
+      <div class="statistics-section mt-4">
+        <h4 class="statistics-section-title"><i class="bi bi-box-seam me-1"></i> Stock Statistics</h4>
+        <div class="row g-3 statistics-grid">
+          ${cards.filter((c) => c.group === "stock").map(renderStatCard).join("")}
+        </div>
       </div>
 
       <div class="row g-3 mt-1">
