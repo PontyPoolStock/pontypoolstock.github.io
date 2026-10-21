@@ -1,8 +1,8 @@
 import renderTable from "../components/table.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { fetchData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
+import { fetchData, postData, updateData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
 import { getModal } from "../components/modal.js";
-import { escapeHtml, getProductDisplayName, debounce } from "../utils/helpers.js";
+import { escapeHtml, getProductDisplayName, debounce, isNotStockedProduct } from "../utils/helpers.js";
 
 let adjustments = [];
 let lastFiltered = [];
@@ -38,9 +38,12 @@ function renderStockAdjustmentsPage() {
     <option value="increase">Add Stock</option>
     <option value="decrease">Remove Stock</option>
   </select>
-  <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addAdjustmentBtn">
-    <i class="bi bi-sliders"></i> New Adjustment
-  </button>
+   <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addAdjustmentBtn">
+     <i class="bi bi-sliders"></i> New Adjustment
+   </button>
+   <button class="btn btn-outline-primary btn-sm px-3 text-nowrap" id="bulkAddBtn">
+     <i class="bi bi-plus-square"></i> Bulk Add Stock
+   </button>
 </div>
 
     <div id="searchStats" class="mb-2 small text-muted"></div>
@@ -96,9 +99,13 @@ function setupEventListeners() {
     .getElementById("typeFilter")
     ?.addEventListener("change", filterAdjustments);
 
-  document
-    .getElementById("addAdjustmentBtn")
-    ?.addEventListener("click", handleAddAdjustment);
+   document
+     .getElementById("addAdjustmentBtn")
+     ?.addEventListener("click", handleAddAdjustment);
+
+   document
+     .getElementById("bulkAddBtn")
+     ?.addEventListener("click", handleBulkAdd);
 
   document
     .querySelector("#stockAdjustmentsTableContainer")
@@ -161,6 +168,116 @@ function updateStats(count, searchTerm, typeFilter) {
     searchTerm || typeFilter
       ? `Found ${count} adjustment${count !== 1 ? "s" : ""}`
       : "";
+}
+
+function handleBulkAdd() {
+  const products = (window.__pontypool_products_cache__ || []).filter((p) => !isNotStockedProduct(p));
+  // fallback: fetch from cache
+  fetchData("products?fields=" + PRODUCT_ADJUSTMENT_FIELDS).then((allProducts) => {
+    const prods = (Array.isArray(allProducts) ? allProducts : []).filter((p) => !isNotStockedProduct(p));
+    let rows = prods.map((p) => {
+      const variants = getProductVariants(p);
+      const qty = variants.length ? getVariantsTotalQuantity(variants) : Number(p.quantity) || 0;
+      return `
+        <tr>
+          <td>${escapeHtml(getProductDisplayName(p))}</td>
+          <td class="text-end">${qty}</td>
+          <td class="text-center">
+            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-qty-input" data-product-id="${p.id}" data-product-name="${escapeHtml(getProductDisplayName(p))}" placeholder="0">
+          </td>
+        </tr>`;
+    }).join("");
+
+    const html = `
+      <div class="modal fade" id="bulkAddModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Bulk Add Stock</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small mb-3">Enter quantities for products you want to add stock to. Products with 0 are skipped.</p>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead><tr><th>Product</th><th class="text-end">Current Stock</th><th class="text-center">Add Quantity</th></tr></thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" id="bulkSaveBtn">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    document.querySelector("#bulkAddModal")?.remove();
+    document.body.insertAdjacentHTML("beforeend", html);
+    const modalEl = document.getElementById("bulkAddModal");
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    document.getElementById("bulkSaveBtn").addEventListener("click", async () => {
+      const inputs = modalEl.querySelectorAll(".bulk-qty-input");
+      const tasks = [];
+      for (const input of inputs) {
+        const q = Math.trunc(Number(input.value || 0));
+        if (q <= 0) continue;
+        const pid = input.dataset.productId;
+        const pname = input.dataset.productName;
+        tasks.push({ pid, pname, qty: q });
+      }
+      if (!tasks.length) {
+        showToast("No quantities entered.", "warning");
+        return;
+      }
+      const saveBtn = document.getElementById("bulkSaveBtn");
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+      const now = new Date().toISOString();
+      const promises = tasks.map(async (t) => {
+        try {
+          // Fetch current product to get current quantity
+          const prod = await fetchData(`products/${t.pid}`);
+          const currentQty = Number(prod?.quantity) || 0;
+          const newQty = currentQty + t.qty;
+          await Promise.all([
+            postData("stockAdjustments", {
+              productId: t.pid,
+              productName: t.pname,
+              type: "increase",
+              quantity: t.qty,
+              date: now,
+              oldQuantity: currentQty,
+              newQuantity: newQty,
+            }),
+            updateData("products", t.pid, { quantity: newQty }),
+          ]);
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e?.message || "Failed" };
+        }
+      });
+      const results = await Promise.all(promises);
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i class="bi bi-check-lg"></i> Apply';
+      const failed = results.filter((r) => !r.ok).length;
+      if (failed === 0) {
+        showToast(`Added stock to ${tasks.length} product${tasks.length === 1 ? "" : "s"}.`, "success");
+        modal.hide();
+        await loadData();
+        lastFiltered = [...adjustments];
+        currentPage = 1;
+        document.getElementById("stockAdjustmentsTableContainer").innerHTML = getTableHtml(lastFiltered);
+      } else {
+        showToast(`${tasks.length - failed} of ${tasks.length} succeeded; ${failed} failed.`, "warning");
+      }
+    });
+  }).catch((err) => {
+    showToast("Could not load products for bulk add.", "danger");
+  });
 }
 
 function handleAddAdjustment() {

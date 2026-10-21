@@ -123,6 +123,8 @@ function renderDashboard(adjustments, sales) {
     ? renderDashboardLowStockList(lowStock)
     : `<p class="text-muted">All products are sufficiently stocked.</p>`;
 
+  const movementHtml = renderMovementAnalysis(products, sales);
+
   const activityHtml =
     recentActivities.length > 0
       ? recentActivities.map(activityRowHtml).join("")
@@ -147,9 +149,16 @@ function renderDashboard(adjustments, sales) {
       <div class="col-12 col-xl-6">
         <div class="bg-white rounded border p-4 h-100 dashboard-panel page-panel">
           <h6 class="fw-bold mb-3">Recent Activity</h6>
-          <div id="dashRecentActivity" class="dashboard-activity-list">
-            ${activityHtml}
-          </div>
+        <div id="dashRecentActivity" class="dashboard-activity-list">
+          ${activityHtml}
+        </div>
+      </div>
+    </div>
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="bg-white rounded border p-4 dashboard-panel page-panel">
+          <h6 class="fw-bold mb-3"><i class="bi bi-speedometer2 me-1"></i> Stock Movement Analysis</h6>
+          ${movementHtml}
         </div>
       </div>
     </div>
@@ -228,6 +237,87 @@ function getTodayItems(items, dateField) {
       && date.getMonth() === today.getMonth()
       && date.getDate() === today.getDate();
   });
+}
+
+function renderMovementAnalysis(products, sales) {
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
+  const salesByProduct = {};
+  for (const sale of sales) {
+    const pid = String(sale.productId);
+    if (!salesByProduct[pid]) salesByProduct[pid] = { recent7: 0, recent30: 0, total: 0 };
+    const soldAt = new Date(sale.soldAt || sale.createdAt).getTime();
+    const qty = Number(sale.quantity) || 0;
+    salesByProduct[pid].total += qty;
+    if (now - soldAt <= sevenDaysMs) salesByProduct[pid].recent7 += qty;
+    if (now - soldAt <= thirtyDaysMs) salesByProduct[pid].recent30 += qty;
+  }
+
+  const fast = [];
+  const slow = [];
+  const dead = [];
+
+  for (const p of products) {
+    const pid = String(p.id);
+    const stock = Number(p.quantity) || (Array.isArray(p.variants) ? p.variants.reduce((s, v) => s + (Number(v.quantity) || 0), 0) : 0);
+    const info = salesByProduct[pid] || { recent7: 0, recent30: 0, total: 0 };
+
+    if (info.recent7 > 0) {
+      fast.push({ product: p, stock, sold7: info.recent7, sold30: info.recent30 });
+    } else if (info.recent30 > 0) {
+      slow.push({ product: p, stock, sold30: info.recent30 });
+    } else {
+      if (stock > 0) dead.push({ product: p, stock });
+    }
+  }
+
+  // Sort
+  fast.sort((a, b) => b.sold7 - a.sold7);
+  slow.sort((a, b) => a.sold30 - b.sold30);
+  dead.sort((a, b) => b.stock - a.stock);
+
+  const fastHtml = fast.length
+    ? fast.slice(0, 8).map((item) => `
+        <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+          <span class="small">${escapeHtml(item.product.name)} <span class="text-muted">(${item.sold7} sold in 7 days)</span></span>
+          <span class="badge bg-success">${item.stock} in stock</span>
+        </div>`).join("")
+    : '<p class="text-muted small mb-0">No fast-moving stock this week.</p>';
+
+  const slowHtml = slow.length
+    ? slow.slice(0, 8).map((item) => `
+        <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+          <span class="small">${escapeHtml(item.product.name)} <span class="text-muted">(${item.sold30} sold in 30 days)</span></span>
+          <span class="badge bg-warning text-dark">${item.stock} in stock</span>
+        </div>`).join("")
+    : '<p class="text-muted small mb-0">No slow-moving stock this month.</p>';
+
+  const deadHtml = dead.length
+    ? dead.slice(0, 8).map((item) => `
+        <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+          <span class="small">${escapeHtml(item.product.name)}</span>
+          <span class="badge bg-danger">${item.stock} in stock · 0 sales in 30d</span>
+        </div>`).join("")
+    : '<p class="text-muted small mb-0">No dead stock — all items have sold recently.</p>';
+
+  return `
+    <div class="row g-3">
+      <div class="col-12 col-md-4">
+        <h6 class="fw-bold text-success mb-2"><i class="bi bi-lightning-fill me-1"></i>Fast Moving (7 days) — ${fast.length}</h6>
+        ${fastHtml}
+      </div>
+      <div class="col-12 col-md-4">
+        <h6 class="fw-bold text-warning mb-2"><i class="bi bi-hourglass-split me-1"></i>Slow Moving (30 days) — ${slow.length}</h6>
+        ${slowHtml}
+      </div>
+      <div class="col-12 col-md-4">
+        <h6 class="fw-bold text-danger mb-2"><i class="bi bi-x-circle-fill me-1"></i>Dead Stock (30+ days) — ${dead.length}</h6>
+        ${deadHtml}
+      </div>
+    </div>
+  `;
 }
 
 function renderDashboardLowStockList(lowStock) {
