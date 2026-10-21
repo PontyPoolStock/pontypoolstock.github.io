@@ -154,7 +154,7 @@ function renderSalesPage() {
             <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
           </div>
           <div class="col-12 col-lg-6"${isStaffView() ? ' style="display:none"' : ""}>
-            <label class="form-label" for="saleDate">Sale date (optional, admin only)</label>
+            <label class="form-label" for="saleDate">Sale date</label>
             <input type="date" id="saleDate" class="form-control">
             <div class="small text-muted mt-1">Leave blank for today.</div>
           </div>
