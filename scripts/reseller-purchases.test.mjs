@@ -1,5 +1,5 @@
 //* Regression test for bought-for-resale tracking ("Shop Purchases"):
-//* - reseller_purchases table exists in schema.sql with NO shop_name column
+//* - reseller_purchases table exists in schema.sql with shop_name and employee_name columns
 //* - hello.ts maps the resellerPurchases resource (table + fields + camelCase)
 //* - js/utils/helpers.js derives reseller stock (bought minus sold) separately
 //* - Statistics loads resellerPurchases and renders the Shop purchases section
@@ -9,7 +9,8 @@ import fs from "node:fs";
 
 const schema = fs.readFileSync(new URL("../schema.sql", import.meta.url), "utf8");
 assert.match(schema, /CREATE TABLE IF NOT EXISTS reseller_purchases/, "schema.sql must create reseller_purchases");
-assert.doesNotMatch(schema, /shop_name/, "reseller_purchases must NOT have a shop_name column (user dropped it)");
+assert.match(schema, /shop_name/, "reseller_purchases must have a shop_name column");
+assert.match(schema, /employee_name/, "reseller_purchases must have an employee_name column");
 assert.match(schema, /unit_cost/, "reseller_purchases must track buy price");
 assert.match(schema, /reseller_purchases_product_id_idx/, "reseller_purchases needs a product index");
 
@@ -18,7 +19,8 @@ assert.match(api, /resellerPurchases:\s*["']reseller_purchases["']/, "hello.ts t
 assert.match(api, /resellerPurchases:\s*\[/, "hello.ts fieldMap must list resellerPurchases fields");
 assert.match(api, /unitCost:\s*["']unit_cost["']/, "hello.ts camelToSnake must map unitCost");
 assert.match(api, /purchasedAt:\s*["']purchased_at["']/, "hello.ts camelToSnake must map purchasedAt");
-assert.doesNotMatch(api, /shopName/, "hello.ts must NOT map shopName (user dropped it)");
+assert.match(api, /shopName:\s*["']shop_name["']/, "hello.ts camelToSnake must map shopName");
+assert.match(api, /employeeName:\s*["']employee_name["']/, "hello.ts camelToSnake must map employeeName");
 
 const helpers = fs.readFileSync(new URL("../js/utils/helpers.js", import.meta.url), "utf8");
 assert.match(helpers, /getResellerTotals/, "helpers must export getResellerTotals");
