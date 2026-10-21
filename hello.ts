@@ -794,7 +794,7 @@ function saleVariantName(productName: string, variant: Record<string, unknown>) 
   return suffix ? `${productName} ${suffix}` : productName;
 }
 
-export default async function api(request: Request): Promise<Response> {
+async function api(request: Request): Promise<Response> {
   const origin = request.headers.get("Origin");
   const headers = getCorsHeaders(origin);
   const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers });
@@ -1015,3 +1015,5 @@ export default async function api(request: Request): Promise<Response> {
     return json({ error: "Database request failed", detail }, 500);
   }
 }
+
+export default { fetch: api };
