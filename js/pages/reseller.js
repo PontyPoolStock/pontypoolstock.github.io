@@ -6,6 +6,7 @@ import { fetchData, postData, updateData, deleteData, hydrateEntityImages, PRODU
 //* executes this module in jsdom so that failure mode can't ship again.
 import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
+import { getCurrentUser } from "../pages/login.js";
 
 let purchases = [];
 let products = [];
@@ -122,11 +123,17 @@ function renderPage() {
   html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerQuantity">Qty bought</label>';
   html += '<input type="number" id="resellerQuantity" class="form-control" min="1" step="1" placeholder="0">';
   html += '<div class="text-danger small errorMes-quantity"></div></div>';
-  html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerUnitCost">Buy price (each)</label>';
-  html += '<input type="number" id="resellerUnitCost" class="form-control" min="0" step="0.01" placeholder="0.00">';
-  html += '<div class="text-danger small errorMes-unitCost"></div></div>';
-  html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button>'
-    + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
+html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerUnitCost">Buy price (each)</label>';
+html += '<input type="number" id="resellerUnitCost" class="form-control" min="0" step="0.01" placeholder="0.00">';
+html += '<div class="text-danger small errorMes-unitCost"></div></div>';
+html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerShopName">Shop bought from</label>';
+html += '<input type="text" id="resellerShopName" class="form-control" placeholder="e.g. Duruma Supplies">';
+html += '<div class="text-danger small errorMes-shopName"></div></div>';
+html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerEmployeeName">Who went</label>';
+html += '<input type="text" id="resellerEmployeeName" class="form-control" placeholder="Employee name">';
+html += '<div class="text-danger small errorMes-employeeName"></div></div>';
+html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button>'
+  + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
   html += '</div><div class="small text-muted mt-2" id="resellerStockHint"></div><div id="resellerFormAlert" class="mt-2"></div>';
   html += "</form></div></div>";
   html += '<div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">';
@@ -184,6 +191,8 @@ function getTableHtml(list) {
     body += "<td>" + (Number(item.quantity) || 0) + "</td>";
     body += "<td>" + formatCurrency(item.unitCost !== undefined ? item.unitCost : item.unit_cost) + "</td>";
     body += "<td class='text-end fw-semibold'>" + formatCurrency(purchaseTotalCost(item)) + "</td>";
+    body += "<td>" + escapeHtml(String(item.shopName || item.shop_name || "—")) + "</td>";
+    body += "<td>" + escapeHtml(String(item.employeeName || item.employee_name || "—")) + "</td>";
     body += "<td><span class='status-badge " + badge + "'>" + left + "</span></td>";
     body += "<td class='text-end'><div class='d-flex gap-1 justify-content-end'>"
       + "<button class='btn btn-sm btn-outline-primary reseller-edit' data-id='" + item.id + "'>Edit</button>"
@@ -194,7 +203,7 @@ function getTableHtml(list) {
     return '<div class="statistics-empty"><span>No shop purchases yet — record what you bought above.</span></div>' + renderPagination(0, 1, PAGE_SIZE);
   }
   let table = '<div class="table-responsive"><table class="table align-middle mb-0"><thead>';
-  table += "<tr><th>Date</th><th>Product</th><th>Bought</th><th>Buy price</th><th class='text-end'>Total spent</th><th>Stock left</th><th></th></tr>";
+  table += "<tr><th>Date</th><th>Product</th><th>Bought</th><th>Buy price</th><th class='text-end'>Total spent</th><th>Shop</th><th>Employee</th><th>Stock left</th><th></th></tr>";
   table += "</thead><tbody>" + body + "</tbody></table></div>";
   return table + renderPagination(rows.length, currentPage, PAGE_SIZE);
 }
@@ -245,6 +254,10 @@ function handleEdit(id) {
   const unitVal = item.unitCost !== undefined ? item.unitCost : item.unit_cost;
   const unitInput = document.getElementById("resellerUnitCost");
   if (unitInput) unitInput.value = unitVal === undefined || unitVal === null ? "" : String(unitVal);
+  const shopInput = document.getElementById("resellerShopName");
+  if (shopInput) shopInput.value = String(item.shopName || item.shop_name || "");
+  const empInput = document.getElementById("resellerEmployeeName");
+  if (empInput) empInput.value = String(item.employeeName || item.employee_name || "");
   const errs = document.querySelectorAll("#resellerPurchaseForm .errorMes-product, #resellerPurchaseForm .errorMes-quantity, #resellerPurchaseForm .errorMes-unitCost");
   for (let i = 0; i < errs.length; i++) errs[i].textContent = "";
   const alertBox = document.getElementById("resellerFormAlert");
@@ -413,11 +426,14 @@ async function handleSave(event) {
   const varSel = document.getElementById("resellerVariantSelect");
   const vIdx = list.length ? Number(varSel ? varSel.value : 0) : null;
   const total = Math.round(qty * (unit || 0) * 100) / 100;
+  const shopName = String(document.getElementById("resellerShopName")?.value || "").trim();
+  const employeeName = String(document.getElementById("resellerEmployeeName")?.value || "").trim();
   const body = {
     productId: product.id,
     productName: String(product.name || "Product"),
     variantIndex: list.length ? vIdx : null,
     quantity: qty, unitCost: unit || 0, totalCost: total,
+    shopName, employeeName,
   };
   //* Editing sends only the fields the form shows — the original purchase
   //* date stays as recorded; adding stamps today's date on the new row.

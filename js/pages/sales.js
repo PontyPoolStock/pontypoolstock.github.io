@@ -226,6 +226,7 @@ function getTableHtml(filteredList = lastFiltered) {
         <td class="text-end">${Number(sale.quantity) || 0}</td>
         <td class="text-end">${formatCurrency(sale.unitPrice)}</td>
         <td class="text-end fw-semibold">${formatCurrency(sale.total)}</td>
+        <td>${escapeHtml(sale.soldBy || "—")}</td>
         <td class="text-end">
           <div class="d-inline-flex gap-1">
             <button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>
@@ -264,7 +265,7 @@ function getTableHtml(filteredList = lastFiltered) {
         <thead>
           <tr>
             <th>Date</th><th>Product</th><th class="text-end">Quantity</th>
-            <th class="text-end">Price</th><th class="text-end">Total</th><th></th>
+            <th class="text-end">Price</th><th class="text-end">Total</th><th>Sold By</th><th></th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
