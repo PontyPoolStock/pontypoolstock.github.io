@@ -953,13 +953,90 @@ async function handleRecordSale(event) {
 //* the branch header, date, items, and totals.
 function renderReceiptHtml(sale, branch) {
   const soldAt = new Date(sale.soldAt || sale.createdAt || Date.now());
-  const dateStr = soldAt.toLocaleDateString('en-KE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const timeStr = soldAt.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
-  const lines = saleCartSnapshot(sale);
-  const lineHtml = lines.map((line) => '<div class="receipt-line"><span class="receipt-name">' + escapeHtml(line.name) + '</span><span class="receipt-qty">' + line.qty + '</span><span class="receipt-price">' + formatCurrency(line.unitPrice) + '</span><span class="receipt-total">' + formatCurrency(line.lineTotal) + '</span></div>').join('');
-  const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Receipt</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:"Courier New",monospace;font-size:12px;width:320px;margin:0 auto;color:#000;background:#fff;}.receipt-header{text-align:center;border-bottom:1px solid #000;padding-bottom:8px;margin-bottom:10px;}.receipt-branch{font-weight:bold;font-size:14px;letter-spacing:1px;}.receipt-meta{font-size:11px;margin-bottom:10px;border-bottom:1px solid #000;padding-bottom:6px;}.receipt-meta-row{display:flex;justify-content:space-between;margin:2px 0;}.receipt-line{display:flex;justify-content:space-between;font-size:11px;margin:3px 0;}.receipt-name{flex:1;}.receipt-qty{width:30px;text-align:right;}.receipt-price{width:70px;text-align:right;}.receipt-total{width:70px;text-align:right;}.receipt-divider{border-bottom:1px solid #000;margin:6px 0;}.receipt-totals{font-size:12px;margin-bottom:10px;border-top:1px solid #000;padding-top:6px;}.receipt-total-row{display:flex;justify-content:space-between;margin:3px 0;}.receipt-grand{font-weight:bold;font-size:13px;border-top:1px solid #000;padding-top:4px;margin-top:4px;}.receipt-footer{text-align:center;font-size:10px;margin-top:12px;border-top:1px solid #000;padding-top:6px;}@media print{body{width:100%;margin:0;}.no-print{display:none!important;}}</style></head><body><div class="receipt-header"><div class="receipt-branch">' + escapeHtml(branch) + '</div><div style="font-size:10px">Pontypool Stock Management</div></div><div class="receipt-meta"><div class="receipt-meta-row"><span>Sale #</span><span>' + escapeHtml(String(sale.id)) + '</span></div><div class="receipt-meta-row"><span>Date</span><span>' + dateStr + '</span></div><div class="receipt-meta-row"><span>Time</span><span>' + timeStr + '</span></div></div>' + lineHtml + '<div class="receipt-divider"></div><div class="receipt-totals"><div class="receipt-total-row"><span>Subtotal</span><span>' + formatCurrency(subtotal) + '</span></div><div class="receipt-total-row"><span>Tax</span><span>' + formatCurrency(0) + '</span></div><div class="receipt-grand"><span>Total</span><span>' + formatCurrency(subtotal) + '</span></div></div><div class="receipt-footer">Thank you for your business<br />This is a computer-generated receipt</div></body></html>';
+  const dateStr = soldAt.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  const timeStr = soldAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const isDuruma = branch === 'Duruma Road';
+  const phone = isDuruma ? '0712255416' : '0790225572';
+  const barcodeHeight = isDuruma ? '17mm' : '12mm';
+  const total = Number(sale.total) || (saleCartSnapshot(sale).reduce((s,l)=>s+l.lineTotal,0));
+  const formattedTotal = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PontyPool Receipts</title>
+</head>
+<body style="margin:0; background:white; color:black;">
+
+  <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" style="position:absolute; overflow:hidden;">
+    <defs>
+      <symbol id="logo" viewBox="0 0 620 180">
+        <g fill="none" stroke="black" stroke-width="4">
+          <path d="M101 66 V55 A46 46 0 0 1 193 55 V87"/>
+          <path d="M91 69 H112 M91 75 H112 M91 81 H112"/>
+          <path d="M81 103 A24 24 0 1 0 124 103" stroke-width="9"/>
+        </g>
+        <g fill="black">
+          <circle cx="91" cy="94" r="4"/>
+          <circle cx="102" cy="89" r="4"/>
+          <circle cx="113" cy="94" r="4"/>
+          <text x="8" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700">P</text>
+          <text x="137" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700" textLength="470" lengthAdjust="spacingAndGlyphs">NTYPOOL</text>
+          <rect x="20" y="155" width="172" height="19"/>
+          <text x="202" y="174" font-family="Arial, sans-serif" font-size="27" textLength="401" lengthAdjust="spacingAndGlyphs">Electricals &amp; Lighting</text>
+        </g>
+      </symbol>
+      <pattern id="bars" width="91" height="100" patternUnits="userSpaceOnUse">
+        <path d="M2 0V100 M17 0V100 M38 0V100 M53 0V100 M78 0V100" stroke="black" stroke-width="2"/>
+        <path d="M9 0V100 M29 0V100 M65 0V100 M87 0V100" stroke="black" stroke-width="5"/>
+      </pattern>
+      <symbol id="barcode" viewBox="0 0 364 100">
+        <rect width="364" height="100" fill="url(#bars)"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <article style="box-sizing:border-box; width:72mm; margin:4mm auto; padding:4mm 0; font-family:'Times New Roman',serif; font-size:12pt; text-align:center; line-height:1.25; break-after:page; page-break-after:always;">
+
+    <svg role="img" aria-label="PontyPool Electricals and Lighting" style="display:block; width:62mm; height:18mm; margin:0 auto 4mm;">
+      <use href="#logo"/>
+    </svg>
+
+    <div style="border-top:1px dashed black; padding:5mm 0 2mm;">
+      Dealers in Electrical Accessories, Lighting Fixtures &amp;<br>
+      Solar Accessories.
+    </div>
+
+    <div style="border-top:1px dashed black; padding-top:1mm;">
+      <div style="font-size:14pt; letter-spacing:0.4px;">
+        PontyPool Enterprises Limited
+      </div>
+      <div style="margin-top:1mm;">${escapeHtml(branch)}</div>
+      <div style="margin:1mm 0 2mm;">${escapeHtml(phone)}</div>
+    </div>
+
+    <div style="border-top:3px double black; padding:1mm 0 2mm;">
+      ${dateStr}, ${timeStr}
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed black; padding:2mm 0; font-size:14pt;">
+      <span style="padding-left:20mm;">TOTAL</span>
+      <span>KSH ${formattedTotal}</span>
+    </div>
+
+    <div style="border-top:1px dashed black; border-bottom:3px double black; padding:2mm 0;">
+      <svg role="img" aria-label="Decorative barcode" style="display:block; width:48mm; height:${barcodeHeight}; margin:auto;">
+        <use href="#barcode"/>
+      </svg>
+    </div>
+  </article>
+
+</body>
+</html>`;
 }
+
 //* Build the line-item list for a recorded sale, using the snapshot stored
 //* alongside the sale so reprints match exactly what was sold.
 function saleCartSnapshot(sale) {
