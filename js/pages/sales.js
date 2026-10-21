@@ -359,7 +359,7 @@ function getSaleProductPreviewHtml(product = null) {
     ? getVariantsTotalQuantity(variants)
     : Number(product.quantity) || 0;
   const category = getCategoryLabel(categories, product.categoryId);
-  const meta = [category, onOrder ? `On order — ${resellerProductLeft(product)} reseller left` : `${stock} in stock`].filter(Boolean).join(" · ");
+  const meta = [category, onOrder ? `Resale product — ${resellerProductLeft(product)} left` : `${stock} in stock`].filter(Boolean).join(" · ");
   return `
     ${productThumbnailHtml(product.imageUrl, getProductDisplayName(product), { productId: product.id })}
     <span class="sale-product-preview-info">
@@ -385,7 +385,7 @@ function getSaleProductGalleryHtml(selectedId = "") {
         <button type="button" class="sale-photo-card${isSelected ? " is-selected" : ""}${out ? " is-out" : ""}" data-product-id="${escapeHtml(String(product.id))}" role="option" aria-selected="${isSelected ? "true" : "false"}" title="${escapeHtml(name)}" ${out ? "disabled" : ""}>
           ${productThumbnailHtml(product.imageUrl, name, { productId: product.id, sizeClass: "entity-thumbnail-sm" })}
           <span class="sale-photo-name">${escapeHtml(name)}</span>
-          <span class="sale-photo-stock">${onOrder ? `On order · ${resellerProductLeft(product)} left` : stock <= 0 ? "Out" : `${stock} left`}</span>
+          <span class="sale-photo-stock">${onOrder ? `Resale · ${resellerProductLeft(product)} left` : stock <= 0 ? "Out" : `${stock} left`}</span>
         </button>`;
     })
     .join("");
@@ -410,8 +410,8 @@ function paintSaleProductVisuals(selectedId = "") {
 }
 
 //* Product dropdown — filtered down to the chosen category, out-of-stock rows
-//* still disabled so nothing unsellable can be staged. Order-based products
-//* are always enabled — they sell without any stock on hand.
+//* still disabled so nothing unsellable can be staged. Resale products are
+//* always enabled — they use shop-purchase stock rather than own stock.
 function getProductOptionsHtml(selectedId = "") {
   const filtered = getFilteredProducts();
   if (!filtered.length) {
@@ -427,7 +427,7 @@ function getProductOptionsHtml(selectedId = "") {
       const out = !onOrder && stock <= 0;
       const name = escapeHtml(getProductDisplayName(product));
       const isSelected = String(product.id) === String(selectedId);
-      const label = onOrder ? `${name} — On order` : `${name} — ${stock} in stock`;
+      const label = onOrder ? `${name} — Resale product` : `${name} — ${stock} in stock`;
       return `<option value="${product.id}" ${isSelected ? "selected" : ""} ${out ? "disabled" : ""}>${label}</option>`;
     })
     .join("");
@@ -731,7 +731,7 @@ function populateVariantSelect(variantSelect) {
         .filter(Boolean)
         .join(" - ");
       const stock = Number(variant.quantity) || 0;
-      const suffix = onOrder ? `On order · ${resellerLeftFor(product?.id, index).left} reseller left` : `${stock} in stock`;
+      const suffix = onOrder ? `Resale · ${resellerLeftFor(product?.id, index).left} left` : `${stock} in stock`;
       return `<option value="${index}">${escapeHtml(bits)} - ${suffix}</option>`;
     })
     .join("");
@@ -780,9 +780,9 @@ function resellerHintFor(productId, variantIndex) {
   if (!bought) {
     //* Both roles can open Shop Purchases (see STAFF_PAGES in js/utils/role.js),
     //* so both get pointed there.
-    return "On order — no shop purchases recorded yet. Add them under Shop Purchases.";
+    return "Resale product — no shop purchases recorded yet. Add them under Shop Purchases.";
   }
-  return `On order — reseller stock: ${left} left (${bought} bought − ${sold} sold).`;
+  return `Resale product — shop-purchase stock: ${left} left (${bought} bought − ${sold} sold).`;
 }
 
 function updateStockHint(text) {

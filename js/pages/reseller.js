@@ -99,8 +99,8 @@ function renderPage() {
   //* select — the checkbox lives on the Products add/edit form.
   const emptyListHint = products.length
     ? ""
-    : '<div class="form-text text-warning">No products are marked "Not in stock — just selling" yet. '
-      + "Go to Products, add or edit a product, and tick that box — it will then appear here.</div>";
+    : '<div class="form-text text-warning">No resale products have been marked yet. '
+      + "Go to Products, add or edit a product, and select Resale product — it will then appear here.</div>";
   let html = "";
   html += '<section class="sale-hero"><div class="sale-hero-text">';
   html += '<span class="statistics-kicker">Bought for resale</span><h3>Shop purchases</h3>';
@@ -113,7 +113,7 @@ function renderPage() {
   if (canManagePurchases) {
     html += '<div class="card border-0 shadow-sm mb-3"><div class="card-body">';
     html += '<form id="resellerPurchaseForm" novalidate><div class="row g-2 align-items-end">';
-    html += '<div class="col-12 col-md-4"><label class="form-label small text-muted" for="resellerProductSelect">Product (On order only)</label>';
+    html += '<div class="col-12 col-md-4"><label class="form-label small text-muted" for="resellerProductSelect">Resale product</label>';
     html += '<select id="resellerProductSelect" class="form-select">' + options + "</select>";
     html += emptyListHint;
     html += '<div class="text-danger small errorMes-product"></div>';
@@ -249,7 +249,7 @@ function handleEdit(id) {
     if (String(products[i].id) === pid) product = products[i];
   }
   if (!product) {
-    showToast("This purchase's product is no longer marked \"Not in stock — just selling\", so the purchase cannot be edited.", "warning");
+    showToast("This product is no longer marked as a resale product, so the purchase cannot be edited.", "warning");
     return;
   }
   editingId = item.id;
@@ -368,8 +368,8 @@ function paintStockHint() {
   const pid = prodSel ? prodSel.value : "";
   if (!pid) {
     hint.textContent = products.length
-      ? "Only products marked Not in stock — just selling can be bought for resale."
-      : "Mark a product Not in stock — just selling first, then record its purchases here.";
+      ? "Only products marked as resale products can be bought for resale."
+      : "Mark a product as a resale product first, then record its purchases here.";
     return;
   }
   const varSel = document.getElementById("resellerVariantSelect");

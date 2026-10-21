@@ -216,7 +216,7 @@ function productCardHtml(product, categories) {
           <div class="preview-detail-grid">
             ${detailHtml("bi-tags", "Category", escapeHtml(getCategoryLabel(categories, product.categoryId)))}
             ${detailHtml("bi-rulers", "Unit", unit ? escapeHtml(unit) : "—")}
-            ${detailHtml("bi-box-seam", "In stock", onOrder ? "On order — not stocked" : `${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}`)}
+            ${detailHtml("bi-box-seam", onOrder ? "Product type" : "In stock", onOrder ? "Resale product" : `${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}`)}
             ${detailHtml("bi-cash-stack", "Price", price)}
             ${isStaffView() ? "" : detailHtml("bi-graph-up-arrow", "Stock value", onOrder ? "—" : formatCurrency(getProductStockValue(product)))}
             ${detailHtml("bi-list-ol", "Ratings", String(variants.length))}
@@ -399,13 +399,13 @@ function compactStatusBadge(product) {
 
 //* One line per rating: what it is, what it costs, how much is left and whether
 //* that is enough — the same status logic the Products table and filter use.
-//* Order-based products show On order instead of stock figures.
+//* Resale products do not use own-stock figures.
 function ratingsHtml(product, variants, unit) {
   if (!variants.length) {
     return `
       <div class="preview-ratings-empty">
         <i class="bi bi-info-circle"></i>
-        <span>${isNotStockedProduct(product) ? "On order — not stocked, sell any quantity." : "No ratings — this product is stocked as a single item."}</span>
+        <span>${isNotStockedProduct(product) ? "Resale product — quantity is tracked through shop purchases." : "No ratings — this product is stocked as a single item."}</span>
       </div>`;
   }
 
@@ -423,7 +423,7 @@ function ratingsHtml(product, variants, unit) {
           <td class="text-end">${price > 0 ? formatCurrency(price) : "—"}</td>
           <td class="text-end">${onOrder ? "—" : `${quantity}${unit ? ` ${escapeHtml(unit)}` : ""}`}</td>
           <td class="text-end">${onOrder ? "—" : min}</td>
-          <td>${onOrder ? `<span class="status-badge status-in">On order</span>` : ratingStatusBadge(quantity, min)}</td>
+          <td>${onOrder ? `<span class="status-badge status-in">Resale</span>` : ratingStatusBadge(quantity, min)}</td>
         </tr>`;
     })
     .join("");
@@ -458,7 +458,7 @@ function detailHtml(icon, label, value) {
 }
 
 function statusBadge(product) {
-  if (isNotStockedProduct(product)) return `<span class="status-badge status-in">On order</span>`;
+  if (isNotStockedProduct(product)) return `<span class="status-badge status-in">Resale</span>`;
   const code = getProductStatusCode(product);
   if (code === "out") return `<span class="status-badge status-out">Out of stock</span>`;
   if (code === "low") return `<span class="status-badge status-low">Low stock</span>`;

@@ -11,6 +11,7 @@ import {
 } from "../services/api.js";
 import { getModal } from "../components/modal.js";
 import { openProductPreview } from "../components/preview.js";
+import { openBulkProductsModal } from "../components/bulk-products.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import {
@@ -95,9 +96,14 @@ function renderProducts() {
           <option value="low">Low Stock</option>
           <option value="out">Out of Stock</option>
         </select>
-        ${isStaffView() ? "" : `<button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addProductBtn">
-          <i class="bi bi-plus-lg"></i> Add Product
-        </button>`}
+        ${isStaffView() ? "" : `<div class="d-flex gap-2 ms-auto">
+          <button class="btn btn-outline-primary btn-sm px-3 text-nowrap" id="bulkAddProductsBtn">
+            <i class="bi bi-stack"></i> Bulk Add Products
+          </button>
+          <button class="btn btn-primary btn-sm px-3 text-nowrap" id="addProductBtn">
+            <i class="bi bi-plus-lg"></i> Add Product
+          </button>
+        </div>`}
       </div>
     </div>
 
@@ -227,6 +233,16 @@ function setupEventListeners() {
   document
     .querySelector("#addProductBtn")
     ?.addEventListener("click", () => handleAdd());
+  document
+    .querySelector("#bulkAddProductsBtn")
+    ?.addEventListener("click", () => {
+      if (isStaffView()) return;
+      openBulkProductsModal(categories, async () => {
+        await loadData();
+        lastFiltered = [...products];
+        filterProducts();
+      });
+    });
 }
 
 //* Filter function for search and filters
@@ -379,9 +395,9 @@ function getRatingsHtml(variants) {
 
 //* A product is low/out when any of its ratings reaches its own minimum —
 //* the badge and the status filter share getProductStatusCode so they agree.
-//* Order-based products show On order instead of any stock badge.
+//* Resale products show their type instead of an own-stock badge.
 function getProductStatus(product) {
-  if (isNotStockedProduct(product)) return `<span class="status-badge status-in">On order</span>`;
+  if (isNotStockedProduct(product)) return `<span class="status-badge status-in">Resale</span>`;
   const code = getProductStatusCode(product);
   if (code === "out") return `<span class="status-badge status-out">Out of stock</span>`;
   if (code === "low") return `<span class="status-badge status-low">Low stock</span>`;

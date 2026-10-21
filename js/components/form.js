@@ -67,7 +67,7 @@ export async function makeProductForm(id, categoryId = "", opts = {}) {
         <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
         <div class="form-check mt-2">
           <input type="checkbox" class="form-check-input" name="notStocked" id="notStockedCheck" value="1" ${(id && (product.notStocked || product.not_stocked)) ? "checked" : ""}>
-          <label class="form-check-label small" for="notStockedCheck">Not in stock — just selling it (no quantity needed)</label>
+          <label class="form-check-label small" for="notStockedCheck">Resale product (quantity is tracked through shop purchases)</label>
         </div>
       </div>
       <div class="col-6">
@@ -182,7 +182,7 @@ function variantRowHtml(variant = {}) {
 }
 
 //* Wire the ratings repeater: add / remove rows, keep Quantity and Price in sync.
-//* The "Not in stock" toggle below Quantity disables Quantity + the ratings
+//* The resale toggle below Quantity disables Quantity + the ratings
 //* block — order-based products need no amounts on hand to be sellable.
 export function setupProductVariants() {
   const list = document.getElementById("variantsList");

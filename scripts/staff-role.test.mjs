@@ -88,6 +88,7 @@ const [
 
 await loadProducts();
 assert.equal(document.getElementById("addProductBtn"), null, "staff cannot add products");
+assert.equal(document.getElementById("bulkAddProductsBtn"), null, "staff cannot bulk add products");
 assert.equal(
   document.querySelector("#productsTableContainer .edit-btn, #productsTableContainer .delete-btn"),
   null,
@@ -150,6 +151,11 @@ assert.equal(staffBlocked("admin", "POST", "resellerPurchases", "").blocked, fal
 sessionStorage.setItem("currentUser", JSON.stringify({ role: "admin" }));
 await loadProducts();
 assert.ok(document.getElementById("addProductBtn"), "admins retain the add product action");
+assert.ok(document.getElementById("bulkAddProductsBtn"), "admins can bulk add products");
+document.getElementById("bulkAddProductsBtn").click();
+assert.ok(document.getElementById("bulkProductsModal"),
+  "bulk-add action opens the product entry and preview modal");
+document.getElementById("bulkProductsModal").remove();
 assert.ok(
   document.querySelector("#productsTableContainer .edit-btn, #productsTableContainer .delete-btn"),
   "admins retain product row actions",

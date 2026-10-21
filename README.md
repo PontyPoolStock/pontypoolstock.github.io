@@ -27,7 +27,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 
 ## ✨ Features
 
-- 📦 **Product Management** — Add, edit, delete, search, and filter products by category and status
+- 📦 **Product Management** — Add, edit, delete, search, and filter products by category and status; bulk add multiple fully detailed products with pictures and a review step
 - 👁️ **Product Preview** — Click any product row (or press Enter on it) for a card with its picture, category, unit, price, stock value, status and one line per rating; Edit hands straight over to the product form
 - 🏷️ **Categories** — Manage product categories with product count tracking
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries

@@ -169,8 +169,8 @@ async function deletePersistentKeysExcept(collection, keepKeys) {
 function mergeCachedRow(cachedRow, payload) {
   // Merge only the fields the cached row already tracks so a slim ?fields=
   // projection never bloats with full image bytes — except notStocked, which
-  // older cached rows predate and must still pick up so "just selling" shows
-  // On order instantly instead of flashing Out of stock.
+  // older cached rows predate and must still pick up so resale products show
+  // their type instantly instead of flashing Out of stock.
   // A known-true flag is sticky: a slim GET from a not-yet-redeployed API
   // silently drops notStocked (it arrives undefined, NOT false), and that
   // must never clear a true we already saved/confirmed.
@@ -769,4 +769,3 @@ export async function deleteData(endpoint, id) {
     return { ok: false, status, error: message };
   }
 }
-
