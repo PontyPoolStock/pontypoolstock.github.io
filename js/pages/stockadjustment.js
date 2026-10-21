@@ -40,8 +40,8 @@ function renderStockAdjustmentsPage() {
   <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addAdjustmentBtn">
     <i class="bi bi-sliders"></i> New Adjustment
   </button>
-  <button class="btn btn-outline-primary btn-sm px-3 text-nowrap" id="bulkAddBtn">
-    <i class="bi bi-plus-square"></i> Bulk Add Stock
+  <button class="btn btn-outline-primary btn-sm px-3 text-nowrap" id="bulkOpsBtn">
+    <i class="bi bi-pencil-square"></i> Bulk Operations
   </button>
 </div>
 
@@ -103,8 +103,8 @@ function setupEventListeners() {
     ?.addEventListener("click", handleAddAdjustment);
 
   document
-    .getElementById("bulkAddBtn")
-    ?.addEventListener("click", handleBulkAdd);
+    .getElementById("bulkOpsBtn")
+    ?.addEventListener("click", handleBulkOps);
 
   document
     .querySelector("#stockAdjustmentsTableContainer")
@@ -168,11 +168,11 @@ function updateStats(count, searchTerm, typeFilter) {
       : "";
 }
 
-function handleBulkAdd() {
+function handleBulkOps() {
   fetchData("products?fields=" + PRODUCT_ADJUSTMENT_FIELDS).then((allProducts) => {
     const prods = (Array.isArray(allProducts) ? allProducts : []).filter((p) => !isNotStockedProduct(p));
     if (!prods.length) {
-      showToast("No products available for bulk stock add.", "warning");
+      showToast("No products available for bulk operations.", "warning");
       return;
     }
 
@@ -180,55 +180,72 @@ function handleBulkAdd() {
       const variants = getProductVariants(p);
       const qty = variants.length ? getVariantsTotalQuantity(variants) : Number(p.quantity) || 0;
       return `
-        <tr data-product-id="${p.id}" data-product-name="${escapeHtml(getProductDisplayName(p))}">
+        <tr data-product-id="${p.id}" data-product-name="${escapeHtml(getProductDisplayName(p))}" data-original-qty="${qty}" data-original-price="${Number(p.price) || 0}">
           <td class="fw-medium">${escapeHtml(getProductDisplayName(p))}</td>
-          <td class="text-end text-muted">${qty}</td>
+          <td class="text-end text-muted current-qty">${qty}</td>
           <td class="text-center">
-            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-qty-input text-center" placeholder="0" style="width:80px;margin:0 auto;">
+            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-add-qty text-center" placeholder="0" style="width:70px;margin:0 auto;">
+          </td>
+          <td class="text-center">
+            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-remove-qty text-center" placeholder="0" style="width:70px;margin:0 auto;">
+          </td>
+          <td class="text-end">
+            <input type="number" min="0" step="0.01" class="form-control form-control-sm bulk-price text-end" value="${Number(p.price) || 0}" style="width:80px;margin:0 auto;">
           </td>
         </tr>`;
     }).join("");
 
     const html = `
-      <div class="modal fade" id="bulkAddModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal fade" id="bulkOpsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header border-bottom-0">
-              <h5 class="modal-title"><i class="bi bi-plus-square me-2"></i>Bulk Add Stock</h5>
+              <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Bulk Operations</h5>
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body pt-0">
-              <p class="text-muted small mb-3">Enter quantities for products you want to add stock to. Products with 0 are skipped. Press <strong>Apply</strong> to save all at once.</p>
+              <p class="text-muted small mb-3">
+                Change multiple products at once. Set quantities to add/remove, or edit prices. Products with no changes are skipped.
+                Press <strong>Review Changes</strong> to see a summary before applying.
+              </p>
               <div class="input-group mb-3">
                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control" id="bulkSearch" placeholder="Search products...">
               </div>
-              <div class="border rounded" style="max-height:400px;overflow-y:auto;">
+              <div class="border rounded" style="max-height:350px;overflow-y:auto;">
                 <table class="table table-sm align-middle mb-0">
                   <thead class="sticky-top bg-light">
-                    <tr><th>Product</th><th class="text-end">Current Stock</th><th class="text-center">Add Qty</th></tr>
+                    <tr><th>Product</th><th class="text-end">Current Stock</th><th class="text-center">Add Qty</th><th class="text-center">Remove Qty</th><th class="text-end">Price</th></tr>
                   </thead>
                   <tbody id="bulkTableBody">${rows}</tbody>
                 </table>
               </div>
+              <div id="bulkSummary" class="mt-3 d-none">
+                <h6 class="fw-bold mb-2"><i class="bi bi-list-check me-1"></i>Changes to Apply:</h6>
+                <ul class="list-group small" id="bulkSummaryList"></ul>
+              </div>
             </div>
             <div class="modal-footer">
-              <span class="text-muted small me-auto" id="bulkCountLabel">0 products to update</span>
+              <span class="text-muted small me-auto" id="bulkCountLabel">0 changes pending</span>
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="button" class="btn btn-primary" id="bulkSaveBtn">
-                <i class="bi bi-check-lg"></i> Apply
+              <button type="button" class="btn btn-secondary" id="bulkReviewBtn">
+                <i class="bi bi-eye"></i> Review Changes
+              </button>
+              <button type="button" class="btn btn-primary d-none" id="bulkApplyBtn">
+                <i class="bi bi-check-lg"></i> Apply All Changes
               </button>
             </div>
           </div>
         </div>
       </div>`;
 
-    document.querySelector("#bulkAddModal")?.remove();
+    document.querySelector("#bulkOpsModal")?.remove();
     document.body.insertAdjacentHTML("beforeend", html);
-    const modalEl = document.getElementById("bulkAddModal");
+    const modalEl = document.getElementById("bulkOpsModal");
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
 
+    // Live search filter
     const searchInput = document.getElementById("bulkSearch");
     searchInput?.addEventListener("input", () => {
       const term = searchInput.value.toLowerCase().trim();
@@ -239,64 +256,136 @@ function handleBulkAdd() {
       }
     });
 
+    // Update count label
     const updateCount = () => {
-      const inputs = modalEl.querySelectorAll(".bulk-qty-input");
-      let count = 0;
-      for (const input of inputs) {
-        if (Number(input.value || 0) > 0) count++;
+      const addInputs = modalEl.querySelectorAll(".bulk-add-qty");
+      const removeInputs = modalEl.querySelectorAll(".bulk-remove-qty");
+      const priceInputs = modalEl.querySelectorAll(".bulk-price");
+      let changes = 0;
+      for (const input of addInputs) {
+        if (Number(input.value || 0) > 0) changes++;
+      }
+      for (const input of removeInputs) {
+        if (Number(input.value || 0) > 0) changes++;
+      }
+      for (const input of priceInputs) {
+        const row = input.closest("tr");
+        const original = Number(row?.dataset?.originalPrice || 0);
+        if (Number(input.value || 0) !== original) changes++;
       }
       const label = document.getElementById("bulkCountLabel");
-      if (label) label.textContent = `${count} product${count === 1 ? "" : "s"} to update`;
+      if (label) label.textContent = `${changes} change${changes === 1 ? "" : "s"} pending`;
     };
     modalEl.addEventListener("input", updateCount);
 
-    document.getElementById("bulkSaveBtn").addEventListener("click", async () => {
-      const inputs = modalEl.querySelectorAll(".bulk-qty-input");
-      const tasks = [];
-      for (const input of inputs) {
-        const q = Math.trunc(Number(input.value || 0));
-        if (q <= 0) continue;
-        const row = input.closest("tr");
-        const pid = row?.dataset?.productId;
-        const pname = row?.dataset?.productName;
-        tasks.push({ pid, pname, qty: q });
+    // Review changes
+    document.getElementById("bulkReviewBtn").addEventListener("click", () => {
+      const rows = modalEl.querySelectorAll("#bulkTableBody tr");
+      const changes = [];
+      for (const row of rows) {
+        const name = row.dataset.productName || row.querySelector("td:first-child")?.textContent || "";
+        const pid = row.dataset.productId;
+        const currentQty = Number(row.dataset.originalQty || 0);
+        const addQty = Number(row.querySelector(".bulk-add-qty")?.value || 0);
+        const removeQty = Number(row.querySelector(".bulk-remove-qty")?.value || 0);
+        const newPrice = Number(row.querySelector(".bulk-price")?.value || 0);
+        const originalPrice = Number(row.dataset.originalPrice || 0);
+        if (addQty > 0) changes.push({ name, pid, action: "Add", detail: `+${addQty} stock (new total: ${currentQty + addQty})` });
+        if (removeQty > 0) changes.push({ name, pid, action: "Remove", detail: `-${removeQty} stock (new total: ${Math.max(0, currentQty - removeQty)})` });
+        if (newPrice !== originalPrice) changes.push({ name, pid, action: "Price", detail: `${formatCurrency(originalPrice)} → ${formatCurrency(newPrice)}` });
       }
-      if (!tasks.length) {
-        showToast("No quantities entered.", "warning");
+
+      const summaryEl = document.getElementById("bulkSummary");
+      const summaryList = document.getElementById("bulkSummaryList");
+      if (!changes.length) {
+        showToast("No changes to apply.", "warning");
+        if (summaryEl) summaryEl.classList.add("d-none");
         return;
       }
-      const saveBtn = document.getElementById("bulkSaveBtn");
-      saveBtn.disabled = true;
-      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+      if (summaryEl && summaryList) {
+        summaryEl.classList.remove("d-none");
+        summaryList.innerHTML = changes.map((c) => `
+          <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+            <span><strong>${escapeHtml(c.name)}</strong></span>
+            <span class="badge ${c.action === "Add" ? "bg-success" : c.action === "Remove" ? "bg-danger" : "bg-warning text-dark"}">${c.action}: ${c.detail}</span>
+          </li>`).join("");
+      }
+      // Show apply button
+      document.getElementById("bulkApplyBtn")?.classList.remove("d-none");
+    });
+
+    // Apply all changes
+    document.getElementById("bulkApplyBtn").addEventListener("click", async () => {
+      const rows = modalEl.querySelectorAll("#bulkTableBody tr");
+      const tasks = [];
+      for (const row of rows) {
+        const pid = row.dataset.productId;
+        const pname = row.dataset.productName;
+        const currentQty = Number(row.dataset.originalQty || 0);
+        const addQty = Math.trunc(Number(row.querySelector(".bulk-add-qty")?.value || 0));
+        const removeQty = Math.trunc(Number(row.querySelector(".bulk-remove-qty")?.value || 0));
+        const newPrice = Number(row.querySelector(".bulk-price")?.value || 0);
+        const originalPrice = Number(row.dataset.originalPrice || 0);
+        if (addQty <= 0 && removeQty <= 0 && newPrice === originalPrice) continue;
+        tasks.push({ pid, pname, currentQty, addQty, removeQty, newPrice, originalPrice });
+      }
+      if (!tasks.length) {
+        showToast("No changes to apply.", "warning");
+        return;
+      }
+      const applyBtn = document.getElementById("bulkApplyBtn");
+      applyBtn.disabled = true;
+      applyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Applying...';
       const now = new Date().toISOString();
       const promises = tasks.map(async (t) => {
         try {
           const prod = await fetchData(`products/${t.pid}`);
-          const currentQty = Number(prod?.quantity) || 0;
-          const newQty = currentQty + t.qty;
-          await Promise.all([
-            postData("stockAdjustments", {
+          const currentQty = Number(prod?.quantity) || t.currentQty;
+          const netChange = t.addQty - t.removeQty;
+          const newQty = Math.max(0, currentQty + netChange);
+          const updates = [];
+          // Stock adjustments
+          if (t.addQty > 0) {
+            updates.push(postData("stockAdjustments", {
               productId: t.pid,
               productName: t.pname,
               type: "increase",
-              quantity: t.qty,
+              quantity: t.addQty,
               date: now,
               oldQuantity: currentQty,
-              newQuantity: newQty,
-            }),
-            updateData("products", t.pid, { quantity: newQty }),
-          ]);
+              newQuantity: currentQty + t.addQty,
+            }));
+          }
+          if (t.removeQty > 0) {
+            updates.push(postData("stockAdjustments", {
+              productId: t.pid,
+              productName: t.pname,
+              type: "decrease",
+              quantity: t.removeQty,
+              date: now,
+              oldQuantity: currentQty,
+              newQuantity: Math.max(0, currentQty - t.removeQty),
+            }));
+          }
+          // Product update
+          const productUpdate = {};
+          if (netChange !== 0) productUpdate.quantity = newQty;
+          if (t.newPrice !== t.originalPrice) productUpdate.price = t.newPrice;
+          if (Object.keys(productUpdate).length) {
+            updates.push(updateData("products", t.pid, productUpdate));
+          }
+          await Promise.all(updates);
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e?.message || "Failed" };
         }
       });
       const results = await Promise.all(promises);
-      saveBtn.disabled = false;
-      saveBtn.innerHTML = '<i class="bi bi-check-lg"></i> Apply';
+      applyBtn.disabled = false;
+      applyBtn.innerHTML = '<i class="bi bi-check-lg"></i> Apply All Changes';
       const failed = results.filter((r) => !r.ok).length;
       if (failed === 0) {
-        showToast(`Added stock to ${tasks.length} product${tasks.length === 1 ? "" : "s"}.`, "success");
+        showToast(`Applied ${tasks.length} change${tasks.length === 1 ? "" : "s"} successfully.`, "success");
         modal.hide();
         await loadData();
         lastFiltered = [...adjustments];
@@ -307,7 +396,7 @@ function handleBulkAdd() {
       }
     });
   }).catch((err) => {
-    showToast("Could not load products for bulk add.", "danger");
+    showToast("Could not load products for bulk operations.", "danger");
   });
 }
 
