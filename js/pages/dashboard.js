@@ -49,19 +49,8 @@ function renderDashboard(adjustments, sales) {
   const totalValue = getTotalInventoryValue(products);
   const recentActivities = activities.slice(0, 5);
 
-  //* The Low Stock card, the alert and the panel all open the same list
+  //* The Low Stock card and product panel open the same list
   registerLowStockData(lowStock, categories);
-
-  const alertHtml = lowStock.length
-    ? `
-    <div class="alert alert-warning d-flex align-items-start gap-2 mb-4 dashboard-alert" role="alert">
-      <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
-      <span>${lowStock.length} product${lowStock.length === 1 ? "" : "s"} are low on stock: ${lowStock.map((p) => escapeHtml(p.name)).join(", ")}</span>
-      <button type="button" class="btn btn-sm btn-outline-dark ms-auto text-nowrap" data-low-stock-open>
-        View list
-      </button>
-    </div>`
-    : "";
 
   const statsHtml = `
     <div class="row g-3 mb-4 dashboard-stats">
@@ -131,7 +120,6 @@ function renderDashboard(adjustments, sales) {
       : `<p class="text-muted">No recent activity.</p>`;
 
   const html = `
-    ${alertHtml}
     ${statsHtml}
     ${renderDashboardPeriodSummary(adjustments, sales)}
     <div class="row g-3 mb-4">
