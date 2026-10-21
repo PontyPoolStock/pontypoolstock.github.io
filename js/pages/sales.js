@@ -230,8 +230,8 @@ function getTableHtml(filteredList = lastFiltered) {
         <td>${escapeHtml(sale.soldBy || "—")}</td>
         <td class="text-end">
           <div class="d-inline-flex gap-1">
-            <button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>
-            <button class="action-btn sale-delete-btn" data-id="${sale.id}" title="Delete sale" aria-label="Delete sale"><i class="bi bi-trash"></i></button>
+            ` + (isStaffView() ? "" : `<button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>`) + `
+            ` + (isStaffView() ? "" : `<button class="action-btn sale-delete-btn" data-id="${sale.id}" title="Delete sale" aria-label="Delete sale"><i class="bi bi-trash"></i></button>`) + `
             <button class="action-btn sale-print-btn" data-id="${sale.id}" title="Print receipt" aria-label="Print receipt"><i class="bi bi-printer"></i></button>
           </div>
         </td>
@@ -252,8 +252,8 @@ function getTableHtml(filteredList = lastFiltered) {
           <span class="text-muted">@${formatCurrency(sale.unitPrice)} each</span>
         </div>
         <div class="d-flex gap-2 mt-3">
-          <button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>
-          <button class="btn btn-outline-secondary btn-sm sale-delete-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-trash"></i> Delete</button>
+          ` + (isStaffView() ? "" : `<button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>`) + `
+          ` + (isStaffView() ? "" : `<button class="btn btn-outline-secondary btn-sm sale-delete-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-trash"></i> Delete</button>`) + `
           <button class="btn btn-outline-secondary btn-sm sale-print-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-printer"></i> Receipt</button>
         </div>
       </div>
@@ -1239,7 +1239,7 @@ function openEditSaleModal(sale) {
                   <label class="form-label" for="editSaleUnitPrice">Selling price (KSh) *</label>
                   <input type="number" min="0" step="0.01" id="editSaleUnitPrice" class="form-control" value="${Number(sale.unitPrice) || 0}">
                   <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
-          <div class="col-12 col-lg-6">
+          <div class="col-12 col-lg-6"${isStaffView() ? ' style="display:none"' : ""}>
             <label class="form-label" for="saleDate">Sale date (optional)</label>
             <input type="date" id="saleDate" class="form-control">
             <div class="small text-muted mt-1">Leave blank for today. Admin only.</div>
