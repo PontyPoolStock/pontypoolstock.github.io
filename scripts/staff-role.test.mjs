@@ -123,4 +123,19 @@ assert.equal(staffBlocked("admin", "POST", "products", "").blocked, false,
 assert.equal(staffBlocked("admin", "POST", "resellerPurchases", "").blocked, false,
   "admins retain shop-purchase management");
 
+sessionStorage.setItem("currentUser", JSON.stringify({ role: "admin" }));
+await loadProducts();
+assert.ok(document.getElementById("addProductBtn"), "admins retain the add product action");
+assert.ok(
+  document.querySelector("#productsTableContainer .edit-btn, #productsTableContainer .delete-btn"),
+  "admins retain product row actions",
+);
+await loadResellerPurchases();
+assert.ok(document.getElementById("resellerPurchaseForm"),
+  "admins retain the shop-purchase form");
+assert.ok(
+  document.querySelector("#resellerTableContainer .reseller-edit, #resellerTableContainer .reseller-delete"),
+  "admins retain shop-purchase row actions",
+);
+
 console.log("Staff permissions test passed.");
