@@ -2,7 +2,7 @@ import renderTable from "../components/table.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { fetchData, postData, updateData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
 import { getModal } from "../components/modal.js";
-import { escapeHtml, getProductDisplayName, debounce, isNotStockedProduct } from "../utils/helpers.js";
+import { escapeHtml, getProductDisplayName, debounce, isNotStockedProduct, getProductVariants, getVariantsTotalQuantity } from "../utils/helpers.js";
 import { showToast } from "../components/toast.js";
 
 let adjustments = [];
