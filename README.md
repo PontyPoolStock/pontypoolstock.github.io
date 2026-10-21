@@ -220,10 +220,11 @@ Everything is stored in the Neon project, so the same data appears on every devi
 neon link                     # once: link this folder to the Neon project
 neon env pull                 # refresh DATABASE_URL in .env.local
 npm run db:check              # verify the connection and print row counts
-neon deploy --env .env.local  # ship changes to hello.ts / neon.ts
+neon deploy --env .env.local  # deploy changes to hello.ts / neon.ts (requires Neon CLI authentication)
 ```
 
 - `.env.local` and `.neon` are git-ignored — never commit them.
+- Deploying a function requires the Neon CLI to authenticate to Neon's control plane (for example, with a locally configured `NEON_API_KEY`). This key authorizes the deployment; it is not used by `hello.ts` to connect to Postgres. The running function receives `DATABASE_URL` from Neon.
 - Neon injects `DATABASE_URL` into the function, so the deployed API always talks to the branch it was deployed to.
 - The function only answers requests from known origins (`DEFAULT_ALLOWED_ORIGINS` in `hello.ts` — localhost plus the hosted domain) and echoes `Access-Control-Allow-Origin` back for them, which is why a hosted page can call it from a different domain.
 - `data/db.json` is only an offline sample for `npm run server`; it is not the live database.
@@ -398,31 +399,32 @@ The app records every sale in Neon as a `sales` row (product, price, quantity, `
 and a matching stock movement. A return or void **reverses the stock** and **reverses the
 sale**, all inside one transaction, so stock and revenue can never disagree.
 
-### Receiving (print-and-send) flow
+### Receipt printing
 
 1. Point-of-sale operator selects the items and enters the sale price.
 2. The sale is recorded in `POST /sales`. The API deducts stock + writes the `sales` row
    in one transaction.
-3. A receipt is printed from the register terminal and the sale is complete.
+3. After a successful sale, the browser automatically opens its native print dialog
+   with the selected branch's receipt template, logo, date, item quantities, unit prices,
+   line amounts, and total. Choose the register's thermal printer in the browser dialog.
 4. If the customer returns an item, the till restores the stock and a `SALE_EDITED` entry
    is written (see `PUT /sales/:id`); the original stock movement is reversed first.
 
-### Receipt printer configuration
+### Receipt printer notes
 
-The thermal printer is a shared register device; the app does **not** print receipts itself —
-it relies on the register's print driver/listener after a sale lands.
+The browser's normal print API cannot silently print without an administrator-configured
+kiosk policy or a local print service, so this workflow uses the browser's native print
+dialog and needs no extra printing software. Set the printer's paper width to 80 mm and
+disable browser headers/footers in the print dialog if they are enabled.
 
-1. **Hardware / driver** — Install the manufacturer's ESC/POS (Epson) or RPL (Star) driver.
-   A Linux network/USB receipt printer with a raw socket is common.
-2. **Connection** — Give the register PC a static IP (or USB) and a shared raw print queue
-   (e.g. `\\print-server\pos-receipts` or `unix://dev/usb/lp0`).
-3. **Test print** — Send a small raw string to the queue to confirm the paper/tractor feed.
-4. **Queue note** — The app only writes the sale; it hands off to the queue. If you ever want
-   the app itself to print (e.g. mobile tablets or a non-register browser), add a print
-   endpoint that renders a receipt from `GET /sales/:id` into the same raw format.
-5. **Return reason** — Stock adjustments default to `Manual adjustment`; use `incorrect sale`
+The optional `npm run print` local agent remains available for a register that already
+uses it, but it is not required by the normal browser print flow.
+
+1. **Printer driver** — Configure the thermal printer in the operating system and choose
+   it in the browser print dialog.
+2. **Return reason** — Stock adjustments default to `Manual adjustment`; use `incorrect sale`
    or `customer return` where the reason matters so the activity log stays clear.
-6. **Runbook** — Keep a short note near the register: `DB check = npm run db:check`, `logs =
+3. **Runbook** — Keep a short note near the register: `DB check = npm run db:check`, `logs =
    neon logs <branch>`, and the function URL `https://br-blue-base-b451rqwn-api...` for the
    on-call staff.
 

@@ -24,7 +24,7 @@ import {
 } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
-import { getSavedBranch, BRANCHES, saveBranch, getSavedPrintAgentUrl } from "../config.js";
+import { getSavedBranch, BRANCHES, saveBranch } from "../config.js";
 
 let sales = [];
 let products = [];
@@ -44,7 +44,7 @@ let saleCategoryFilter = "";
 //* Last successfully recorded sale — kept so the till can reprint its receipt
 //* without recording a new sale (a failed print must not force a duplicate).
 let lastRecordedSale = null;
-//* id of the sale whose receipt was last sent to the print agent — blocks
+//* id of the sale whose receipt was last opened for printing — blocks
 //* double prints when Record Sale is clicked twice or a request is retried.
 let lastPrintedSaleId = null;
 
@@ -923,22 +923,23 @@ async function handleRecordSale(event) {
   renderSalesPage();
 
   const recordedTotal = recorded.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+  if (recorded.length) {
+    lastRecordedSale = toCombinedReceipt(recorded);
+    lastPrintedSaleId = null;
+    printReceipt(lastRecordedSale).catch((error) => {
+      showToast(`Sale recorded — ${describePrintFailure(error)} Press Reprint to try again.`, "warning", { title: "Print check" });
+    });
+  }
+
   if (!failed.length) {
     //* One receipt for the whole basket — all lines + one total + one barcode.
-    //* No confirm, no dialog, no popup: it fires by itself on Record Sale.
-    lastRecordedSale = toCombinedReceipt(recorded);
-    lastPrintedSaleId = null; //* allow printing the new sale (dedup reset)
+    //* One combined receipt is printed after all lines are recorded.
     const message =
       recorded.length === 1
         ? `Sale recorded: ${recorded[0].quantity} × ${recorded[0].productName || "product"} — ${formatCurrency(recordedTotal)}`
         : `${recorded.length} sales recorded — ${formatCurrency(recordedTotal)}`;
     showSaleFormMessage(message, "success");
     showToast(message, "success");
-    //* Silent auto-print: no confirm, no dialog. Fire-and-forget so the till
-    //* never waits — a failed print only shows a small Reprint hint, never blocks.
-    printReceipt(lastRecordedSale).catch((error) => {
-      showToast(`Sale recorded — ${describePrintFailure(error)} Press Reprint to try again.`, "warning", { title: "Print check" });
-    });
     return;
   }
 
@@ -952,93 +953,74 @@ async function handleRecordSale(event) {
 
 //* ── Receipt printing ────────────────────────────────────────────────────────
 
-//* Render a black-and-white receipt for one sale, formatted for thermal
-//* receipt paper (~80mm wide). No logo, no decimals, no Change line — just
-//* the branch header, date, items, and totals.
+//* Render one branch-specific receipt using the supplied design and the
+//* recorded sale snapshot.
 function renderReceiptHtml(sale, branch) {
   const soldAt = new Date(sale.soldAt || sale.createdAt || Date.now());
-  const dateStr = soldAt.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-  const timeStr = soldAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const isDuruma = branch === 'Duruma Road';
-  const phone = isDuruma ? '0712255416' : '0790225572';
-  const barcodeHeight = isDuruma ? '17mm' : '12mm';
-  const total = Number(sale.total) || (saleCartSnapshot(sale).reduce((s,l)=>s+l.lineTotal,0));
-  const formattedTotal = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dateStr = soldAt.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
+  const timeStr = soldAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const isDuruma = branch === "Duruma Road";
+  const phone = isDuruma ? "0712255416" : "0790225572";
+  const barcodeHeight = isDuruma ? "17mm" : "12mm";
+  const lines = Array.isArray(sale.lines) && sale.lines.length ? sale.lines : saleCartSnapshot(sale);
+  const total = Number(sale.total) || lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
+  const formattedTotal = total.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const itemRows = lines.map((line) => {
+    const quantity = Number(line.qty) || 0;
+    const unitPrice = Number(line.unitPrice) || 0;
+    const lineTotal = Number(line.lineTotal) || quantity * unitPrice;
+    return `<tr>
+      <td>${escapeHtml(line.name || "Product")}<small>KSH ${unitPrice.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</small></td>
+      <td>${quantity}</td>
+      <td>KSH ${lineTotal.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+    </tr>`;
+  }).join("");
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PontyPool Receipts</title>
-</head>
-<body style="margin:0; background:white; color:black;">
-
-  <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" style="position:absolute; overflow:hidden;">
-    <defs>
-      <symbol id="logo" viewBox="0 0 620 180">
-        <g fill="none" stroke="black" stroke-width="4">
-          <path d="M101 66 V55 A46 46 0 0 1 193 55 V87"/>
-          <path d="M91 69 H112 M91 75 H112 M91 81 H112"/>
-          <path d="M81 103 A24 24 0 1 0 124 103" stroke-width="9"/>
-        </g>
-        <g fill="black">
-          <circle cx="91" cy="94" r="4"/>
-          <circle cx="102" cy="89" r="4"/>
-          <circle cx="113" cy="94" r="4"/>
-          <text x="8" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700">P</text>
-          <text x="137" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700" textLength="470" lengthAdjust="spacingAndGlyphs">NTYPOOL</text>
-          <rect x="20" y="155" width="172" height="19"/>
-          <text x="202" y="174" font-family="Arial, sans-serif" font-size="27" textLength="401" lengthAdjust="spacingAndGlyphs">Electricals &amp; Lighting</text>
-        </g>
-      </symbol>
-      <pattern id="bars" width="91" height="100" patternUnits="userSpaceOnUse">
-        <path d="M2 0V100 M17 0V100 M38 0V100 M53 0V100 M78 0V100" stroke="black" stroke-width="2"/>
-        <path d="M9 0V100 M29 0V100 M65 0V100 M87 0V100" stroke="black" stroke-width="5"/>
-      </pattern>
-      <symbol id="barcode" viewBox="0 0 364 100">
-        <rect width="364" height="100" fill="url(#bars)"/>
-      </symbol>
-    </defs>
-  </svg>
-
-  <article style="box-sizing:border-box; width:72mm; margin:4mm auto; padding:4mm 0; font-family:'Times New Roman',serif; font-size:12pt; text-align:center; line-height:1.25; break-after:page; page-break-after:always;">
-
-    <svg role="img" aria-label="PontyPool Electricals and Lighting" style="display:block; width:62mm; height:18mm; margin:0 auto 4mm;">
-      <use href="#logo"/>
+  return `<div class="receipt-print">
+    <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" class="receipt-art">
+      <defs>
+        <symbol id="receipt-logo" viewBox="0 0 620 180">
+          <g fill="none" stroke="black" stroke-width="4">
+            <path d="M101 66 V55 A46 46 0 0 1 193 55 V87"/>
+            <path d="M91 69 H112 M91 75 H112 M91 81 H112"/>
+            <path d="M81 103 A24 24 0 1 0 124 103" stroke-width="9"/>
+          </g>
+          <g fill="black">
+            <circle cx="91" cy="94" r="4"/><circle cx="102" cy="89" r="4"/><circle cx="113" cy="94" r="4"/>
+            <text x="8" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700">P</text>
+            <text x="137" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700" textLength="470" lengthAdjust="spacingAndGlyphs">NTYPOOL</text>
+            <rect x="20" y="155" width="172" height="19"/>
+            <text x="202" y="174" font-family="Arial, sans-serif" font-size="27" textLength="401" lengthAdjust="spacingAndGlyphs">Electricals &amp; Lighting</text>
+          </g>
+        </symbol>
+        <pattern id="receipt-bars" width="91" height="100" patternUnits="userSpaceOnUse">
+          <path d="M2 0V100 M17 0V100 M38 0V100 M53 0V100 M78 0V100" stroke="black" stroke-width="2"/>
+          <path d="M9 0V100 M29 0V100 M65 0V100 M87 0V100" stroke="black" stroke-width="5"/>
+        </pattern>
+        <symbol id="receipt-barcode" viewBox="0 0 364 100">
+          <rect width="364" height="100" fill="url(#receipt-bars)"/>
+        </symbol>
+      </defs>
     </svg>
-
-    <div style="border-top:1px dashed black; padding:5mm 0 2mm;">
-      Dealers in Electrical Accessories, Lighting Fixtures &amp;<br>
-      Solar Accessories.
-    </div>
-
-    <div style="border-top:1px dashed black; padding-top:1mm;">
-      <div style="font-size:14pt; letter-spacing:0.4px;">
-        PontyPool Enterprises Limited
+    <article class="receipt-paper">
+      <svg role="img" aria-label="PontyPool Electricals and Lighting" class="receipt-logo"><use href="#receipt-logo"/></svg>
+      <div class="receipt-tagline">Dealers in Electrical Accessories, Lighting Fixtures &amp;<br>Solar Accessories.</div>
+      <div class="receipt-company">
+        <div class="receipt-company-name">PontyPool Enterprises Limited</div>
+        <div>${escapeHtml(branch)}</div>
+        <div>${phone}</div>
       </div>
-      <div style="margin-top:1mm;">${escapeHtml(branch)}</div>
-      <div style="margin:1mm 0 2mm;">${escapeHtml(phone)}</div>
-    </div>
-
-    <div style="border-top:3px double black; padding:1mm 0 2mm;">
-      ${dateStr}, ${timeStr}
-    </div>
-
-    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed black; padding:2mm 0; font-size:14pt;">
-      <span style="padding-left:20mm;">TOTAL</span>
-      <span>KSH ${formattedTotal}</span>
-    </div>
-
-    <div style="border-top:1px dashed black; border-bottom:3px double black; padding:2mm 0;">
-      <svg role="img" aria-label="Decorative barcode" style="display:block; width:48mm; height:${barcodeHeight}; margin:auto;">
-        <use href="#barcode"/>
-      </svg>
-    </div>
-  </article>
-
-</body>
-</html>`;
+      <div class="receipt-date">${dateStr}, ${timeStr}</div>
+      <table class="receipt-items">
+        <thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+      <div class="receipt-total${isDuruma ? "" : " receipt-total-ambala"}"><span>TOTAL</span><span>KSH ${formattedTotal}</span></div>
+      <div class="receipt-barcode">
+        <svg role="img" aria-label="Decorative barcode" class="receipt-barcode-image" style="height:${barcodeHeight}"><use href="#receipt-barcode"/></svg>
+      </div>
+    </article>
+  </div>`;
 }
 
 //* Build the line-item list for a recorded sale, using the snapshot stored
@@ -1056,34 +1038,27 @@ function saleCartSnapshot(sale) {
   ];
 }
 
-//* Send the receipt to the local print agent — no browser print dialog, no
-//* Ctrl+P, no pop-up. The agent (scripts/print-agent.mjs) runs on the till
-//* desktop and pushes ESC-POS straight to the cable-connected thermal printer.
-//* Returns { ok, branch, saleId, target } on success; throws on failure.
+//* Print through the browser's configured printer. This deliberately uses the
+//* current page rather than opening a popup, so it still works after the sale
+//* request has completed asynchronously.
 async function printReceipt(sale) {
   const branch = getSavedBranch();
   const key = String(sale.receiptNo != null ? sale.receiptNo : sale.id);
   if (lastPrintedSaleId === key) {
-    return { ok: true, branch, saleId: sale.id, target: 'skipped-duplicate' };
+    return { ok: true, branch, saleId: sale.id, target: "skipped-duplicate" };
   }
-  const html = renderReceiptHtml(sale, branch);
-  const win = window.open('', '_blank', 'width=400,height=600');
-  if (!win) { throw new Error('Pop-up blocked — allow pop-ups for this site.'); }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.print();
+  const container = document.getElementById("receipt-print-container");
+  if (!container) throw new Error("Receipt print area is missing from the page.");
+  if (typeof window.print !== "function") throw new Error("This browser does not support printing.");
+  container.innerHTML = renderReceiptHtml(sale, branch);
+  window.print();
   lastPrintedSaleId = key;
-  return { ok: true, branch, saleId: sale.id, target: 'browser' };
+  return { ok: true, branch, saleId: sale.id, target: "browser" };
 }
 //* Turn a print failure into a plain reason: agent not running vs printer error.
 function describePrintFailure(error) {
   const text = String((error && error.message) || error || "");
-  if (!text || error?.name === "AbortError" || /failed to fetch|networkerror|load failed|unreachable/i.test(text)) {
-    return "print agent not reachable (start it on the till with: npm run print).";
-  }
-  return `printer says: ${text}.`;
+  return text || "browser print dialog could not be opened.";
 }
 
 //* Reprint the receipt for the last recorded sale — standalone retry that does

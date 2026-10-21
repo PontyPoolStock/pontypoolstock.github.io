@@ -10,7 +10,7 @@ import assert from "node:assert";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM(
-  '<!doctype html><html><body><h2 id="pageTitle">Dashboard</h2><div id="pageContent"></div></body></html>',
+  '<!doctype html><html><body><h2 id="pageTitle">Dashboard</h2><div id="pageContent"></div><div id="receipt-print-container"></div></body></html>',
   { url: "https://pontypoolstock.github.io/index.html", pretendToBeVisual: true },
 );
 const { window } = dom;
@@ -19,6 +19,8 @@ for (const key of ["window", "document", "localStorage", "sessionStorage", "Even
   globalThis[key] = window[key] ?? window;
 }
 globalThis.window = window;
+let printCount = 0;
+window.print = () => { printCount += 1; };
 
 const categories = [
   { id: "c-bulbs", name: "Bulbs" },
@@ -164,6 +166,14 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(serverSales.length, 2, "server holds both sales");
 assert.strictEqual(lines().length, 0, "basket emptied after a clean record");
+assert.strictEqual(printCount, 1, "successful Record Sale opens the native print dialog once");
+const receipt = document.getElementById("receipt-print-container").textContent;
+assert.match(receipt, /PontyPool Enterprises Limited/, "receipt uses the supplied company layout");
+assert.match(receipt, /Ambala Road/, "receipt uses the selected branch");
+assert.match(receipt, /A60 Bulb/, "receipt includes the first sold item");
+assert.match(receipt, /G95 Bulb/, "receipt includes the second sold item");
+assert.match(receipt, /KSH 200\.00/, "receipt includes item line amounts");
+assert.match(receipt, /KSH 350\.00/, "receipt includes the recorded total");
 assert.match(
   document.getElementById("saleFormAlert")?.textContent || "",
   /2 sales recorded/,
@@ -179,12 +189,34 @@ pickProduct("p1");
 setField("saleQuantity", 1);
 setField("saleUnitPrice", 100);
 document.getElementById("addSaleLineBtn").click();
-assert.strictEqual(lines().length, 1, "line staged for the partial-failure case");
+pickCategory("c-cable");
+pickProduct("p2");
+setField("saleQuantity", 1);
+setField("saleUnitPrice", 50);
+document.getElementById("addSaleLineBtn").click();
+assert.strictEqual(lines().length, 2, "lines staged for the partial-failure case");
 
 const realFetch = globalThis.fetch;
 globalThis.fetch = window.fetch = async (url, opts = {}) => {
   if ((opts.method || "GET") === "POST" && String(url).endsWith("/sales")) {
-    posts.push(JSON.parse(opts.body));
+    const body = JSON.parse(opts.body);
+    posts.push(body);
+    if (body.productId === "p1") {
+      const sale = {
+        id: 3,
+        productId: body.productId,
+        productName: "A60 Bulb",
+        quantity: body.quantity,
+        unitPrice: body.unitPrice,
+        total: body.quantity * body.unitPrice,
+        soldAt: new Date().toISOString(),
+      };
+      serverSales = [sale];
+      return new Response(JSON.stringify(sale), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     return new Response(JSON.stringify({ error: "Not enough stock" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -194,7 +226,14 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
 };
 submit();
 await settle(120);
+assert.strictEqual(posts.length, 2, "both lines attempted in the partial-failure case");
 assert.strictEqual(lines().length, 1, "refused line kept in the basket");
+assert.match(lines()[0].textContent, /G95 Bulb/, "only the refused line remains staged");
+assert.strictEqual(printCount, 2, "partial success also opens one receipt");
+const partialReceipt = document.getElementById("receipt-print-container").textContent;
+assert.match(partialReceipt, /A60 Bulb/, "partial receipt includes the accepted sale");
+assert.doesNotMatch(partialReceipt, /G95 Bulb/, "partial receipt excludes the refused line");
+assert.match(partialReceipt, /KSH 100\.00/, "partial receipt total matches accepted sales");
 assert.match(
   document.getElementById("saleFormAlert")?.textContent || "",
   /Not enough stock/,
