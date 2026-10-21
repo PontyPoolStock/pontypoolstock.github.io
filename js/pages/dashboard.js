@@ -134,6 +134,14 @@ function renderDashboard(adjustments, sales) {
     ${alertHtml}
     ${statsHtml}
     ${renderDashboardPeriodSummary(adjustments, sales)}
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="bg-white rounded border p-4 dashboard-panel page-panel">
+          <h6 class="fw-bold mb-3"><i class="bi bi-speedometer2 me-1"></i> Stock Movement Analysis</h6>
+          ${movementHtml}
+        </div>
+      </div>
+    </div>
     <div class="row g-3 dashboard-panels">
       <div class="col-12 col-xl-6">
         <div class="bg-white rounded border p-4 h-100 dashboard-panel page-panel">
@@ -149,16 +157,9 @@ function renderDashboard(adjustments, sales) {
       <div class="col-12 col-xl-6">
         <div class="bg-white rounded border p-4 h-100 dashboard-panel page-panel">
           <h6 class="fw-bold mb-3">Recent Activity</h6>
-        <div id="dashRecentActivity" class="dashboard-activity-list">
-          ${activityHtml}
-        </div>
-      </div>
-    </div>
-    <div class="row g-3 mb-4">
-      <div class="col-12">
-        <div class="bg-white rounded border p-4 dashboard-panel page-panel">
-          <h6 class="fw-bold mb-3"><i class="bi bi-speedometer2 me-1"></i> Stock Movement Analysis</h6>
-          ${movementHtml}
+          <div id="dashRecentActivity" class="dashboard-activity-list">
+            ${activityHtml}
+          </div>
         </div>
       </div>
     </div>
