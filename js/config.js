@@ -80,38 +80,6 @@ export function saveBranch(branch) {
   }
 }
 
-//* Local silent-print agent running on the till PC.
-export const PRINT_AGENT_STORAGE_KEY = "pontypool_print_agent_url";
-export const DEFAULT_PRINT_AGENT_URL = "http://127.0.0.1:5501";
-
-export function getSavedPrintAgentUrl() {
-  if (typeof localStorage !== "undefined") {
-    try {
-      const value = localStorage.getItem(PRINT_AGENT_STORAGE_KEY);
-      if (value) {
-        const parsed = new URL(value);
-        if (parsed.hostname === "localhost") parsed.hostname = "127.0.0.1";
-        return parsed.href.replace(/\/$/, "");
-      }
-    } catch {}
-  }
-  return DEFAULT_PRINT_AGENT_URL;
-}
-
-export function savePrintAgentUrl(url) {
-  const value = String(url || "").trim();
-  if (!value) return DEFAULT_PRINT_AGENT_URL;
-  try { new URL(value); } catch { return DEFAULT_PRINT_AGENT_URL; }
-  if (typeof localStorage !== "undefined") {
-    try { localStorage.setItem(PRINT_AGENT_STORAGE_KEY, value); } catch {}
-  }
-  if (typeof window !== "undefined") {
-    window.__PONTYPOOL_CONFIG__ = window.__PONTYPOOL_CONFIG__ || {};
-    window.__PONTYPOOL_CONFIG__.printAgentUrl = value;
-  }
-  return value;
-}
-
 //* How long before its real end a token counts as already gone, so a request is
 //* never fired with a token that expires mid-flight.
 export const AUTH_TOKEN_SKEW_MS = 60 * 1000;

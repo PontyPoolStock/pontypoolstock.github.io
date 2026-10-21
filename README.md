@@ -405,19 +405,17 @@ sale**, all inside one transaction, so stock and revenue can never disagree.
    prefilled (editable) **Sold by** name. That name is saved on every line in the basket.
 2. The sale is recorded in `POST /sales`. The API deducts stock + writes the `sales` row
    in one transaction.
-3. After a successful sale, the till's local print agent sends the selected branch's
-   receipt (logo, date, actual item quantities, prices, and total) directly to its
-   configured Windows printer without opening a browser preview.
+3. After a successful sale, the browser opens its native print dialog with the selected
+   branch's receipt (logo, date, actual item quantities, prices, and total). Confirm
+   printing there to send it to the till's configured printer.
 4. If the customer returns an item, the till restores the stock and a `SALE_EDITED` entry
    is written (see `PUT /sales/:id`); the original stock movement is reversed first.
 
 ### Receipt printer notes
 
-Direct printing requires the app's included local print agent on the till PC. It uses
-the existing Windows printer configuration and does not require extra printer software.
-Start it from a copy of this project on the till PC with `npm run print` and leave its
-console running while using the till. The agent defaults to the Windows default printer;
-set `PRINTER_NAME` if needed.
+The browser print dialog uses the printer configured on the till PC and requires no
+separate local print agent. Set the paper width to 80 mm and turn off browser headers
+and footers if they are enabled.
 
 1. **Printer driver** — Configure the thermal printer as the Windows default printer.
 2. **Return reason** — Stock adjustments default to `Manual adjustment`; use `incorrect sale`
