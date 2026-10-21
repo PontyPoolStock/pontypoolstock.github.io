@@ -185,6 +185,12 @@ assert.match(receipt, /A60 Bulb/, "receipt includes the first sold item");
 assert.match(receipt, /G95 Bulb/, "receipt includes the second sold item");
 assert.match(receipt, /KSH 200\.00/, "receipt includes item line amounts");
 assert.match(receipt, /KSH 350\.00/, "receipt includes the combined sale total");
+window.dispatchEvent(new window.Event("afterprint"));
+assert.equal(
+  document.getElementById("receipt-print-container").innerHTML,
+  "",
+  "receipt preview is cleared after printing finishes",
+);
 assert.ok(posts.every((post) => post.soldBy === "Jane Cashier"),
   "each sale row is submitted with the entered seller name");
 assert.match(
@@ -247,6 +253,12 @@ const partialReceipt = document.getElementById("receipt-print-container").textCo
 assert.match(partialReceipt, /A60 Bulb/, "partial receipt includes the accepted sale");
 assert.doesNotMatch(partialReceipt, /G95 Bulb/, "partial receipt excludes the refused line");
 assert.match(partialReceipt, /KSH 100\.00/, "partial receipt total matches accepted sales");
+window.dispatchEvent(new window.Event("afterprint"));
+assert.equal(
+  document.getElementById("receipt-print-container").innerHTML,
+  "",
+  "partial-sale receipt preview is cleared after printing finishes",
+);
 assert.match(
   document.getElementById("saleFormAlert")?.textContent || "",
   /Not enough stock/,

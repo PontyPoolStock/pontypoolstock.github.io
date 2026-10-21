@@ -70,6 +70,10 @@ main {
   flex-direction: column;
 }
 
+#receipt-print-container {
+  display: none;
+}
+
 .contentContainer {
   flex: 1;
   /* On an ultrawide monitor a full-bleed table stretches so wide the row labels

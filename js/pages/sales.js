@@ -1060,7 +1060,17 @@ async function printReceipt(sale) {
   if (!container) throw new Error("Receipt print area is missing from the page.");
   if (typeof window.print !== "function") throw new Error("This browser does not support printing.");
   container.innerHTML = renderReceiptHtml(sale, branch);
-  window.print();
+  const cleanup = () => {
+    container.innerHTML = "";
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup, { once: true });
+  try {
+    window.print();
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
   lastPrintedSaleId = key;
   return { ok: true, branch, saleId: sale.id, target: "browser" };
 }

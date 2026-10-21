@@ -173,8 +173,8 @@ function readTokenClaims(token: string) {
 
 //* ===== Staff server enforcement ============================================
 //* A staff account may read Products / Categories / Sales / Shop Purchases
-//* (the till needs them) and may record sales. Product, category, and
-//* shop-purchase writes are reserved for admins.
+//* (the till needs them), may record sales, and may add/edit shop purchases.
+//* Product/category writes and shop-purchase deletions are reserved for admins.
 //* Everything else — users, stock adjustments, activity log reads — is
 //* refused here with 403, so even a hand-crafted request cannot reach it.
 type StaffResource = keyof typeof tableNames;
@@ -189,6 +189,10 @@ const STAFF_READ_RESOURCES: ReadonlySet<string> = new Set([
 const STAFF_WRITE_RESOURCES: ReadonlySet<string> = new Set([
   "sales",
   "activityLog",
+]);
+
+const STAFF_EDIT_RESOURCES: ReadonlySet<string> = new Set([
+  "resellerPurchases",
 ]);
 
 async function tokenRole(token: string): Promise<string> {
@@ -225,14 +229,20 @@ export function staffBlocked(
     if (STAFF_READ_RESOURCES.has(resource)) return { blocked: false };
     return { blocked: true, error: "Not available for staff accounts" };
   }
-  if (method === "POST" && !id && STAFF_WRITE_RESOURCES.has(resource)) return { blocked: false };
-  if (method === "PUT" && id && STAFF_WRITE_RESOURCES.has(resource)) return { blocked: false };
+  if (method === "POST" && !id
+    && (STAFF_WRITE_RESOURCES.has(resource) || STAFF_EDIT_RESOURCES.has(resource))) {
+    return { blocked: false };
+  }
+  if (method === "PUT" && id
+    && (STAFF_WRITE_RESOURCES.has(resource) || STAFF_EDIT_RESOURCES.has(resource))) {
+    return { blocked: false };
+  }
   if (method === "DELETE" && id && STAFF_WRITE_RESOURCES.has(resource)) return { blocked: false };
   return { blocked: true, error: "Not available for staff accounts" };
 }
 
-//* Staff can view products and shop purchases, but only administrators can
-//* create, edit, or delete those records.
+//* Staff can record and edit shop purchases, but only administrators can
+//* delete them. Product writes remain administrator-only.
 
 function getRoute(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
