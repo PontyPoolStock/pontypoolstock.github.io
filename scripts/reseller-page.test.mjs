@@ -20,6 +20,7 @@ for (const key of ["window", "document", "localStorage", "sessionStorage", "Even
   globalThis[key] = window[key] ?? window;
 }
 globalThis.window = window;
+sessionStorage.setItem("currentUser", JSON.stringify({ role: "admin" }));
 
 //* On-order product (Glass Panels) + one recorded purchase, mirroring the
 //* live production data the API was seeded with.

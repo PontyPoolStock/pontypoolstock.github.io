@@ -3303,13 +3303,24 @@ html[data-role="staff"] .nav-item[data-page="Activity Log"] {
     width: 100%;
     border-collapse: collapse;
     border-top: 1px dashed #000;
-    font-size: 10pt;
+    font-size: 11pt;
+    line-height: 1.3;
     text-align: left;
   }
 
   .receipt-items th,
   .receipt-items td {
-    padding: 1.5mm 0;
+    padding: 2mm 0;
+  }
+
+  .receipt-items th {
+    border-bottom: 1px dashed #000;
+    font-weight: 700;
+  }
+
+  .receipt-items td:first-child {
+    font-weight: 700;
+    overflow-wrap: anywhere;
   }
 
   .receipt-items th:not(:first-child),
@@ -3318,9 +3329,14 @@ html[data-role="staff"] .nav-item[data-page="Activity Log"] {
     white-space: nowrap;
   }
 
+  .receipt-items td:last-child {
+    font-weight: 700;
+  }
+
   .receipt-items small {
     display: block;
-    font-size: 8pt;
+    font-size: 9pt;
+    font-weight: 400;
   }
 
   .receipt-total {
@@ -3329,7 +3345,8 @@ html[data-role="staff"] .nav-item[data-page="Activity Log"] {
     align-items: center;
     border-top: 1px dashed #000;
     padding: 2mm 0;
-    font-size: 14pt;
+    font-size: 16pt;
+    font-weight: 700;
   }
 
   .receipt-total-ambala {

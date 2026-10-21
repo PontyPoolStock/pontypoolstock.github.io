@@ -33,6 +33,7 @@ This system helps teams track inventory, manage categories, monitor stock levels
 - 📊 **Statistics** — View sales, inventory value, stock health, and movement summaries
 - 🛒 **Record Sale** — Pick a category to narrow the product list, add as many lines as you like to the sale basket (mixing categories freely), then record them all in one click; stock, sales totals, and the activity log update together
 - 🛍️ **Shop Purchases** — Record what you bought from other shops to sell on (On-order products only): quantity bought + buy price each; reseller stock (bought minus sold) stays fully separate from your own stock, with its own section in Statistics showing bought units, spent, sales, stock left, and profit
+- 🔐 **Staff access** — Staff can view products and shop purchases and record sales, but only administrators can add, edit, or delete products and shop-purchase records
 - ✏️ **Edit Sale** — Correct a mis-keyed sale (product, rating, quantity, price); the original stock is returned and re-deducted atomically
 - 🗑️ **Delete Sale** — Void a sale outright; the units it consumed are returned to the same rating in the same transaction, so revenue and stock never drift apart
 - 🔄 **Stock Adjustments** — Increase or decrease quantities with reason tracking (no sales revenue)

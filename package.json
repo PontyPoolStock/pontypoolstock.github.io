@@ -5,7 +5,7 @@
   "description": "A responsive stock management application for products, categories, and inventory.",
   "main": "index.js",
   "scripts": {
-    "test": "node scripts/api-cache.test.mjs && node scripts/sales-delete.test.mjs && node scripts/sales-bulk.test.mjs && node scripts/notstocked-fields.test.mjs && node scripts/reseller-purchases.test.mjs && node scripts/reseller-page.test.mjs",
+    "test": "node scripts/api-cache.test.mjs && node --experimental-strip-types scripts/staff-role.test.mjs && node scripts/sales-delete.test.mjs && node scripts/sales-bulk.test.mjs && node scripts/notstocked-fields.test.mjs && node scripts/reseller-purchases.test.mjs && node scripts/reseller-page.test.mjs",
     "serve": "node scripts/static-server.mjs",
     "share": "npx --yes localtunnel --port 5500 --subdomain pontypool",
     "server": "json-server --watch data/db.json --port 3000",
@@ -13,10 +13,6 @@
     "db:schema": "node scripts/migrate-schema.mjs",
     "db:seed-staff": "node scripts/seed-staff.mjs",
     "db:migrate": "node scripts/migrate-db-json-to-neon.mjs",
-    "print": "node scripts/print-agent.mjs",
-    "print:windows": "node scripts/print-agent.mjs",
-    "print:autostart": "powershell -ExecutionPolicy Bypass -File scripts/install-autostart.ps1",
-    "print:autostart:remove": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-autostart.ps1",
     "till": "node scripts/static-server.mjs"
   },
   "repository": {

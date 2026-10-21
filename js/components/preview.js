@@ -226,13 +226,14 @@ function productCardHtml(product, categories) {
 
       <div class="mt-3">${ratingsHtml(product, variants, unit)}</div>
     `,
+    !isStaffView(),
   );
 }
 
 //* One line per rating: what it is, what it costs, how much is left and whether
 //* that is enough — the same status logic the Products table and filter use.
 //* The shared modal shell for both cards
-function cardShell(modalId, icon, title, actionLabel, bodyHtml) {
+function cardShell(modalId, icon, title, actionLabel, bodyHtml, showEdit = true) {
   return `
     <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Title" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
@@ -245,9 +246,9 @@ function cardShell(modalId, icon, title, actionLabel, bodyHtml) {
           </div>
           <div class="modal-body">${bodyHtml}</div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-primary" data-preview-edit>
+            ${showEdit ? `<button type="button" class="btn btn-primary" data-preview-edit>
               <i class="bi bi-pencil"></i> ${actionLabel}
-            </button>
+            </button>` : ""}
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
           </div>
         </div>

@@ -12,6 +12,7 @@ import {
 import { getModal } from "../components/modal.js";
 import { openProductPreview } from "../components/preview.js";
 import { showToast, confirmAction } from "../components/toast.js";
+import { isStaffView } from "../utils/role.js";
 import {
   GetCurrentDate,
   escapeHtml,
@@ -78,7 +79,6 @@ function renderProducts() {
   let categoryOptions = categories
     .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
     .join("");
-  //* Staff manage stock like admin: same Add / edit / delete on this page.
   let html = `
       <div class="mb-3 p-3 bg-white rounded border">
       <div class="d-flex align-items-center gap-2 flex-wrap page-filter-bar">
@@ -95,9 +95,9 @@ function renderProducts() {
           <option value="low">Low Stock</option>
           <option value="out">Out of Stock</option>
         </select>
-        <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addProductBtn">
+        ${isStaffView() ? "" : `<button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addProductBtn">
           <i class="bi bi-plus-lg"></i> Add Product
-        </button>
+        </button>`}
       </div>
     </div>
 
@@ -147,8 +147,7 @@ function getTableHtml(filteredProducts = products) {
     "status",
   ];
   return (
-    //^ Staff get the same ACTIONS column as admin: edit + delete on every row.
-    renderTable(tableData, columns, true)
+    renderTable(tableData, columns, !isStaffView())
     + renderPagination(filteredProducts.length, currentPage, PAGE_SIZE)
   );
 }
@@ -267,6 +266,7 @@ function filterProducts() {
 
 //* ADD
 function handleAdd() {
+  if (isStaffView()) return;
   getModal("products", "Add", "", async () => {
     await loadData();
     lastFiltered = [...products];
@@ -286,6 +286,7 @@ function previewRow(row) {
 //* UPDATE — reuse the cached row for an instant modal; the preview image fills
 //* from the image cache and the save itself goes out optimistically.
 function handleEdit(id) {
+  if (isStaffView()) return;
   const cached = products.find((e) => String(e.id) === String(id));
   getModal("products", "Edit", id, async () => {
     await loadData();
@@ -299,6 +300,7 @@ function handleEdit(id) {
 //* toasted either way: a failure with no visible feedback reads as a dead
 //* button, which is how "delete does nothing" bugs go unnoticed.
 async function handleDelete(id) {
+  if (isStaffView()) return;
   let p = products.find((e) => e.id == id);
   if (!p) return;
 

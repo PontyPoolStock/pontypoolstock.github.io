@@ -6,7 +6,7 @@ import { fetchData, postData, updateData, deleteData, hydrateEntityImages, PRODU
 //* executes this module in jsdom so that failure mode can't ship again.
 import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml } from "../utils/helpers.js";
 import { showToast, confirmAction } from "../components/toast.js";
-import { getCurrentUser } from "../pages/login.js";
+import { isStaffView } from "../utils/role.js";
 
 let purchases = [];
 let products = [];
@@ -78,6 +78,7 @@ function displayName(p) {
   return "Product";
 }
 function renderPage() {
+  const canManagePurchases = !isStaffView();
   const maps = stockMap();
   let onHand = 0;
   const keys = Object.keys(maps.left);
@@ -109,33 +110,37 @@ function renderPage() {
   html += '<div class="sale-hero-stat"><span>Reseller stock left</span><strong>' + onHand.toLocaleString("en-US") + "</strong></div>";
   html += '<div class="sale-hero-stat"><span>Spent on stock</span><strong>' + formatCurrency(spent) + "</strong></div>";
   html += "</div></section>";
-  html += '<div class="card border-0 shadow-sm mb-3"><div class="card-body">';
-  html += '<form id="resellerPurchaseForm" novalidate><div class="row g-2 align-items-end">';
-  html += '<div class="col-12 col-md-4"><label class="form-label small text-muted" for="resellerProductSelect">Product (On order only)</label>';
-  html += '<select id="resellerProductSelect" class="form-select">' + options + "</select>";
-  html += emptyListHint;
-  html += '<div class="text-danger small errorMes-product"></div>';
-  //* Same "summary pic" as Record Sale — a thumbnail + name card under the
-  //* dropdown so the right product is obvious before money changes hands.
-  html += '<div id="resellerProductPreview" class="sale-product-preview d-none" aria-live="polite"></div></div>';
-  html += '<div class="col-12 col-md-3 d-none" id="resellerVariantWrapper"><label class="form-label small text-muted" for="resellerVariantSelect">Rating</label>';
-  html += '<select id="resellerVariantSelect" class="form-select"></select></div>';
-  html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerQuantity">Qty bought</label>';
-  html += '<input type="number" id="resellerQuantity" class="form-control" min="1" step="1" placeholder="0">';
-  html += '<div class="text-danger small errorMes-quantity"></div></div>';
-html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerUnitCost">Buy price (each)</label>';
-html += '<input type="number" id="resellerUnitCost" class="form-control" min="0" step="0.01" placeholder="0.00">';
-html += '<div class="text-danger small errorMes-unitCost"></div></div>';
-html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerShopName">Shop bought from</label>';
-html += '<input type="text" id="resellerShopName" class="form-control" placeholder="e.g. Duruma Supplies">';
-html += '<div class="text-danger small errorMes-shopName"></div></div>';
-html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerEmployeeName">Who went</label>';
-html += '<input type="text" id="resellerEmployeeName" class="form-control" placeholder="Employee name">';
-html += '<div class="text-danger small errorMes-employeeName"></div></div>';
-html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button>'
-  + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
-  html += '</div><div class="small text-muted mt-2" id="resellerStockHint"></div><div id="resellerFormAlert" class="mt-2"></div>';
-  html += "</form></div></div>";
+  if (canManagePurchases) {
+    html += '<div class="card border-0 shadow-sm mb-3"><div class="card-body">';
+    html += '<form id="resellerPurchaseForm" novalidate><div class="row g-2 align-items-end">';
+    html += '<div class="col-12 col-md-4"><label class="form-label small text-muted" for="resellerProductSelect">Product (On order only)</label>';
+    html += '<select id="resellerProductSelect" class="form-select">' + options + "</select>";
+    html += emptyListHint;
+    html += '<div class="text-danger small errorMes-product"></div>';
+    //* Same "summary pic" as Record Sale — a thumbnail + name card under the
+    //* dropdown so the right product is obvious before money changes hands.
+    html += '<div id="resellerProductPreview" class="sale-product-preview d-none" aria-live="polite"></div></div>';
+    html += '<div class="col-12 col-md-3 d-none" id="resellerVariantWrapper"><label class="form-label small text-muted" for="resellerVariantSelect">Rating</label>';
+    html += '<select id="resellerVariantSelect" class="form-select"></select></div>';
+    html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerQuantity">Qty bought</label>';
+    html += '<input type="number" id="resellerQuantity" class="form-control" min="1" step="1" placeholder="0">';
+    html += '<div class="text-danger small errorMes-quantity"></div></div>';
+    html += '<div class="col-6 col-md-2"><label class="form-label small text-muted" for="resellerUnitCost">Buy price (each)</label>';
+    html += '<input type="number" id="resellerUnitCost" class="form-control" min="0" step="0.01" placeholder="0.00">';
+    html += '<div class="text-danger small errorMes-unitCost"></div></div>';
+    html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerShopName">Shop bought from</label>';
+    html += '<input type="text" id="resellerShopName" class="form-control" placeholder="e.g. Duruma Supplies">';
+    html += '<div class="text-danger small errorMes-shopName"></div></div>';
+    html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerEmployeeName">Who went</label>';
+    html += '<input type="text" id="resellerEmployeeName" class="form-control" placeholder="Employee name">';
+    html += '<div class="text-danger small errorMes-employeeName"></div></div>';
+    html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button>'
+      + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
+    html += '</div><div class="small text-muted mt-2" id="resellerStockHint"></div><div id="resellerFormAlert" class="mt-2"></div>';
+    html += "</form></div></div>";
+  } else {
+    html += '<div class="alert alert-info">Shop purchase records are read-only for staff. Ask an administrator to add, edit, or delete purchases.</div>';
+  }
   html += '<div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">';
   html += '<i class="bi bi-search text-muted d-none d-sm-block"></i>';
   html += '<input type="text" id="searchReseller" placeholder="Search purchases..." class="form-control form-control-sm border-0 shadow-none" style="flex:1; min-width:150px;">';
@@ -172,6 +177,7 @@ function variantLabel(product, index) {
 }
 
 function getTableHtml(list) {
+  const canManagePurchases = !isStaffView();
   const rows = list || lastFiltered;
   const paged = paginateData(rows, currentPage, PAGE_SIZE);
   const maps = stockMap();
@@ -194,16 +200,24 @@ function getTableHtml(list) {
     body += "<td>" + escapeHtml(String(item.shopName || item.shop_name || "—")) + "</td>";
     body += "<td>" + escapeHtml(String(item.employeeName || item.employee_name || "—")) + "</td>";
     body += "<td><span class='status-badge " + badge + "'>" + left + "</span></td>";
-    body += "<td class='text-end'><div class='d-flex gap-1 justify-content-end'>"
-      + "<button class='btn btn-sm btn-outline-primary reseller-edit' data-id='" + item.id + "'>Edit</button>"
-      + "<button class='btn btn-sm btn-outline-danger reseller-delete' data-id='" + item.id + "'>Delete</button>"
-      + "</div></td></tr>";
+    if (canManagePurchases) {
+      body += "<td class='text-end'><div class='d-flex gap-1 justify-content-end'>"
+        + "<button class='btn btn-sm btn-outline-primary reseller-edit' data-id='" + item.id + "'>Edit</button>"
+        + "<button class='btn btn-sm btn-outline-danger reseller-delete' data-id='" + item.id + "'>Delete</button>"
+        + "</div></td></tr>";
+    } else {
+      body += "</tr>";
+    }
   }
   if (!body) {
-    return '<div class="statistics-empty"><span>No shop purchases yet — record what you bought above.</span></div>' + renderPagination(0, 1, PAGE_SIZE);
+    const emptyMessage = canManagePurchases
+      ? "No shop purchases yet — record what you bought above."
+      : "No shop purchases recorded yet.";
+    return '<div class="statistics-empty"><span>' + emptyMessage + "</span></div>" + renderPagination(0, 1, PAGE_SIZE);
   }
   let table = '<div class="table-responsive"><table class="table align-middle mb-0"><thead>';
-  table += "<tr><th>Date</th><th>Product</th><th>Bought</th><th>Buy price</th><th class='text-end'>Total spent</th><th>Shop</th><th>Employee</th><th>Stock left</th><th></th></tr>";
+  table += "<tr><th>Date</th><th>Product</th><th>Bought</th><th>Buy price</th><th class='text-end'>Total spent</th><th>Shop</th><th>Employee</th><th>Stock left</th>"
+    + (canManagePurchases ? "<th></th>" : "") + "</tr>";
   table += "</thead><tbody>" + body + "</tbody></table></div>";
   return table + renderPagination(rows.length, currentPage, PAGE_SIZE);
 }
@@ -219,6 +233,7 @@ function dateOnly(value) {
 //* new purchases, so entering edit mode just swaps the button label and shows
 //* Cancel — handleSave then PUTs the change instead of POSTing a new row.
 function handleEdit(id) {
+  if (isStaffView()) return;
   let item = null;
   for (let i = 0; i < purchases.length; i++) {
     if (String(purchases[i].id) === String(id)) item = purchases[i];
@@ -402,6 +417,7 @@ function paintProductPreview() {
 
 async function handleSave(event) {
   event.preventDefault();
+  if (isStaffView()) return;
   const errs = document.querySelectorAll("#resellerPurchaseForm .errorMes-product, #resellerPurchaseForm .errorMes-quantity, #resellerPurchaseForm .errorMes-unitCost");
   for (let i = 0; i < errs.length; i++) errs[i].textContent = "";
   const alertBox = document.getElementById("resellerFormAlert");
@@ -480,6 +496,7 @@ function filterPurchases() {
 }
 
 async function handleDelete(id) {
+  if (isStaffView()) return;
   let item = null;
   for (let i = 0; i < purchases.length; i++) {
     if (String(purchases[i].id) === String(id)) item = purchases[i];
@@ -518,4 +535,3 @@ async function handleDelete(id) {
   setupEventListeners();
   showToast("Purchase deleted — reseller stock updated.", "success");
 }
-

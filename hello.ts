@@ -173,8 +173,8 @@ function readTokenClaims(token: string) {
 
 //* ===== Staff server enforcement ============================================
 //* A staff account may read Products / Categories / Sales / Shop Purchases
-//* (the till needs them) and fully manage them: record sales AND add / edit /
-//* delete products, categories, sales AND shop purchases — just like admin.
+//* (the till needs them) and may record sales and manage categories. Product
+//* and shop-purchase writes are reserved for admins.
 //* Everything else — users, stock adjustments, activity log reads — is
 //* refused here with 403, so even a hand-crafted request cannot reach it.
 type StaffResource = keyof typeof tableNames;
@@ -188,10 +188,8 @@ const STAFF_READ_RESOURCES: ReadonlySet<string> = new Set([
 
 const STAFF_WRITE_RESOURCES: ReadonlySet<string> = new Set([
   "sales",
-  "products",
   "categories",
   "activityLog",
-  "resellerPurchases",
 ]);
 
 async function tokenRole(token: string): Promise<string> {
@@ -216,7 +214,7 @@ async function tokenUserName(token: string): Promise<string> {
   }
 }
 
-function staffBlocked(
+export function staffBlocked(
   role: string,
   method: string,
   typedResource: StaffResource,
@@ -234,8 +232,8 @@ function staffBlocked(
   return { blocked: true, error: "Not available for staff accounts" };
 }
 
-//* Staff manage shop purchases in full (add / edit / delete), so the buy
-//* price travels both ways — they see the same ledger the form edits.
+//* Staff can view products and shop purchases, but only administrators can
+//* create, edit, or delete those records.
 
 function getRoute(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
