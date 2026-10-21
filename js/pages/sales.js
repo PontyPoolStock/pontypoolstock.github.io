@@ -948,128 +948,13 @@ async function handleRecordSale(event) {
 //* the branch header, date, items, and totals.
 function renderReceiptHtml(sale, branch) {
   const soldAt = new Date(sale.soldAt || sale.createdAt || Date.now());
-  const dateStr = soldAt.toLocaleDateString("en-KE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  const timeStr = soldAt.toLocaleTimeString("en-KE", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const dateStr = soldAt.toLocaleDateString('en-KE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = soldAt.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
   const lines = saleCartSnapshot(sale);
-  const lineHtml = lines
-    .map(
-      (line) => `
-    <div class="receipt-line">
-      <span class="receipt-name">${escapeHtml(line.name)}</span>
-      <span class="receipt-qty">${line.qty}</span>
-      <span class="receipt-price">${formatCurrency(line.unitPrice)}</span>
-      <span class="receipt-total">${formatCurrency(line.lineTotal)}</span>
-    </div>`,
-    )
-    .join("");
+  const lineHtml = lines.map((line) => '<div class="receipt-line"><span class="receipt-name">' + escapeHtml(line.name) + '</span><span class="receipt-qty">' + line.qty + '</span><span class="receipt-price">' + formatCurrency(line.unitPrice) + '</span><span class="receipt-total">' + formatCurrency(line.lineTotal) + '</span></div>').join('');
   const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Receipt — ${sale.id}</title>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body {
-        font-family: "Courier New", monospace;
-        font-size: 12px;
-        width: 320px;
-        margin: 0 auto;
-        color: #000;
-        background: #fff;
-      }
-      .receipt-header {
-        text-align: center;
-        border-bottom: 1px solid #000;
-        padding-bottom: 8px;
-        margin-bottom: 10px;
-      }
-      .receipt-branch {
-        font-weight: bold;
-        font-size: 14px;
-        letter-spacing: 1px;
-      }
-      .receipt-meta {
-        font-size: 11px;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #000;
-        padding-bottom: 6px;
-      }
-      .receipt-meta-row {
-        display: flex;
-        justify-content: space-between;
-        margin: 2px 0;
-      }
-      .receipt-line {
-        display: flex;
-        justify-content: space-between;
-        font-size: 11px;
-        margin: 3px 0;
-      }
-      .receipt-name { flex: 1; }
-      .receipt-qty { width: 30px; text-align: right; }
-      .receipt-price { width: 70px; text-align: right; }
-      .receipt-total { width: 70px; text-align: right; }
-      .receipt-divider { border-bottom: 1px solid #000; margin: 6px 0; }
-      .receipt-totals {
-        font-size: 12px;
-        margin-bottom: 10px;
-        border-top: 1px solid #000;
-        padding-top: 6px;
-      }
-      .receipt-total-row {
-        display: flex;
-        justify-content: space-between;
-        margin: 3px 0;
-      }
-      .receipt-grand { font-weight: bold; font-size: 13px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px; }
-      .receipt-footer {
-        text-align: center;
-        font-size: 10px;
-        margin-top: 12px;
-        border-top: 1px solid #000;
-        padding-top: 6px;
-      }
-      @media print {
-        body { width: 100%; margin: 0; }
-        .no-print { display: none !important; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="receipt-header">
-      <div class="receipt-branch">${escapeHtml(branch)}</div>
-      <div style="font-size:10px">Pontypool Stock Management</div>
-    </div>
-    <div class="receipt-meta">
-      <div class="receipt-meta-row"><span>Sale #</span><span>${escapeHtml(String(sale.id))}</span></div>
-      <div class="receipt-meta-row"><span>Date</span><span>${dateStr}</span></div>
-      <div class="receipt-meta-row"><span>Time</span><span>${timeStr}</span></div>
-    </div>
-    ${lineHtml}
-    <div class="receipt-divider"></div>
-    <div class="receipt-totals">
-      <div class="receipt-total-row"><span>Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
-      <div class="receipt-total-row"><span>Tax</span><span>${formatCurrency(0)}</span></div>
-      <div class="receipt-grand"><span>Total</span><span>${formatCurrency(subtotal)}</span></div>
-    </div>
-    <div class="receipt-footer">
-      Thank you for your business<br />
-      This is a computer-generated receipt
-    </div>
-  </body>
-  </html>`;
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Receipt</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:"Courier New",monospace;font-size:12px;width:320px;margin:0 auto;color:#000;background:#fff;}.receipt-header{text-align:center;border-bottom:1px solid #000;padding-bottom:8px;margin-bottom:10px;}.receipt-branch{font-weight:bold;font-size:14px;letter-spacing:1px;}.receipt-meta{font-size:11px;margin-bottom:10px;border-bottom:1px solid #000;padding-bottom:6px;}.receipt-meta-row{display:flex;justify-content:space-between;margin:2px 0;}.receipt-line{display:flex;justify-content:space-between;font-size:11px;margin:3px 0;}.receipt-name{flex:1;}.receipt-qty{width:30px;text-align:right;}.receipt-price{width:70px;text-align:right;}.receipt-total{width:70px;text-align:right;}.receipt-divider{border-bottom:1px solid #000;margin:6px 0;}.receipt-totals{font-size:12px;margin-bottom:10px;border-top:1px solid #000;padding-top:6px;}.receipt-total-row{display:flex;justify-content:space-between;margin:3px 0;}.receipt-grand{font-weight:bold;font-size:13px;border-top:1px solid #000;padding-top:4px;margin-top:4px;}.receipt-footer{text-align:center;font-size:10px;margin-top:12px;border-top:1px solid #000;padding-top:6px;}@media print{body{width:100%;margin:0;}.no-print{display:none!important;}}</style></head><body><div class="receipt-header"><div class="receipt-branch">' + escapeHtml(branch) + '</div><div style="font-size:10px">Pontypool Stock Management</div></div><div class="receipt-meta"><div class="receipt-meta-row"><span>Sale #</span><span>' + escapeHtml(String(sale.id)) + '</span></div><div class="receipt-meta-row"><span>Date</span><span>' + dateStr + '</span></div><div class="receipt-meta-row"><span>Time</span><span>' + timeStr + '</span></div></div>' + lineHtml + '<div class="receipt-divider"></div><div class="receipt-totals"><div class="receipt-total-row"><span>Subtotal</span><span>' + formatCurrency(subtotal) + '</span></div><div class="receipt-total-row"><span>Tax</span><span>' + formatCurrency(0) + '</span></div><div class="receipt-grand"><span>Total</span><span>' + formatCurrency(subtotal) + '</span></div></div><div class="receipt-footer">Thank you for your business<br />This is a computer-generated receipt</div></body></html>';
 }
-
 //* Build the line-item list for a recorded sale, using the snapshot stored
 //* alongside the sale so reprints match exactly what was sold.
 function saleCartSnapshot(sale) {
@@ -1091,42 +976,21 @@ function saleCartSnapshot(sale) {
 //* Returns { ok, branch, saleId, target } on success; throws on failure.
 async function printReceipt(sale) {
   const branch = getSavedBranch();
-  const printAgentUrl = getSavedPrintAgentUrl();
-
-  //* Dedup: never print the same sale twice, even if Record Sale is clicked
-  //* twice or the request is retried.
   const key = String(sale.receiptNo != null ? sale.receiptNo : sale.id);
   if (lastPrintedSaleId === key) {
-    return { ok: true, branch, saleId: sale.id, target: "skipped-duplicate" };
+    return { ok: true, branch, saleId: sale.id, target: 'skipped-duplicate' };
   }
-
-  const payload = { branch, sale };
-  let lastError;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 4000);
-      let response, result;
-      try {
-        response = await fetch(`${printAgentUrl}/print`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: ctrl.signal,
-        });
-        result = await response.json();
-      } finally { clearTimeout(timer); }
-      if (!response.ok || result.error) throw new Error(result.error || `HTTP ${response.status}`);
-      lastPrintedSaleId = key;
-      return { ok: true, branch, saleId: sale.id, target: result.target || "unknown" };
-    } catch (err) {
-      lastError = err;
-      if (attempt === 1) await new Promise((r) => setTimeout(r, 400));
-    }
-  }
-  throw lastError || new Error("Print agent unreachable — run npm run print on the till.");
+  const html = renderReceiptHtml(sale, branch);
+  const win = window.open('', '_blank', 'width=400,height=600');
+  if (!win) { throw new Error('Pop-up blocked — allow pop-ups for this site.'); }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+  lastPrintedSaleId = key;
+  return { ok: true, branch, saleId: sale.id, target: 'browser' };
 }
-
 //* Turn a print failure into a plain reason: agent not running vs printer error.
 function describePrintFailure(error) {
   const text = String((error && error.message) || error || "");
