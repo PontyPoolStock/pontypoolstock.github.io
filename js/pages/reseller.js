@@ -127,14 +127,15 @@ function renderPage() {
   html += '<input type="number" id="resellerUnitCost" class="form-control" min="0" step="0.01" placeholder="0.00">';
   html += '<div class="text-danger small errorMes-unitCost"></div></div>';
   html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerShopName">Shop bought from</label>';
-  html += '<input type="text" id="resellerShopName" class="form-control" placeholder="e.g. Duruma Supplies">';
+  html += '<input type="text" id="resellerShopName" class="form-control">';
   html += '<div class="text-danger small errorMes-shopName"></div></div>';
-  html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerEmployeeName">Who went</label>';
+  html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerEmployeeName">'
+    + (isStaffView() ? "Employee" : "Who went") + "</label>";
   html += '<input type="text" id="resellerEmployeeName" class="form-control" placeholder="Employee name">';
   html += '<div class="text-danger small errorMes-employeeName"></div></div>';
   html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button>'
     + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
-  html += '</div><div class="small text-muted mt-2" id="resellerStockHint"></div><div id="resellerFormAlert" class="mt-2"></div>';
+  html += '</div><div id="resellerFormAlert" class="mt-2"></div>';
   html += "</form></div></div>";
   html += '<div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">';
   html += '<i class="bi bi-search text-muted d-none d-sm-block"></i>';
@@ -142,7 +143,6 @@ function renderPage() {
   html += '<div id="resellerTableContainer" class="w-100 mt-2">' + getTableHtml() + "</div></div>";
   html += '<div id="searchStats" class="mb-2 small text-muted"></div>';
   document.getElementById("pageContent").innerHTML = html;
-  paintStockHint();
   paintProductPreview();
 }
 
@@ -265,15 +265,10 @@ function handleEdit(id) {
   if (empInput) empInput.value = String(item.employeeName || item.employee_name || "");
   const errs = document.querySelectorAll("#resellerPurchaseForm .errorMes-product, #resellerPurchaseForm .errorMes-quantity, #resellerPurchaseForm .errorMes-unitCost");
   for (let i = 0; i < errs.length; i++) errs[i].textContent = "";
-  const alertBox = document.getElementById("resellerFormAlert");
-  if (alertBox) {
-    alertBox.innerHTML = '<div class="alert alert-info py-2 mb-0">Editing this purchase — press Save to apply the changes, or Cancel to keep it as it is.</div>';
-  }
   const btn = document.getElementById("resellerSaveBtn");
   if (btn) btn.textContent = "Save";
   const cancel = document.getElementById("resellerCancelEdit");
   if (cancel) cancel.classList.remove("d-none");
-  paintStockHint();
   paintProductPreview();
   const form = document.getElementById("resellerPurchaseForm");
   if (form && form.scrollIntoView) form.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -293,7 +288,6 @@ function resetEditState() {
   const alertBox = document.getElementById("resellerFormAlert");
   if (alertBox) alertBox.innerHTML = "";
   fillVariants();
-  paintStockHint();
   paintProductPreview();
 }
 
@@ -301,9 +295,9 @@ function setupEventListeners() {
   const search = document.getElementById("searchReseller");
   if (search) search.addEventListener("input", debounce(filterPurchases, 120));
   const prodSel = document.getElementById("resellerProductSelect");
-  if (prodSel) prodSel.addEventListener("change", function () { fillVariants(); paintStockHint(); paintProductPreview(); });
+  if (prodSel) prodSel.addEventListener("change", function () { fillVariants(); paintProductPreview(); });
   const varSel = document.getElementById("resellerVariantSelect");
-  if (varSel) varSel.addEventListener("change", function () { paintStockHint(); paintProductPreview(); });
+  if (varSel) varSel.addEventListener("change", paintProductPreview);
   const form = document.getElementById("resellerPurchaseForm");
   if (form) form.addEventListener("submit", handleSave);
   const cancel = document.getElementById("resellerCancelEdit");
@@ -351,24 +345,6 @@ function fillVariants() {
   let html = "";
   for (let i = 0; i < list.length; i++) html += '<option value="' + i + '">' + escapeHtml(variantLabel(product, i)) + "</option>";
   sel.innerHTML = html;
-}
-
-function paintStockHint() {
-  const hint = document.getElementById("resellerStockHint");
-  if (!hint) return;
-  const prodSel = document.getElementById("resellerProductSelect");
-  const pid = prodSel ? prodSel.value : "";
-  if (!pid) {
-    hint.textContent = products.length
-      ? "Only products marked as resale products can be bought for resale."
-      : "Mark a product as a resale product first, then record its purchases here.";
-    return;
-  }
-  const varSel = document.getElementById("resellerVariantSelect");
-  const vIdx = varSel && varSel.value !== "" ? varSel.value : "";
-  const maps = stockMap();
-  const k = resellerKey(pid, vIdx);
-  hint.textContent = "Reseller stock: " + (maps.bought[k] || 0) + " bought minus " + (maps.sold[k] || 0) + " sold = " + (maps.left[k] || 0) + " left. Your own stock is untouched.";
 }
 
 //* The "summary pic" under the product dropdown — the same sale-product-preview

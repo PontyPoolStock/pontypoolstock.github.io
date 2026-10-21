@@ -137,6 +137,11 @@ await loadResellerPurchases();
 assert.ok(document.getElementById("resellerPurchaseForm"),
   "staff can add and edit shop purchases");
 assert.equal(
+  document.querySelector('label[for="resellerEmployeeName"]').textContent,
+  "Employee",
+  "staff Shop Purchases form labels the employee field clearly",
+);
+assert.equal(
   document.querySelectorAll("#resellerTableContainer .reseller-edit").length,
   1,
   "staff shop-purchase list has an edit action",
@@ -213,6 +218,11 @@ assert.ok(
 await loadResellerPurchases();
 assert.ok(document.getElementById("resellerPurchaseForm"),
   "admins retain the shop-purchase form");
+assert.equal(
+  document.querySelector('label[for="resellerEmployeeName"]').textContent,
+  "Who went",
+  "admin Shop Purchases form retains its existing employee label",
+);
 assert.ok(
   document.querySelector("#resellerTableContainer .reseller-edit, #resellerTableContainer .reseller-delete"),
   "admins retain shop-purchase row actions",

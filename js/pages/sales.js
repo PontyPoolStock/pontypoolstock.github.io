@@ -860,6 +860,7 @@ function toCombinedReceipt(recorded) {
   return {
     id: last.id,
     receiptNo: String(last.id),
+    soldBy: last.soldBy || last.sold_by || "",
     soldAt: last.soldAt || last.createdAt || new Date().toISOString(),
     total,
     lines: list.map((sale) => ({
@@ -984,42 +985,30 @@ function saleCartSnapshot(sale) {
 //* Render the supplied branch receipt and open the browser's print dialog.
 function renderReceiptHtml(sale, branch) {
   const soldAt = new Date(sale.soldAt || sale.createdAt || Date.now());
-  const dateStr = soldAt.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
-  const timeStr = soldAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const dateStr = soldAt.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+  const timeStr = soldAt.toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true });
   const isDuruma = branch === "Duruma Road";
   const phone = isDuruma ? "0712255416" : "0790225572";
   const barcodeHeight = isDuruma ? "17mm" : "12mm";
   const lines = Array.isArray(sale.lines) && sale.lines.length ? sale.lines : saleCartSnapshot(sale);
   const total = Number(sale.total) || lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
   const formattedTotal = total.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const receiptNo = escapeHtml(String(sale.receiptNo ?? sale.id ?? "-"));
+  const soldBy = String(sale.soldBy || sale.sold_by || "").trim();
   const itemRows = lines.map((line) => {
     const quantity = Number(line.qty) || 0;
     const unitPrice = Number(line.unitPrice) || 0;
     const lineTotal = Number(line.lineTotal) || quantity * unitPrice;
     return `<tr>
-      <td>${escapeHtml(line.name || "Product")}<small>KSH ${unitPrice.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</small></td>
-      <td>${quantity}</td>
-      <td>KSH ${lineTotal.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td class="receipt-item-name">${escapeHtml(line.name || "Product")}<small>KSH ${unitPrice.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</small></td>
+      <td class="receipt-item-qty">${quantity}</td>
+      <td class="receipt-item-amount">KSH ${lineTotal.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     </tr>`;
   }).join("");
 
   return `<div class="receipt-print">
     <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" class="receipt-art">
       <defs>
-        <symbol id="receipt-logo" viewBox="0 0 620 180">
-          <g fill="none" stroke="black" stroke-width="4">
-            <path d="M101 66 V55 A46 46 0 0 1 193 55 V87"/>
-            <path d="M91 69 H112 M91 75 H112 M91 81 H112"/>
-            <path d="M81 103 A24 24 0 1 0 124 103" stroke-width="9"/>
-          </g>
-          <g fill="black">
-            <circle cx="91" cy="94" r="4"/><circle cx="102" cy="89" r="4"/><circle cx="113" cy="94" r="4"/>
-            <text x="8" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700">P</text>
-            <text x="137" y="143" font-family="Arial, sans-serif" font-size="75" font-weight="700" textLength="470" lengthAdjust="spacingAndGlyphs">NTYPOOL</text>
-            <rect x="20" y="155" width="172" height="19"/>
-            <text x="202" y="174" font-family="Arial, sans-serif" font-size="27" textLength="401" lengthAdjust="spacingAndGlyphs">Electricals &amp; Lighting</text>
-          </g>
-        </symbol>
         <pattern id="receipt-bars" width="91" height="100" patternUnits="userSpaceOnUse">
           <path d="M2 0V100 M17 0V100 M38 0V100 M53 0V100 M78 0V100" stroke="black" stroke-width="2"/>
           <path d="M9 0V100 M29 0V100 M65 0V100 M87 0V100" stroke="black" stroke-width="5"/>
@@ -1030,22 +1019,27 @@ function renderReceiptHtml(sale, branch) {
       </defs>
     </svg>
     <article class="receipt-paper">
-      <svg role="img" aria-label="PontyPool Electricals and Lighting" class="receipt-logo"><use href="#receipt-logo"/></svg>
-      <div class="receipt-tagline">Dealers in Electrical Accessories, Lighting Fixtures &amp;<br>Solar Accessories.</div>
+      <img src="./pontylogo-receipt.png" alt="PontyPool Electricals and Lighting" class="receipt-logo">
+      <div class="receipt-title">SALES RECEIPT</div>
+      <div class="receipt-tagline">Dealers in Electrical Accessories, Lighting Fixtures &amp; Solar Accessories</div>
       <div class="receipt-company">
         <div class="receipt-company-name">PontyPool Enterprises Limited</div>
-        <div>${escapeHtml(branch)}</div>
-        <div>${phone}</div>
+        <div>${escapeHtml(branch)} &middot; ${phone}</div>
       </div>
-      <div class="receipt-date">${dateStr}, ${timeStr}</div>
+      <div class="receipt-meta">
+        <div><span>Receipt No.</span><strong>${receiptNo}</strong></div>
+        <div><span>Date</span><strong>${dateStr}, ${timeStr}</strong></div>
+        ${soldBy ? `<div><span>Served by</span><strong>${escapeHtml(soldBy)}</strong></div>` : ""}
+      </div>
       <table class="receipt-items">
-        <thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead>
+        <thead><tr><th>ITEM</th><th>QTY</th><th>AMOUNT</th></tr></thead>
         <tbody>${itemRows}</tbody>
       </table>
-      <div class="receipt-total${isDuruma ? "" : " receipt-total-ambala"}"><span>TOTAL</span><span>KSH ${formattedTotal}</span></div>
+      <div class="receipt-total"><span>TOTAL</span><span>KSH ${formattedTotal}</span></div>
       <div class="receipt-barcode">
         <svg role="img" aria-label="Decorative barcode" class="receipt-barcode-image" style="height:${barcodeHeight}"><use href="#receipt-barcode"/></svg>
       </div>
+      <div class="receipt-thank-you">Thank you for your business</div>
     </article>
   </div>`;
 }
@@ -1066,6 +1060,8 @@ async function printReceipt(sale) {
   };
   window.addEventListener("afterprint", cleanup, { once: true });
   try {
+    const logo = container.querySelector(".receipt-logo");
+    if (logo && typeof logo.decode === "function") await logo.decode();
     window.print();
   } catch (error) {
     cleanup();

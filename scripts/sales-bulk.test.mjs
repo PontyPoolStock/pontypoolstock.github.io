@@ -58,6 +58,7 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
       quantity: body.quantity,
       unitPrice: body.unitPrice,
       total: body.quantity * body.unitPrice,
+      soldBy: body.soldBy,
       soldAt: new Date().toISOString(),
     };
     serverSales = [sale, ...serverSales];
@@ -178,11 +179,21 @@ assert.deepStrictEqual(
 assert.strictEqual(serverSales.length, 2, "server holds both sales");
 assert.strictEqual(lines().length, 0, "basket emptied after a clean record");
 assert.strictEqual(printCount, 1, "successful sale opens the browser print dialog once");
-const receipt = document.getElementById("receipt-print-container").textContent;
+const receiptContainer = document.getElementById("receipt-print-container");
+const receipt = receiptContainer.textContent;
+assert.equal(
+  receiptContainer.querySelector(".receipt-logo").getAttribute("src"),
+  "./pontylogo-receipt.png",
+  "receipt uses the high-contrast PontyPool logo",
+);
 assert.match(receipt, /PontyPool Enterprises Limited/, "receipt uses the company template");
+assert.match(receipt, /SALES RECEIPT/, "receipt has a clear title");
 assert.match(receipt, /Ambala Road/, "receipt uses the selected branch");
+assert.match(receipt, /Receipt No\.\s*2/, "receipt shows its reference number");
+assert.match(receipt, /Served by\s*Jane Cashier/, "receipt shows the seller");
 assert.match(receipt, /A60 Bulb/, "receipt includes the first sold item");
 assert.match(receipt, /G95 Bulb/, "receipt includes the second sold item");
+assert.match(receipt, /100\.00 each/, "receipt shows each item's unit price");
 assert.match(receipt, /KSH 200\.00/, "receipt includes item line amounts");
 assert.match(receipt, /KSH 350\.00/, "receipt includes the combined sale total");
 window.dispatchEvent(new window.Event("afterprint"));
