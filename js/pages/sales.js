@@ -196,6 +196,7 @@ function renderSalesPage() {
         <option value="week">Last 7 Days</option>
         <option value="month">Last 30 Days</option>
       </select>
+      <input type="date" id="saleDateFilter" class="form-control form-control-sm border-0 shadow-none w-auto" title="Filter by specific date">
     </div>
 
     <div id="salesHistoryStats" class="mb-2 small text-muted${staffView ? " d-none" : ""}"></div>
@@ -630,6 +631,7 @@ function setupEventListeners() {
   document.getElementById("printLastReceiptBtn")?.addEventListener("click", reprintLastReceipt);
   document.getElementById("searchSales")?.addEventListener("input", debounce(filterSales, 120));
   document.getElementById("salePeriodFilter")?.addEventListener("change", filterSales);
+  document.getElementById("saleDateFilter")?.addEventListener("change", filterSales);
   const container = document.getElementById("salesTableContainer");
   container?.addEventListener("click", (event) => {
     const editBtn = event.target.closest(".sale-edit-btn");
@@ -1377,6 +1379,7 @@ function showEditSaleMessage(message, tone) {
 function filterSales() {
   const term = document.getElementById("searchSales").value.trim().toLowerCase();
   const period = document.getElementById("salePeriodFilter").value;
+  const dateFilter = document.getElementById("saleDateFilter")?.value || "";
 
   lastFiltered = sales.filter((sale) => {
     if (term) {
@@ -1386,6 +1389,13 @@ function filterSales() {
       if (!matches) return false;
     }
     if (period && !isWithinPeriod(sale.soldAt || sale.createdAt, period)) return false;
+    if (dateFilter) {
+      const saleDate = new Date(sale.soldAt || sale.createdAt);
+      const y = saleDate.getFullYear();
+      const m = String(saleDate.getMonth() + 1).padStart(2, "0");
+      const d = String(saleDate.getDate()).padStart(2, "0");
+      if (`${y}-${m}-${d}` !== dateFilter) return false;
+    }
     return true;
   });
   currentPage = 1;
