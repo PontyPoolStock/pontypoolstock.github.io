@@ -895,6 +895,9 @@ async function handleRecordSale(event) {
       variantIndex: line.variantIndex,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
+      soldAt: document.getElementById("saleDate")?.value
+        ? new Date(document.getElementById("saleDate").value + "T12:00:00").toISOString()
+        : undefined,
     });
     if (!result || result.error) {
       failed.push({ line, error: result?.error || "Unable to record this sale." });
@@ -1236,8 +1239,12 @@ function openEditSaleModal(sale) {
                   <label class="form-label" for="editSaleUnitPrice">Selling price (KSh) *</label>
                   <input type="number" min="0" step="0.01" id="editSaleUnitPrice" class="form-control" value="${Number(sale.unitPrice) || 0}">
                   <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
-                </div>
-              </div>
+          <div class="col-12 col-lg-6">
+            <label class="form-label" for="saleDate">Sale date (optional)</label>
+            <input type="date" id="saleDate" class="form-control">
+            <div class="small text-muted mt-1">Leave blank for today. Admin only.</div>
+          </div>
+        </div>
               <div class="small text-muted">
                 <i class="bi bi-info-circle"></i>
                 Saving returns the original stock and takes the corrected amount.

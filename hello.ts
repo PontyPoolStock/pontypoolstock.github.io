@@ -374,7 +374,8 @@ async function recordSale(body: Record<string, unknown>, token: string) {
   }
 
   const total = Math.round(unitPrice * quantity * 100) / 100;
-  const soldAt = new Date();
+  const parsedSoldAt = body.soldAt ? new Date(String(body.soldAt)) : new Date();
+  const soldAt = isNaN(parsedSoldAt.getTime()) ? new Date() : parsedSoldAt;
   const client = await pool.connect();
 
   try {
