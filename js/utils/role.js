@@ -1,6 +1,6 @@
 //* Roles decide which side of the app an account sees.
 //^ The owner (admin) gets every page. A staff account gets the shop-floor
-//^ side only: browse stock, view categories and shop purchases, and run the
+//^ side only: browse stock and categories, view shop purchases, and run the
 //^ till — no Dashboard, Statistics, Stock Adjustments, Reports or Activity Log.
 //^ Keep STAFF_PAGES in sync with the sidebar rules in css/style.css
 //^ (html[data-role="staff"] ...) — scripts/staff-role.test.mjs checks that

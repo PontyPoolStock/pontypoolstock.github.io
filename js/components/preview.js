@@ -96,7 +96,7 @@ export function openCategoryPreview(
   const items = productsInCategory(products, category.id);
   const modalElement = mountCard(
     CATEGORY_CARD_ID,
-    categoryCardHtml(category, items),
+    categoryCardHtml(category, items, typeof onEdit === "function"),
   );
 
   modalElement
@@ -258,7 +258,7 @@ function cardShell(modalId, icon, title, actionLabel, bodyHtml, showEdit = true)
 
 //* The category card: the picture, then how much of the catalogue sits inside it,
 //* then the products themselves — one glance instead of opening every product.
-function categoryCardHtml(category, items) {
+function categoryCardHtml(category, items, showEdit) {
   const units = items.reduce((sum, product) => sum + getProductStock(product), 0);
   const value = items.reduce((sum, product) => sum + getProductStockValue(product), 0);
   const low = items.filter((product) => getProductStatusCode(product) === "low").length;
@@ -316,6 +316,7 @@ function categoryCardHtml(category, items) {
 
       <div class="mt-3">${categoryProductsHtml(category, items)}</div>
     `,
+    showEdit,
   );
 }
 

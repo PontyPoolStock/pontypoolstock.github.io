@@ -138,8 +138,6 @@ function renderPage() {
       + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
     html += '</div><div class="small text-muted mt-2" id="resellerStockHint"></div><div id="resellerFormAlert" class="mt-2"></div>';
     html += "</form></div></div>";
-  } else {
-    html += '<div class="alert alert-info">Shop purchase records are read-only for staff. Ask an administrator to add, edit, or delete purchases.</div>';
   }
   html += '<div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">';
   html += '<i class="bi bi-search text-muted d-none d-sm-block"></i>';

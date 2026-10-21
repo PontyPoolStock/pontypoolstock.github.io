@@ -73,10 +73,16 @@ globalThis.fetch = window.fetch = async (url) => {
   return json({ error: `unmocked ${path}` });
 };
 
-const [{ openProductPreview }, { loadProducts }, { loadResellerPurchases }] =
+const [
+  { openProductPreview, openCategoryPreview },
+  { loadProducts },
+  { loadCategories },
+  { loadResellerPurchases },
+] =
   await Promise.all([
     import("../js/components/preview.js"),
     import("../js/pages/products.js"),
+    import("../js/pages/categories.js"),
     import("../js/pages/reseller.js"),
   ]);
 
@@ -90,6 +96,24 @@ assert.equal(
 openProductPreview(products[0], { categories });
 assert.equal(document.querySelector("#productPreviewModal [data-preview-edit]"), null,
   "staff product preview has no edit action");
+
+document.getElementById("pageContent").innerHTML = "";
+await loadCategories();
+assert.equal(document.getElementById("addCategoryBtn"), null, "staff cannot add categories");
+assert.equal(
+  document.querySelector("#categoriesTableContainer .edit-btn, #categoriesTableContainer .delete-btn"),
+  null,
+  "staff category list has no edit or delete actions",
+);
+openCategoryPreview(categories[0], { categories, products });
+assert.equal(document.querySelector("#categoryPreviewModal [data-preview-edit]"), null,
+  "staff category preview has no edit action");
+for (const method of ["POST", "PUT", "DELETE"]) {
+  assert.equal(staffBlocked("staff", method, "categories", method === "POST" ? "" : "1").blocked, true,
+    `staff cannot ${method === "POST" ? "create" : method === "PUT" ? "update" : "delete"} categories`);
+}
+assert.equal(staffBlocked("staff", "GET", "categories", "").blocked, false,
+  "staff can still view categories");
 
 document.getElementById("pageContent").innerHTML = "";
 await loadResellerPurchases();
@@ -137,5 +161,13 @@ assert.ok(
   document.querySelector("#resellerTableContainer .reseller-edit, #resellerTableContainer .reseller-delete"),
   "admins retain shop-purchase row actions",
 );
+await loadCategories();
+assert.ok(document.getElementById("addCategoryBtn"), "admins retain the add category action");
+assert.ok(
+  document.querySelector("#categoriesTableContainer .edit-btn, #categoriesTableContainer .delete-btn"),
+  "admins retain category row actions",
+);
+assert.equal(staffBlocked("admin", "POST", "categories", "").blocked, false,
+  "admins retain category management");
 
 console.log("Staff permissions test passed.");

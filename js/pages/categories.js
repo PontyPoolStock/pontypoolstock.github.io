@@ -12,6 +12,7 @@ import { openCategoryPreview } from "../components/preview.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml, describeApiError } from "../utils/helpers.js";
+import { isStaffView } from "../utils/role.js";
 
 let products = [];
 let categories = [];
@@ -37,15 +38,16 @@ async function loadData() {
 
 //* Retrieve Categories
 function renderCategories() {
-  //* Staff manage categories like admin: same Add / edit / delete on this page.
+  const canManageCategories = !isStaffView();
   let html = `
   <div class="d-flex gap-2 mb-3 align-items-center flex-wrap p-3 bg-white rounded border page-filter-bar">
       <i class="bi bi-search text-muted d-none d-sm-block"></i>
       <input type="text" id="searchCat" placeholder="Search categories..."
         class="form-control form-control-sm border-0 shadow-none" style="flex:1; min-width:150px;">
+      ${canManageCategories ? `
       <button class="btn btn-primary btn-sm px-3 ms-auto text-nowrap" id="addCategoryBtn">
         <i class="bi bi-plus-lg"></i> Add Category
-      </button>
+      </button>` : ""}
     </div>
     <div id="searchStats" class="mb-2 small text-muted"></div>
     <div id="categoriesTableContainer">
@@ -70,8 +72,7 @@ function getTableHtml(filteredCategories = categories) {
   }));
   let columns = ["image", "name", "products"];
   return (
-    //^ Staff get the same ACTIONS column as admin: edit + delete on every row.
-    renderTable(tableData, columns, true)
+    renderTable(tableData, columns, !isStaffView())
     + renderPagination(filteredCategories.length, currentPage, PAGE_SIZE)
   );
 }
@@ -103,7 +104,7 @@ function previewRow(row) {
   openCategoryPreview(category, {
     categories,
     products,
-    onEdit: handleEdit,
+    onEdit: isStaffView() ? undefined : handleEdit,
     onProductEdit: handleProductEdit,
   });
 }
@@ -176,7 +177,7 @@ function setupEventListeners() {
       }
     });
 
-  //& handle Category Creation (staff have no button — hence the optional chain)
+  //& handle Category Creation
   document
     .querySelector("#addCategoryBtn")
     ?.addEventListener("click", () => handleAdd());
@@ -202,6 +203,7 @@ function filterCategories() {
 
 //* ADD
 function handleAdd() {
+  if (isStaffView()) return;
   getModal("categories", "Add", "", async () => {
     await loadData();
     filterCategories();
@@ -210,6 +212,7 @@ function handleAdd() {
 
 //* UPDATE — same instant trick: reuse the cached row + slim list.
 function handleEdit(id) {
+  if (isStaffView()) return;
   const cached = categories.find((e) => String(e.id) === String(id));
   getModal("categories", "Edit", id, async () => {
     await loadData();
@@ -230,6 +233,7 @@ function handleProductEdit(id) {
 //* DELETE — repaint first, verify in the background; a rejected delete
 //* restores the list. Both outcomes are toasted so the click always answers.
 async function handleDelete(id) {
+  if (isStaffView()) return;
   let c = categories.find((e) => e.id == id);
   if (!c) return;
 

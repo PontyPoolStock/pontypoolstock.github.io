@@ -173,8 +173,8 @@ function readTokenClaims(token: string) {
 
 //* ===== Staff server enforcement ============================================
 //* A staff account may read Products / Categories / Sales / Shop Purchases
-//* (the till needs them) and may record sales and manage categories. Product
-//* and shop-purchase writes are reserved for admins.
+//* (the till needs them) and may record sales. Product, category, and
+//* shop-purchase writes are reserved for admins.
 //* Everything else — users, stock adjustments, activity log reads — is
 //* refused here with 403, so even a hand-crafted request cannot reach it.
 type StaffResource = keyof typeof tableNames;
@@ -188,7 +188,6 @@ const STAFF_READ_RESOURCES: ReadonlySet<string> = new Set([
 
 const STAFF_WRITE_RESOURCES: ReadonlySet<string> = new Set([
   "sales",
-  "categories",
   "activityLog",
 ]);
 
