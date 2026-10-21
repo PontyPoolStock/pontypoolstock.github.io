@@ -1,5 +1,5 @@
 //* Brings the linked Neon branch in line with schema.sql.
-//^ Usage: npm run db:schema   (reads DATABASE_URL from .env.local, .env, or the shell)
+//^ Usage: npm run db:schema   (prefers DATABASE_URL_UNPOOLED for migrations)
 //*
 //* schema.sql is written so it can be re-run, but `CREATE TABLE IF NOT EXISTS`
 //* only creates a missing table — it never adds a column to a table that already
@@ -13,18 +13,29 @@ const SCHEMA_FILE = "schema.sql";
 const ENV_FILES = [".env.local", ".env"];
 
 function readConnectionString() {
+  if (process.env.DATABASE_URL_UNPOOLED) return process.env.DATABASE_URL_UNPOOLED;
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
 
+  let pooledConnectionString = "";
   for (const file of ENV_FILES) {
     if (!fs.existsSync(file)) continue;
-    const line = fs
+    const lines = fs
       .readFileSync(file, "utf8")
-      .split(/\r?\n/)
-      .find((entry) => entry.startsWith("DATABASE_URL="));
-    if (line) return line.split("=").slice(1).join("=").replace(/^"|"$/g, "").trim();
+      .split(/\r?\n/);
+    const directLine = lines.find((entry) => entry.startsWith("DATABASE_URL_UNPOOLED="));
+    if (directLine) {
+      return directLine.slice("DATABASE_URL_UNPOOLED=".length).replace(/^"|"$/g, "").trim();
+    }
+    const pooledLine = lines.find((entry) => entry.startsWith("DATABASE_URL="));
+    if (!pooledConnectionString && pooledLine) {
+      pooledConnectionString = pooledLine
+        .slice("DATABASE_URL=".length)
+        .replace(/^"|"$/g, "")
+        .trim();
+    }
   }
 
-  return "";
+  return pooledConnectionString;
 }
 
 //* schema.sql without its comments
