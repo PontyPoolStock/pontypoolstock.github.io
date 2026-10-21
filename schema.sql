@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS sales (
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   unit_price NUMERIC(12, 2) NOT NULL CHECK (unit_price >= 0),
   total NUMERIC(12, 2) NOT NULL CHECK (total >= 0),
+  sold_by TEXT NOT NULL DEFAULT 'admin',
   sold_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -83,6 +84,8 @@ CREATE TABLE IF NOT EXISTS reseller_purchases (
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   unit_cost NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (unit_cost >= 0),
   total_cost NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (total_cost >= 0),
+  shop_name TEXT NOT NULL DEFAULT '',
+  employee_name TEXT NOT NULL DEFAULT '',
   purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

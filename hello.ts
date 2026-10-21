@@ -25,8 +25,8 @@ const fieldMap = {
   categories: ["name", "description", "parent_id", "image_url"],
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
-  sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "sold_at"],
-  resellerPurchases: ["product_id", "product_name", "variant_index", "quantity", "unit_cost", "total_cost", "purchased_at"],
+  sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "sold_by", "sold_at"],
+  resellerPurchases: ["product_id", "product_name", "variant_index", "quantity", "unit_cost", "total_cost", "shop_name", "employee_name", "purchased_at"],
 };
 
 const toCamel = (row: Record<string, unknown>) => ({
@@ -44,6 +44,9 @@ const toCamel = (row: Record<string, unknown>) => ({
   totalCost: row.total_cost,
   purchasedAt: row.purchased_at,
   soldAt: row.sold_at,
+  soldBy: row.sold_by,
+  shopName: row.shop_name,
+  employeeName: row.employee_name,
   variantIndex: row.variant_index,
   notStocked: row.not_stocked === true || row.not_stocked === 1 || row.not_stocked === "1" || row.not_stocked === "t",
   createdAt: row.created_at,
@@ -202,6 +205,17 @@ async function tokenRole(token: string): Promise<string> {
   }
 }
 
+async function tokenUserName(token: string): Promise<string> {
+  const claims = readTokenClaims(token);
+  if (!claims) return "admin";
+  try {
+    const account = await pool.query(`SELECT name FROM users WHERE id = $1 LIMIT 1`, [claims.u]);
+    return String(account.rows[0]?.name || "admin");
+  } catch {
+    return "admin";
+  }
+}
+
 function staffBlocked(
   role: string,
   method: string,
@@ -242,12 +256,15 @@ function normalizeBody(body: Record<string, unknown>) {
     productName: "product_name",
     oldQuantity: "old_quantity",
     newQuantity: "new_quantity",
-    unitPrice: "unit_price",
-    unitCost: "unit_cost",
-    totalCost: "total_cost",
-    purchasedAt: "purchased_at",
-    soldAt: "sold_at",
-    variantIndex: "variant_index",
+  unitPrice: "unit_price",
+  unitCost: "unit_cost",
+  totalCost: "total_cost",
+  purchasedAt: "purchased_at",
+  soldAt: "sold_at",
+  soldBy: "sold_by",
+  shopName: "shop_name",
+  employeeName: "employee_name",
+  variantIndex: "variant_index",
     notStocked: "not_stocked",
     not_stocked: "not_stocked",
   };
@@ -342,7 +359,7 @@ function clearLoginAttempts(request: Request) {
 //* without its stock deduction (and vice versa). Editing and deleting a sale go
 //* through their own transactions that reverse the original stock movement in
 //* the same breath, so history and stock can never drift apart.
-async function recordSale(body: Record<string, unknown>) {
+async function recordSale(body: Record<string, unknown>, token: string) {
   const productId = String(body.productId ?? "").trim();
   const quantity = Number(body.quantity);
   const unitPrice = Number(body.unitPrice);
@@ -433,8 +450,8 @@ async function recordSale(body: Record<string, unknown>) {
 
     //* variant_index is stored so a later edit knows which rating to give back
     const saleResult = await client.query(
-      `INSERT INTO sales (product_id, product_name, variant_index, quantity, unit_price, total, sold_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO sales (product_id, product_name, variant_index, quantity, unit_price, total, sold_by, sold_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
         productId,
         productName,
@@ -444,6 +461,7 @@ async function recordSale(body: Record<string, unknown>) {
         quantity,
         unitPrice,
         total,
+        await tokenUserName(token),
         soldAt,
       ],
     );
@@ -926,7 +944,7 @@ export default async function api(request: Request): Promise<Response> {
 
     //* Recorded sales go through the transaction above, not the generic insert
     if (request.method === "POST" && typedResource === "sales") {
-      const result = await recordSale(await readBody(request));
+      const result = await recordSale(await readBody(request), token);
       if (result.error) return json({ error: result.error }, 400);
       return json(result.sale, 201);
     }
@@ -953,6 +971,9 @@ export default async function api(request: Request): Promise<Response> {
       }
       if (typedResource === "stockAdjustments" && body.reason === undefined) {
         body.reason = "Manual adjustment";
+      }
+      if (typedResource === "resellerPurchases" && body.employeeName === undefined) {
+        body.employeeName = await tokenUserName(token);
       }
       const fields = getFields(typedResource, body);
       if (!fields.length) return json({ error: "No supported fields supplied" }, 400);
