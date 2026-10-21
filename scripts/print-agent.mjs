@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
-const TARGET = (process.env.PRINTER_TARGET || "file").toLowerCase();
+//* Default to "windows" so a plain `npm run print` really prints (was "file", which only saved a .bin).
+const TARGET = (process.env.PRINTER_TARGET || "windows").toLowerCase();
 const PORT = Number(process.env.PRINT_AGENT_PORT || 5501);
 const SERIAL_PORT = process.env.PRINTER_PORT || "";
 const PRINTER_NAME = process.env.PRINTER_NAME || "";
@@ -170,11 +171,21 @@ function printToLpt1(data) {
   }
 }
 
+//* Sends the real ESC-POS receipt (logo, layout, barcode, cut) as RAW bytes to the
+//* Windows printer. The old Out-Printer path printed plain text and lost the template.
 function printToWindows(data, sale, branch) {
-  const tmp = path.join(QUEUE_DIR, "receipt-" + Date.now() + ".txt");
-  fs.writeFileSync(tmp, buildText(branch, sale));
-  const arg = PRINTER_NAME ? ' -PrinterName "' + PRINTER_NAME.replace(/"/g, "") + '"' : "";
-  execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", 'Get-Content -Raw -Encoding UTF8 "' + tmp + '" | Out-Printer' + arg], { windowsHide: true, stdio: "pipe" });
+  const tmp = path.join(QUEUE_DIR, "job-" + Date.now() + ".bin");
+  fs.writeFileSync(tmp, data);
+  try {
+    const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path.join(HERE, "print-raw.ps1"), "-FilePath", tmp];
+    if (PRINTER_NAME) args.push("-PrinterName", PRINTER_NAME);
+    execFileSync("powershell.exe", args, { windowsHide: true, stdio: "pipe", timeout: 15000 });
+  } catch (err) {
+    const detail = String((err.stderr && err.stderr.toString()) || (err.stdout && err.stdout.toString()) || err.message || err).trim();
+    throw new Error("Windows printer error: " + detail.split(/\r?\n/).filter(Boolean).slice(0, 3).join(" "));
+  } finally {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
   return tmp;
 }
 function buildText(branch, sale) {
@@ -208,6 +219,8 @@ const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  //* Chrome/Edge block a public https site from calling localhost unless this is sent.
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);

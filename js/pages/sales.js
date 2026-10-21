@@ -926,8 +926,8 @@ async function handleRecordSale(event) {
     showToast(message, "success");
     //* Silent auto-print: no confirm, no dialog. Fire-and-forget so the till
     //* never waits — a failed print only shows a small Reprint hint, never blocks.
-    printReceipt(lastRecordedSale).catch(() => {
-      showToast("Sale recorded — printer quiet? Press Reprint to try again.", "warning", { title: "Print check" });
+    printReceipt(lastRecordedSale).catch((error) => {
+      showToast(`Sale recorded — ${describePrintFailure(error)} Press Reprint to try again.`, "warning", { title: "Print check" });
     });
     return;
   }
@@ -1124,6 +1124,15 @@ async function printReceipt(sale) {
     }
   }
   throw lastError || new Error("Print agent unreachable — run npm run print on the till.");
+}
+
+//* Turn a print failure into a plain reason: agent not running vs printer error.
+function describePrintFailure(error) {
+  const text = String((error && error.message) || error || "");
+  if (!text || error?.name === "AbortError" || /failed to fetch|networkerror|load failed|unreachable/i.test(text)) {
+    return "print agent not reachable (start it on the till with: npm run print).";
+  }
+  return `printer says: ${text}.`;
 }
 
 //* Reprint the receipt for the last recorded sale — standalone retry that does
