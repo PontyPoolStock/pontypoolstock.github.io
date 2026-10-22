@@ -3414,3 +3414,30 @@ html[data-role="staff"] .nav-item[data-page="Activity Log"] {
     margin: 0;
   }
 }
+.sidebar-install-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin: auto 14px 16px;
+  padding: 8px 12px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-radius: 8px;
+  background: rgba(250, 204, 21, 0.1);
+  color: var(--pontypool-yellow);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.sidebar-install-btn:hover {
+  border-color: var(--pontypool-yellow);
+  background: rgba(250, 204, 21, 0.18);
+}
+
+.sidebar-install-btn:focus-visible {
+  outline: 2px solid var(--pontypool-yellow);
+  outline-offset: 2px;
+}
