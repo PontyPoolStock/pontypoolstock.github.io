@@ -27,6 +27,8 @@ import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
 import { getSavedBranch, BRANCHES, saveBranch } from "../config.js";
 
+const SELLER_SUGGESTIONS = ["Mwaura", "Edu", "Peter", "Jane", "Alvo", "Martha"];
+
 let sales = [];
 let products = [];
 let categories = [];
@@ -156,7 +158,10 @@ function renderSalesPage() {
           </div>
           <div class="col-12 col-lg-6">
             <label class="form-label" for="saleSoldBy">Sold by *</label>
-            <input type="text" name="soldBy" id="saleSoldBy" class="form-control" maxlength="100" required value="${escapeHtml(getCurrentUser()?.name || "")}">
+            <input type="text" name="soldBy" id="saleSoldBy" class="form-control" maxlength="100" list="saleSellerSuggestions" required value="${escapeHtml(getCurrentUser()?.name || "")}">
+            <datalist id="saleSellerSuggestions">
+              ${SELLER_SUGGESTIONS.map((name) => `<option value="${name}"></option>`).join("")}
+            </datalist>
           </div>
           <div class="col-12 col-lg-6"${isStaffView() ? ' style="display:none"' : ""}>
             <label class="form-label" for="saleDate">Sale date</label>

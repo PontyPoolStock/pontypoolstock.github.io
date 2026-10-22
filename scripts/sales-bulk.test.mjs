@@ -102,6 +102,11 @@ const { loadSales } = await import("../js/pages/sales.js");
 await loadSales();
 assert.strictEqual(document.getElementById("saleSoldBy").value, "Till Operator",
   "seller field defaults to the logged-in name");
+assert.deepStrictEqual(
+  [...document.querySelectorAll("#saleSellerSuggestions option")].map((option) => option.value),
+  ["Mwaura", "Edu", "Peter", "Jane", "Alvo", "Martha"],
+  "seller field offers the requested quick-pick names",
+);
 
 // 1. Every category is offered; the product list starts unfiltered.
 assert.ok(document.getElementById("saleCategorySelect"), "category dropdown rendered");
@@ -168,7 +173,7 @@ assert.match(
 //    from step 5 is still sitting in the quantity box — clear it so only the
 //    basket goes up (a valid-but-unstaged line would be added automatically).
 setField("saleQuantity", "");
-document.getElementById("saleSoldBy").value = "Jane Cashier";
+document.getElementById("saleSoldBy").value = "Mwaura";
 posts.length = 0;
 submit();
 await settle(120);
@@ -195,7 +200,7 @@ assert.match(receipt, /SALES RECEIPT/, "receipt has a clear title");
 assert.match(receipt, /Duruma Road/, "receipt uses the selected branch");
 assert.doesNotMatch(receipt, /Receipt No\.?/, "receipt omits the receipt number");
 assert.match(receipt, /Date/, "receipt keeps the sale date");
-assert.match(receipt, /Served by\s*Jane Cashier/, "receipt shows the seller");
+assert.match(receipt, /Served by\s*Mwaura/, "receipt shows the selected seller");
 assert.match(receipt, /A60 Bulb/, "receipt includes the first sold item");
 assert.match(receipt, /G95 Bulb/, "receipt includes the second sold item");
 assert.match(receipt, /100\.00 each/, "receipt shows each item's unit price");
@@ -207,8 +212,8 @@ assert.equal(
   "",
   "receipt preview is cleared after printing finishes",
 );
-assert.ok(posts.every((post) => post.soldBy === "Jane Cashier"),
-  "each sale row is submitted with the entered seller name");
+assert.ok(posts.every((post) => post.soldBy === "Mwaura"),
+  "each sale row is submitted with the selected seller name");
 assert.match(
   document.getElementById("saleFormAlert")?.textContent || "",
   /2 sales recorded/,
