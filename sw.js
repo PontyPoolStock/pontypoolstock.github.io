@@ -4,7 +4,7 @@ const urlsToCache = [
   './index.html',
   './css/style.css',
   './js/main.js',
-  './logo.png',
+  './pwa-icon-192.png',
   './manifest.json'
 ];
 
@@ -21,4 +21,3 @@ self.addEventListener('fetch', (event) => {
       .then((response) => response || fetch(event.request))
   );
 });
-"

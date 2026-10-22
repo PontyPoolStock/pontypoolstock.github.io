@@ -33,7 +33,7 @@ jobs:
       - name: Stage the frontend
         run: |
           mkdir _site
-          cp -R index.html login.html css js pontylogo.jpeg pontylogo-receipt.png robots.txt sitemap.xml _site/
+          cp -R index.html login.html css js manifest.json sw.js pwa-icon-192.png pwa-icon-512.png pontylogo.jpeg pontylogo-receipt.png robots.txt sitemap.xml _site/
 
       - uses: actions/upload-pages-artifact@v3
         with:
