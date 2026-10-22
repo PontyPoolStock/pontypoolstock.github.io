@@ -189,7 +189,8 @@ assert.equal(
 assert.match(receipt, /PontyPool Enterprises Limited/, "receipt uses the company template");
 assert.match(receipt, /SALES RECEIPT/, "receipt has a clear title");
 assert.match(receipt, /Ambala Road/, "receipt uses the selected branch");
-assert.match(receipt, /Receipt No\.\s*2/, "receipt shows its reference number");
+assert.doesNotMatch(receipt, /Receipt No\.?/, "receipt omits the receipt number");
+assert.match(receipt, /Date/, "receipt keeps the sale date");
 assert.match(receipt, /Served by\s*Jane Cashier/, "receipt shows the seller");
 assert.match(receipt, /A60 Bulb/, "receipt includes the first sold item");
 assert.match(receipt, /G95 Bulb/, "receipt includes the second sold item");

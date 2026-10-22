@@ -993,7 +993,6 @@ function renderReceiptHtml(sale, branch) {
   const lines = Array.isArray(sale.lines) && sale.lines.length ? sale.lines : saleCartSnapshot(sale);
   const total = Number(sale.total) || lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
   const formattedTotal = total.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const receiptNo = escapeHtml(String(sale.receiptNo ?? sale.id ?? "-"));
   const soldBy = String(sale.soldBy || sale.sold_by || "").trim();
   const itemRows = lines.map((line) => {
     const quantity = Number(line.qty) || 0;
@@ -1027,7 +1026,6 @@ function renderReceiptHtml(sale, branch) {
         <div>${escapeHtml(branch)} &middot; ${phone}</div>
       </div>
       <div class="receipt-meta">
-        <div><span>Receipt No.</span><strong>${receiptNo}</strong></div>
         <div><span>Date</span><strong>${dateStr}, ${timeStr}</strong></div>
         ${soldBy ? `<div><span>Served by</span><strong>${escapeHtml(soldBy)}</strong></div>` : ""}
       </div>
