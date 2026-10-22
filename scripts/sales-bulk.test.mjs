@@ -104,10 +104,16 @@ await loadSales();
 assert.strictEqual(document.getElementById("saleSoldBy").value, "Till Operator",
   "seller field defaults to the logged-in name");
 assert.deepStrictEqual(
-  [...document.querySelectorAll("#saleSellerSuggestions option")].map((option) => option.value),
+  [...document.querySelectorAll("[data-seller-name]")].map((button) => button.dataset.sellerName),
   ["Mwaura", "Edu", "Peter", "Jane", "Alvo", "Martha"],
-  "seller field offers the requested quick-pick names",
+  "seller field visibly offers the requested quick-pick buttons",
 );
+const mwauraButton = document.querySelector('[data-seller-name="Mwaura"]');
+mwauraButton.click();
+assert.equal(document.getElementById("saleSoldBy").value, "Mwaura",
+  "clicking a quick-pick button fills the seller field");
+assert.equal(mwauraButton.getAttribute("aria-pressed"), "true",
+  "selected quick-pick is exposed accessibly");
 
 // 1. Every category is offered; the product list starts unfiltered.
 assert.ok(document.getElementById("saleCategorySelect"), "category dropdown rendered");
@@ -174,7 +180,7 @@ assert.match(
 //    from step 5 is still sitting in the quantity box — clear it so only the
 //    basket goes up (a valid-but-unstaged line would be added automatically).
 setField("saleQuantity", "");
-document.getElementById("saleSoldBy").value = "Mwaura";
+document.querySelector('[data-seller-name="Mwaura"]').click();
 posts.length = 0;
 submit();
 await settle(120);

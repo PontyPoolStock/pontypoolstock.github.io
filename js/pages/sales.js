@@ -158,10 +158,11 @@ function renderSalesPage() {
           </div>
           <div class="col-12 col-lg-6">
             <label class="form-label" for="saleSoldBy">Sold by *</label>
-            <input type="text" name="soldBy" id="saleSoldBy" class="form-control" maxlength="100" list="saleSellerSuggestions" required value="${escapeHtml(getCurrentUser()?.name || "")}">
-            <datalist id="saleSellerSuggestions">
-              ${SELLER_SUGGESTIONS.map((name) => `<option value="${name}"></option>`).join("")}
-            </datalist>
+            <input type="text" name="soldBy" id="saleSoldBy" class="form-control" maxlength="100" required value="${escapeHtml(getCurrentUser()?.name || "")}">
+            <div class="small text-muted mt-2 mb-1">Quick pick a name</div>
+            <div class="d-flex flex-wrap gap-2" role="group" aria-label="Quick pick seller name">
+              ${SELLER_SUGGESTIONS.map((name) => `<button type="button" class="btn btn-sm btn-outline-secondary" data-seller-name="${name}" aria-pressed="false">${name}</button>`).join("")}
+            </div>
           </div>
           <div class="col-12 col-lg-6"${isStaffView() ? ' style="display:none"' : ""}>
             <label class="form-label" for="saleDate">Sale date</label>
@@ -590,6 +591,26 @@ function setupEventListeners() {
   const variantSelect = document.getElementById("saleVariantSelect");
   const quantityInput = document.getElementById("saleQuantity");
   const priceInput = document.getElementById("saleUnitPrice");
+  const sellerInput = document.getElementById("saleSoldBy");
+
+  const updateSellerQuickPicks = () => {
+    document.querySelectorAll("[data-seller-name]").forEach((button) => {
+      const selected = button.dataset.sellerName === sellerInput?.value;
+      button.classList.toggle("btn-primary", selected);
+      button.classList.toggle("btn-outline-secondary", !selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  };
+
+  sellerInput?.addEventListener("input", updateSellerQuickPicks);
+  document.querySelector('[aria-label="Quick pick seller name"]')?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-seller-name]");
+    if (!button || !sellerInput) return;
+    sellerInput.value = button.dataset.sellerName;
+    sellerInput.dispatchEvent(new Event("input", { bubbles: true }));
+    sellerInput.focus();
+  });
+  updateSellerQuickPicks();
 
   document
     .getElementById("saleCategorySelect")
