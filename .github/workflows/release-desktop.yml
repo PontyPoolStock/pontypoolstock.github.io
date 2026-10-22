@@ -21,7 +21,36 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build:win
+      - name: Build signed Windows installer
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_SIGNING_CERTIFICATE_BASE64 -or -not $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD) {
+            throw "Add the public code-signing certificate as the WINDOWS_SIGNING_CERTIFICATE_BASE64 and WINDOWS_SIGNING_CERTIFICATE_PASSWORD GitHub Actions secrets before releasing."
+          }
+
+          $certificatePath = Join-Path $env:RUNNER_TEMP "pontypool-codesign.pfx"
+          try {
+            $certificateBytes = [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)
+            [System.IO.File]::WriteAllBytes($certificatePath, $certificateBytes)
+            $env:CSC_LINK = $certificatePath
+            $env:CSC_KEY_PASSWORD = $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
+
+            npm run build:win
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+
+            $signature = Get-AuthenticodeSignature "release\PontyPoolStockManager-Setup.exe"
+            if ($signature.Status -ne "Valid") {
+              throw "The generated installer is not validly code-signed: $($signature.StatusMessage)"
+            }
+          }
+          finally {
+            Remove-Item -LiteralPath $certificatePath -Force -ErrorAction SilentlyContinue
+          }
 
       - name: Publish installer
         env:
