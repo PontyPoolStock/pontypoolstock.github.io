@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pontypool-v2';
+const CACHE_NAME = 'pontypool-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
   );
 });
 
