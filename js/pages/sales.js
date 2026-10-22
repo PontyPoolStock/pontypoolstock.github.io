@@ -860,6 +860,7 @@ function toCombinedReceipt(recorded) {
   return {
     id: last.id,
     receiptNo: String(last.id),
+    branch: last.branch,
     soldBy: last.soldBy || last.sold_by || "",
     soldAt: last.soldAt || last.createdAt || new Date().toISOString(),
     total,
@@ -893,6 +894,7 @@ async function handleRecordSale(event) {
     return;
   }
 
+  const branch = getSavedBranch();
   const lines = [...saleCart];
   const button = document.getElementById("recordSaleBtn");
   isSubmitting = true;
@@ -912,6 +914,7 @@ async function handleRecordSale(event) {
       variantIndex: line.variantIndex,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
+      branch,
       soldBy,
       soldAt: document.getElementById("saleDate")?.value
         ? new Date(document.getElementById("saleDate").value + "T12:00:00").toISOString()
@@ -1043,7 +1046,7 @@ function renderReceiptHtml(sale, branch) {
 }
 
 async function printReceipt(sale) {
-  const branch = getSavedBranch();
+  const branch = sale.branch || getSavedBranch();
   const key = String(sale.receiptNo != null ? sale.receiptNo : sale.id);
   if (lastPrintedSaleId === key) {
     return { ok: true, branch, saleId: sale.id, target: "skipped-duplicate" };

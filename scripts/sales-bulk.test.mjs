@@ -29,6 +29,7 @@ window.localStorage.setItem("currentUser", JSON.stringify({
   role: "staff",
   expiresAt: tokenExpiry,
 }));
+window.localStorage.setItem("pontypool_branch", "Duruma Road");
 
 const categories = [
   { id: "c-bulbs", name: "Bulbs" },
@@ -58,6 +59,7 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
       quantity: body.quantity,
       unitPrice: body.unitPrice,
       total: body.quantity * body.unitPrice,
+      branch: body.branch,
       soldBy: body.soldBy,
       soldAt: new Date().toISOString(),
     };
@@ -176,6 +178,8 @@ assert.deepStrictEqual(
   ["p1", "p2"],
   "both products recorded",
 );
+assert.ok(posts.every((post) => post.branch === "Duruma Road"),
+  "each recorded sale includes the selected branch");
 assert.strictEqual(serverSales.length, 2, "server holds both sales");
 assert.strictEqual(lines().length, 0, "basket emptied after a clean record");
 assert.strictEqual(printCount, 1, "successful sale opens the browser print dialog once");
@@ -188,7 +192,7 @@ assert.equal(
 );
 assert.match(receipt, /PontyPool Enterprises Limited/, "receipt uses the company template");
 assert.match(receipt, /SALES RECEIPT/, "receipt has a clear title");
-assert.match(receipt, /Ambala Road/, "receipt uses the selected branch");
+assert.match(receipt, /Duruma Road/, "receipt uses the selected branch");
 assert.doesNotMatch(receipt, /Receipt No\.?/, "receipt omits the receipt number");
 assert.match(receipt, /Date/, "receipt keeps the sale date");
 assert.match(receipt, /Served by\s*Jane Cashier/, "receipt shows the seller");
@@ -240,6 +244,7 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
         quantity: body.quantity,
         unitPrice: body.unitPrice,
         total: body.quantity * body.unitPrice,
+        branch: body.branch,
         soldAt: new Date().toISOString(),
       };
       serverSales = [sale];

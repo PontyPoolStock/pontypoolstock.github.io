@@ -4,6 +4,7 @@ import {
   CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
 import { registerLowStockData } from "../components/lowstock.js";
+import { BRANCHES } from "../config.js";
 import {
   escapeHtml,
   formatCurrency,
@@ -49,6 +50,11 @@ function renderStatistics() {
   const periodSales = filterByPeriod(sales, selectedPeriod, "soldAt");
   const salesToday = filterByPeriod(sales, "day", "soldAt");
   const dailySales = groupSalesByDay(periodSales);
+  const branchSales = BRANCHES.map((branch) => ({
+    branch,
+    sales: periodSales.filter((sale) => sale.branch === branch),
+  }));
+  const unassignedSales = periodSales.filter((sale) => !BRANCHES.includes(sale.branch));
   //* Bought-for-resale is fully separate from own stock: bought units + spent
   //* from the purchase ledger, reseller sales = On-order product sales only.
   const periodPurchases = filterByPeriod(resellerPurchases, selectedPeriod, "purchasedAt");
@@ -218,6 +224,21 @@ function renderStatistics() {
             <div class="statistics-panel-header">
               <div>
                 <span class="statistics-kicker">Sales performance</span>
+                <h4>Sales by branch</h4>
+              </div>
+              <i class="bi bi-shop"></i>
+            </div>
+            ${renderBranchSalesTable(branchSales, unassignedSales)}
+          </section>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-12">
+          <section class="statistics-panel">
+            <div class="statistics-panel-header">
+              <div>
+                <span class="statistics-kicker">Sales performance</span>
                 <h4>Sales by day</h4>
               </div>
               <i class="bi bi-calendar2-week"></i>
@@ -281,6 +302,36 @@ function filterByPeriod(items, period, dateField = "date") {
 
 function getSalesTotal(sales) {
   return sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+}
+
+function renderBranchSalesTable(branches, unassignedSales) {
+  const rows = [
+    ...branches.map(({ branch, sales }) => ({ branch, sales })),
+    { branch: "Unassigned (legacy)", sales: unassignedSales },
+  ];
+
+  return `
+    <div class="table-responsive">
+      <table id="branchSalesTable" class="table statistics-table align-middle mb-0">
+        <thead>
+          <tr><th>Branch</th><th class="text-end">Revenue</th><th>Transactions</th><th>Units sold</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map(({ branch, sales }) => `
+            <tr>
+              <td><strong>${escapeHtml(branch)}</strong></td>
+              <td class="text-end fw-semibold">${formatCurrency(getSalesTotal(sales))}</td>
+              <td>${sales.length.toLocaleString("en-US")}</td>
+              <td>${sales.reduce((sum, sale) => sum + (Number(sale.quantity) || 0), 0).toLocaleString("en-US")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    <p class="small text-muted mt-2 mb-0">
+      Older sales without a saved branch appear as unassigned and remain included in the overall sales totals.
+    </p>
+  `;
 }
 
 //* Per-product bought-for-resale breakdown: bought units + spent from the

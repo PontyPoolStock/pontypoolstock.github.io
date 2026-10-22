@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS sales (
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   unit_price NUMERIC(12, 2) NOT NULL CHECK (unit_price >= 0),
   total NUMERIC(12, 2) NOT NULL CHECK (total >= 0),
+  branch TEXT CHECK (branch IN ('Ambala Road', 'Duruma Road')),
   sold_by TEXT NOT NULL DEFAULT 'admin',
   sold_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -98,6 +99,7 @@ CREATE INDEX IF NOT EXISTS categories_parent_id_idx ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS stock_adjustments_product_id_idx ON stock_adjustments(product_id);
 CREATE INDEX IF NOT EXISTS activity_log_timestamp_idx ON activity_log(timestamp DESC);
 CREATE INDEX IF NOT EXISTS sales_sold_at_idx ON sales(sold_at DESC);
+CREATE INDEX IF NOT EXISTS sales_branch_sold_at_idx ON sales(branch, sold_at DESC);
 CREATE INDEX IF NOT EXISTS reseller_purchases_product_id_idx ON reseller_purchases(product_id);
 CREATE INDEX IF NOT EXISTS reseller_purchases_purchased_at_idx ON reseller_purchases(purchased_at DESC);
 

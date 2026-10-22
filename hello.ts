@@ -25,7 +25,7 @@ const fieldMap = {
   categories: ["name", "description", "parent_id", "image_url"],
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
-  sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "sold_by", "sold_at"],
+  sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "branch", "sold_by", "sold_at"],
   resellerPurchases: ["product_id", "product_name", "variant_index", "quantity", "unit_cost", "total_cost", "shop_name", "employee_name", "purchased_at"],
 };
 
@@ -54,6 +54,7 @@ const toCamel = (row: Record<string, unknown>) => ({
 });
 
 const PASSWORD_PREFIX = "scrypt";
+const SALE_BRANCHES = ["Ambala Road", "Duruma Road"] as const;
 //* Session-only sign-ins last 12 hours; "keep me signed in" lasts 30 days, so
 //* a remembered browser is never silently signed out the next morning.
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -371,9 +372,13 @@ async function recordSale(body: Record<string, unknown>, token: string) {
   const quantity = Number(body.quantity);
   const unitPrice = Number(body.unitPrice);
   const variantRaw = body.variantIndex;
+  const branch = body.branch;
   const requestedSeller = String(body.soldBy ?? "").trim();
 
   if (!productId) return { error: "Product is required" };
+  if (typeof branch !== "string" || !SALE_BRANCHES.some((allowed) => allowed === branch)) {
+    return { error: "Select a valid branch for this sale" };
+  }
   if (!Number.isInteger(quantity) || quantity <= 0) {
     return { error: "Quantity must be a whole number greater than 0" };
   }
@@ -463,8 +468,8 @@ async function recordSale(body: Record<string, unknown>, token: string) {
 
     //* variant_index is stored so a later edit knows which rating to give back
     const saleResult = await client.query(
-      `INSERT INTO sales (product_id, product_name, variant_index, quantity, unit_price, total, sold_by, sold_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      `INSERT INTO sales (product_id, product_name, variant_index, quantity, unit_price, total, branch, sold_by, sold_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
       [
         productId,
         productName,
@@ -474,6 +479,7 @@ async function recordSale(body: Record<string, unknown>, token: string) {
         quantity,
         unitPrice,
         total,
+        branch,
         soldBy,
         soldAt,
       ],
