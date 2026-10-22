@@ -15,7 +15,7 @@
     "db:migrate": "node scripts/migrate-db-json-to-neon.mjs",
     "till": "node scripts/static-server.mjs",
     "electron": "electron .",
-    "build:win": "electron-builder --win nsis --x64"
+    "build:win": "electron-builder --win nsis --x64 --publish never"
   },
   "repository": {
     "type": "git",
