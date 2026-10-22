@@ -54,7 +54,6 @@ function renderStatistics() {
     branch,
     sales: periodSales.filter((sale) => sale.branch === branch),
   }));
-  const unassignedSales = periodSales.filter((sale) => !BRANCHES.includes(sale.branch));
   //* Bought-for-resale is fully separate from own stock: bought units + spent
   //* from the purchase ledger, reseller sales = On-order product sales only.
   const periodPurchases = filterByPeriod(resellerPurchases, selectedPeriod, "purchasedAt");
@@ -228,7 +227,7 @@ function renderStatistics() {
               </div>
               <i class="bi bi-shop"></i>
             </div>
-            ${renderBranchSalesTable(branchSales, unassignedSales)}
+            ${renderBranchSalesTable(branchSales, periodSales)}
           </section>
         </div>
       </div>
@@ -304,10 +303,10 @@ function getSalesTotal(sales) {
   return sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
 }
 
-function renderBranchSalesTable(branches, unassignedSales) {
+function renderBranchSalesTable(branches, allSales) {
   const rows = [
     ...branches.map(({ branch, sales }) => ({ branch, sales })),
-    { branch: "Unassigned (legacy)", sales: unassignedSales },
+    { branch: "Totals", sales: allSales },
   ];
 
   return `
@@ -328,9 +327,6 @@ function renderBranchSalesTable(branches, unassignedSales) {
         </tbody>
       </table>
     </div>
-    <p class="small text-muted mt-2 mb-0">
-      Older sales without a saved branch appear as unassigned and remain included in the overall sales totals.
-    </p>
   `;
 }
 
