@@ -132,7 +132,7 @@ function renderSalesPage() {
             <div class="small text-muted mt-1">Narrow the product list to one category.</div>
           </div>
           <div class="col-12 col-lg-6">
-            <label class="form-label" for="saleProductSelect">Product *</label>
+            <label class="form-label" for="saleProductSelect">Product</label>
             <select name="productId" id="saleProductSelect" class="form-select">
               <option value="">Select product</option>
               ${getProductOptionsHtml()}
@@ -142,22 +142,22 @@ function renderSalesPage() {
             <div id="saleProductGallery" class="sale-product-gallery" role="listbox" aria-label="Product photos"></div>
           </div>
           <div class="col-12 col-lg-6 d-none" id="saleVariantWrapper">
-            <label class="form-label" for="saleVariantSelect">Rating *</label>
+            <label class="form-label" for="saleVariantSelect">Rating</label>
             <select name="variantIndex" id="saleVariantSelect" class="form-select"></select>
             <div class="text-danger fw-bold errorMes errorMes-variantIndex"></div>
           </div>
           <div class="col-12 col-lg-6">
-            <label class="form-label" for="saleQuantity">Quantity *</label>
+            <label class="form-label" for="saleQuantity">Quantity</label>
             <input type="number" name="quantity" id="saleQuantity" class="form-control" min="1" step="1" placeholder="1">
             <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
           </div>
           <div class="col-12 col-lg-6">
-            <label class="form-label" for="saleUnitPrice">Selling price (KSh) *</label>
+            <label class="form-label" for="saleUnitPrice">Selling price (KSh)</label>
             <input type="number" name="unitPrice" id="saleUnitPrice" class="form-control" min="0" step="0.01" placeholder="0.00">
             <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
           </div>
           <div class="col-12 col-lg-6">
-            <label class="form-label" for="saleSoldBy">Sold by *</label>
+            <label class="form-label" for="saleSoldBy">Sold by</label>
             <input type="text" name="soldBy" id="saleSoldBy" class="form-control" maxlength="100" required value="${escapeHtml(getCurrentUser()?.name || "")}">
             <div class="small text-muted mt-2 mb-1">Quick pick a name</div>
             <div class="d-flex flex-wrap gap-2" role="group" aria-label="Quick pick seller name">

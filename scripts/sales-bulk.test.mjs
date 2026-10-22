@@ -103,6 +103,10 @@ const { loadSales } = await import("../js/pages/sales.js");
 await loadSales();
 assert.strictEqual(document.getElementById("saleSoldBy").value, "Till Operator",
   "seller field defaults to the logged-in name");
+assert.ok(
+  [...document.querySelectorAll("#recordSaleForm label")].every((label) => !label.textContent.includes("*")),
+  "sale form labels do not show required-field asterisks",
+);
 assert.deepStrictEqual(
   [...document.querySelectorAll("[data-seller-name]")].map((button) => button.dataset.sellerName),
   ["Mwaura", "Edu", "Peter", "Jane", "Alvo", "Martha"],
