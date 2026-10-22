@@ -222,7 +222,7 @@ body.sidebar-open .sidebar-backdrop {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 16px 12px;
+  padding: 32px 16px 12px;
   border-bottom: 1px solid #2d2d2d;
   position: relative;
 }
@@ -1395,7 +1395,7 @@ body.sidebar-open .sidebar-backdrop {
   /* Keep the fixed hamburger (44px wide at left:10px, z-index above the
      drawer) clear of the logo — the image starts to its right instead. */
   .sidebar-logo {
-    padding: 20px 16px 12px 62px;
+    padding: 32px 16px 12px 62px;
   }
 
   .sidebar-logo::after {

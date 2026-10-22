@@ -3,8 +3,8 @@
   "short_name": "PontyPool",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0f7b3e",
-  "theme_color": "#0f7b3e",
+  "background_color": "#212529",
+  "theme_color": "#212529",
   "icons": [
     {
       "src": "pwa-icon-192.png",
