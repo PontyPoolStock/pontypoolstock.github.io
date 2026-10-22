@@ -43,12 +43,20 @@ const products = [
 ];
 let serverSales = [];
 const posts = [];
+let blockSaleRefresh = false;
+let saleRefreshStarted = false;
+let releaseSaleRefresh;
+let saleRefreshGate = Promise.resolve();
 
 globalThis.fetch = window.fetch = async (url, opts = {}) => {
   const u = String(url);
   const method = opts.method || "GET";
   const json = (body, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  if (blockSaleRefresh && method === "GET" && u.includes("/sales")) {
+    saleRefreshStarted = true;
+    await saleRefreshGate;
+  }
   if (method === "POST" && u.endsWith("/sales")) {
     const body = JSON.parse(opts.body);
     posts.push(body);
@@ -254,6 +262,12 @@ assert.strictEqual(lines().length, 2, "lines staged for the partial-failure case
 
 const realFetch = globalThis.fetch;
 globalThis.fetch = window.fetch = async (url, opts = {}) => {
+  const u = String(url);
+  const method = opts.method || "GET";
+  if (blockSaleRefresh && method === "GET" && u.includes("/sales")) {
+    saleRefreshStarted = true;
+    await saleRefreshGate;
+  }
   if ((opts.method || "GET") === "POST" && String(url).endsWith("/sales")) {
     const body = JSON.parse(opts.body);
     posts.push(body);
@@ -281,7 +295,16 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
   }
   return realFetch(url, opts);
 };
+blockSaleRefresh = true;
+saleRefreshStarted = false;
+saleRefreshGate = new Promise((resolve) => { releaseSaleRefresh = resolve; });
 submit();
+await settle(120);
+const receiptStartedBeforeRefresh = saleRefreshStarted && printCount === 2;
+releaseSaleRefresh();
+blockSaleRefresh = false;
+assert.ok(receiptStartedBeforeRefresh,
+  "receipt printing starts while the post-sale database refresh is still pending");
 await settle(120);
 assert.strictEqual(posts.length, 2, "both lines attempted in the partial-failure case");
 assert.strictEqual(lines().length, 1, "refused line kept in the basket");

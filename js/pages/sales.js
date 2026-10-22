@@ -958,13 +958,6 @@ async function handleRecordSale(event) {
   //* stock clash or typo can be corrected and retried instead of retyped.
   saleCart = failed.map((item) => item.line);
 
-  //* Re-fetch so the history, the KSh totals and stock all reflect the sales —
-  //* products too: every recorded line just moved stock on the server.
-  await loadData({ freshSales: true, freshProducts: true });
-  lastFiltered = [...sales];
-  currentPage = 1;
-  renderSalesPage();
-
   const recordedTotal = recorded.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
   if (recorded.length) {
     lastRecordedSale = toCombinedReceipt(recorded);
@@ -973,6 +966,13 @@ async function handleRecordSale(event) {
       showToast(`Sale recorded — ${describePrintFailure(error)} Press Reprint to try again.`, "warning", { title: "Print check" });
     });
   }
+
+  //* Re-fetch so the history, the KSh totals and stock all reflect the sales —
+  //* products too: every recorded line just moved stock on the server.
+  await loadData({ freshSales: true, freshProducts: true });
+  lastFiltered = [...sales];
+  currentPage = 1;
+  renderSalesPage();
 
   if (!failed.length) {
     //* One receipt for the whole basket — all lines + one total + one barcode.
