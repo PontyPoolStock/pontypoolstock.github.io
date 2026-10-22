@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pontypool-v6';
+const CACHE_NAME = 'pontypool-v7';
 const urlsToCache = [
   './',
   './index.html',
