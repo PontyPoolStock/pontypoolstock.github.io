@@ -1,0 +1,21 @@
+{
+  "name": "PontyPool Stock Manager",
+  "short_name": "PontyPool",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f7b3e",
+  "theme_color": "#0f7b3e",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+"
