@@ -7,6 +7,7 @@
 //   npm install --no-save jsdom
 // Run: node scripts/sales-bulk.test.mjs
 import assert from "node:assert";
+import fs from "node:fs";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM(
@@ -206,6 +207,11 @@ assert.match(receipt, /G95 Bulb/, "receipt includes the second sold item");
 assert.match(receipt, /100\.00 each/, "receipt shows each item's unit price");
 assert.match(receipt, /KSH 200\.00/, "receipt includes item line amounts");
 assert.match(receipt, /KSH 350\.00/, "receipt includes the combined sale total");
+assert.match(receipt, /We Light Up Your World !/, "receipt ends with the requested slogan");
+assert.doesNotMatch(receipt, /Thank you for your business/, "receipt removes the old thank-you footer");
+const styles = fs.readFileSync(new URL("../css/style.css", import.meta.url), "utf8");
+const printStyles = styles.match(/@media print\s*\{([\s\S]*?)\n\}/)?.[1] || "";
+assert.match(printStyles, /\.toast-stack/, "print styles hide sale notifications from receipts");
 window.dispatchEvent(new window.Event("afterprint"));
 assert.equal(
   document.getElementById("receipt-print-container").innerHTML,

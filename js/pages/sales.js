@@ -1045,7 +1045,7 @@ function renderReceiptHtml(sale, branch) {
       <div class="receipt-barcode">
         <svg role="img" aria-label="Decorative barcode" class="receipt-barcode-image" style="height:${barcodeHeight}"><use href="#receipt-barcode"/></svg>
       </div>
-      <div class="receipt-thank-you">Thank you for your business</div>
+      <div class="receipt-thank-you">We Light Up Your World !</div>
     </article>
   </div>`;
 }

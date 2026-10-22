@@ -3219,6 +3219,7 @@ html[data-role="staff"] .nav-item[data-page="Activity Log"] {
   #sidebarToggle,
   #sidebarBackdrop,
   #appSidebar,
+  .toast-stack,
   main,
   header,
   footer,
