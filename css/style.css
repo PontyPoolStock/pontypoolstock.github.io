@@ -254,13 +254,21 @@ body.sidebar-open .sidebar-backdrop {
   gap: 2px;
 }
 
+.sidebar-app-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  margin: auto 14px 16px;
+}
+
 .sidebar-install-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   flex-shrink: 0;
-  margin: auto 14px 16px;
+  margin: 0;
   padding: 8px 12px;
   border: 1px solid rgba(250, 204, 21, 0.45);
   border-radius: 8px;
@@ -280,6 +288,10 @@ body.sidebar-open .sidebar-backdrop {
 .sidebar-install-btn:focus-visible {
   outline: 2px solid var(--pontypool-yellow);
   outline-offset: 2px;
+}
+
+.sidebar-app-actions a {
+  text-decoration: none;
 }
 
 .nav-section {

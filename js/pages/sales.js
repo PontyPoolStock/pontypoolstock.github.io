@@ -1086,21 +1086,28 @@ async function printReceipt(sale) {
     window.removeEventListener("afterprint", cleanup);
   };
   window.addEventListener("afterprint", cleanup, { once: true });
+  let target = "browser";
   try {
     const logo = container.querySelector(".receipt-logo");
     if (logo && typeof logo.decode === "function") await logo.decode();
-    window.print();
+    if (window.pontypoolDesktop && typeof window.pontypoolDesktop.printReceipt === "function") {
+      await window.pontypoolDesktop.printReceipt();
+      cleanup();
+      target = "desktop";
+    } else {
+      window.print();
+    }
   } catch (error) {
     cleanup();
     throw error;
   }
   lastPrintedSaleId = key;
-  return { ok: true, branch, saleId: sale.id, target: "browser" };
+  return { ok: true, branch, saleId: sale.id, target };
 }
-//* Turn a print failure into a plain reason: agent not running vs printer error.
+//* Turn a print failure into a plain reason for the sale confirmation.
 function describePrintFailure(error) {
   const text = String((error && error.message) || error || "");
-  return text || "browser print dialog could not be opened.";
+  return text || "the receipt could not be printed.";
 }
 
 //* Reprint the receipt for the last recorded sale — standalone retry that does

@@ -312,4 +312,28 @@ assert.strictEqual(
   "button back to single-sale label",
 );
 
-console.log("OK — sales bulk: category filter, multi-category basket, bulk record, partial failure, line removal");
+// 9. The desktop app prints through its trusted Electron bridge instead of
+//    opening the browser print dialog.
+let desktopPrintCount = 0;
+window.pontypoolDesktop = {
+  async printReceipt() {
+    desktopPrintCount += 1;
+    return { ok: true };
+  },
+};
+pickCategory("c-bulbs");
+pickProduct("p1");
+setField("saleQuantity", 1);
+setField("saleUnitPrice", 100);
+document.getElementById("addSaleLineBtn").click();
+submit();
+await settle(120);
+assert.strictEqual(desktopPrintCount, 1, "desktop app requests one silent receipt print");
+assert.strictEqual(printCount, 2, "desktop app does not open the browser print dialog");
+assert.strictEqual(
+  document.getElementById("receipt-print-container").innerHTML,
+  "",
+  "desktop receipt is cleared after silent printing finishes",
+);
+
+console.log("OK — sales bulk: category filter, multi-category basket, bulk record, partial failure, line removal, desktop printing");

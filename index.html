@@ -100,10 +100,16 @@
           <i class="bi bi-journal-text"></i><span>Activity Log</span>
         </div>
       </nav>
-      <button id="installAppBtn" class="sidebar-install-btn" type="button">
-        <i class="bi bi-download" aria-hidden="true"></i>
-        <span>Install app</span>
-      </button>
+      <div class="sidebar-app-actions">
+        <button id="installAppBtn" class="sidebar-install-btn" type="button">
+          <i class="bi bi-download" aria-hidden="true"></i>
+          <span>Install app</span>
+        </button>
+        <a class="sidebar-install-btn" href="https://github.com/PontyPoolStock/pontypoolstock.github.io/releases/latest/download/PontyPoolStockManager-Setup.exe">
+          <i class="bi bi-windows" aria-hidden="true"></i>
+          <span>Download Windows app</span>
+        </a>
+      </div>
     </aside>
 
     <main class="flex-grow-1">
@@ -254,13 +260,31 @@
     <div id="receipt-print-container" class="no-print"></div>
   <script>
     (function () {
+      var appActions = document.querySelector(".sidebar-app-actions");
       var installButton = document.getElementById("installAppBtn");
-      if (!installButton) return;
-
+      if (!appActions || !installButton) return;
       var installPrompt = null;
-      var isStandalone = window.matchMedia("(display-mode: standalone)").matches
-        || window.navigator.standalone === true;
-      if (isStandalone) installButton.hidden = true;
+      var displayModes = ["standalone", "minimal-ui", "fullscreen"].map(function (mode) {
+        return window.matchMedia("(display-mode: " + mode + ")");
+      });
+      var isElectron = window.navigator.userAgent.includes("Electron");
+
+      function updateAppActionsVisibility() {
+        var isInstalledApp = window.navigator.standalone === true
+          || displayModes.some(function (mediaQuery) {
+            return mediaQuery.matches;
+          });
+        appActions.hidden = isElectron || isInstalledApp;
+      }
+
+      updateAppActionsVisibility();
+      displayModes.forEach(function (mediaQuery) {
+        if (mediaQuery.addEventListener) {
+          mediaQuery.addEventListener("change", updateAppActionsVisibility);
+        } else if (mediaQuery.addListener) {
+          mediaQuery.addListener(updateAppActionsVisibility);
+        }
+      });
 
       window.addEventListener("beforeinstallprompt", function (event) {
         event.preventDefault();
@@ -268,6 +292,13 @@
       });
 
       installButton.addEventListener("click", async function () {
+        if (isElectron || displayModes.some(function (mediaQuery) {
+          return mediaQuery.matches;
+        }) || window.navigator.standalone === true) {
+          updateAppActionsVisibility();
+          return;
+        }
+
         if (!installPrompt) {
           window.alert(
             "To install Pontypool, open this page in Chrome and choose Install app from the browser menu. On iPhone or iPad, open the page in Safari, tap Share, then Add to Home Screen."
@@ -278,11 +309,11 @@
         installPrompt.prompt();
         var result = await installPrompt.userChoice;
         installPrompt = null;
-        if (result.outcome === "accepted") installButton.hidden = true;
+        if (result.outcome === "accepted") appActions.hidden = true;
       });
 
       window.addEventListener("appinstalled", function () {
-        installButton.hidden = true;
+        appActions.hidden = true;
         installPrompt = null;
       });
     })();

@@ -1,0 +1,29 @@
+name: Build Windows desktop app
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build:win
+
+      - name: Publish installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$env:GITHUB_REF_NAME" "release/PontyPoolStockManager-Setup.exe" --title "PontyPool Stock Manager $env:GITHUB_REF_NAME" --notes "Windows installer for PontyPool Stock Manager." --latest
