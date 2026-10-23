@@ -302,7 +302,25 @@ function previewRow(row) {
 //* UPDATE — reuse the cached row for an instant modal; the preview image fills
 //* from the image cache and the save itself goes out optimistically.
 function handleEdit(id) {
-  if (isStaffView()) return;
+  if (isStaffView()) {
+    //* Staff may only add stock (increase), never subtract or change other fields.
+    const product = products.find((p) => String(p.id) === String(id));
+    if (!product) return;
+    const currentStock = getProductStock(product);
+    const addQty = window.prompt(`Add stock to "${getProductDisplayName(product)}"\nCurrent stock: ${currentStock}\nEnter amount to add:`);
+    if (addQty === null) return;
+    const qty = Number(addQty);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      showToast("Please enter a positive whole number.", "warning");
+      return;
+    }
+    const newQty = currentStock + qty;
+    updateData("products", id, { quantity: newQty, stock: newQty }).then(() => {
+      showToast(`Added ${qty} to stock.`, "success");
+      loadData().then(() => { lastFiltered = [...products]; filterProducts(); });
+    }).catch((err) => showToast(describeApiError(err), "danger"));
+    return;
+  }
   const cached = products.find((e) => String(e.id) === String(id));
   getModal("products", "Edit", id, async () => {
     await loadData();
