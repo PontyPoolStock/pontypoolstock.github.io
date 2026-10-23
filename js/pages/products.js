@@ -153,7 +153,7 @@ function getTableHtml(filteredProducts = products) {
     "status",
   ];
   return (
-    renderTable(tableData, columns, !isStaffView())
+    renderTable(tableData, columns, true)
     + renderPagination(filteredProducts.length, currentPage, PAGE_SIZE)
   );
 }
