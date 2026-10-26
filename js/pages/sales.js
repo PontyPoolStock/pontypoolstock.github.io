@@ -164,7 +164,7 @@ function renderSalesPage() {
               ${SELLER_SUGGESTIONS.map((name) => `<button type="button" class="btn btn-sm btn-outline-secondary" data-seller-name="${name}" aria-pressed="false">${name}</button>`).join("")}
             </div>
           </div>
-          <div class="col-12 col-lg-6"${isStaffView() ? ' style="display:none"' : ""}>
+          <div class="col-12 col-lg-6">
             <label class="form-label" for="saleDate">Sale date</label>
             <input type="date" id="saleDate" class="form-control">
           </div>

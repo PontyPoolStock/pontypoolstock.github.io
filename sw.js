@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pontypool-v7';
+const CACHE_NAME = 'pontypool-v8';
 const urlsToCache = [
   './',
   './index.html',
@@ -28,9 +28,42 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+  const isAppAsset = ["script", "style", "image", "font"].includes(request.destination);
+  const shouldRefresh =
+    request.mode === "navigate" ||
+    ["script", "style"].includes(request.destination);
+
+  if (
+    request.method !== "GET" ||
+    url.origin !== self.location.origin ||
+    (request.mode !== "navigate" && !isAppAsset)
+  ) {
+    return;
+  }
+
   event.respondWith(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.match(event.request))
-      .then((response) => response || fetch(event.request))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(request);
+      if (cached && !shouldRefresh) return cached;
+
+      const refresh = fetch(request).then((response) => {
+        if (!response.ok) return response;
+        return cache.put(request, response.clone()).then(
+          () => response,
+          () => response,
+        );
+      });
+
+      if (cached) {
+        event.waitUntil(refresh.catch((error) => {
+          console.warn("App cache refresh failed:", error);
+        }));
+        return cached;
+      }
+
+      return refresh;
+    })
   );
 });
