@@ -753,7 +753,8 @@ function populateVariantSelect(variantSelect) {
   wrapper?.classList.remove("d-none");
   variantSelect.innerHTML = sellable
     .map(({ variant, index }) => {
-      const bits = [variant.label || `Row ${index + 1}`, variant.colour || ""]
+      const label = variant.label || variant.name || variant.value || variant.rating || `Option ${index + 1}`;
+      const bits = [label, variant.colour || ""]
         .filter(Boolean)
         .join(" - ");
       const stock = Number(variant.quantity) || 0;
