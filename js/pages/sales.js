@@ -741,7 +741,15 @@ function populateVariantSelect(variantSelect) {
 
   const sellable = variants
     .map((variant, index) => ({ variant, index }))
-    .filter(({ variant }) => onOrder || (Number(variant.quantity) || 0) > 0);
+    .filter(({ variant }) => onOrder || (Number(variant.quantity) || 0) > 0)
+    .sort((a, b) => {
+      const la = String(a.variant.label || a.variant.name || "").trim();
+      const lb = String(b.variant.label || b.variant.name || "").trim();
+      const na = Number(la);
+      const nb = Number(lb);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return la.localeCompare(lb, undefined, { numeric: true, sensitivity: "base" });
+    });
 
   if (!sellable.length) {
     wrapper?.classList.remove("d-none");
@@ -754,12 +762,13 @@ function populateVariantSelect(variantSelect) {
   variantSelect.innerHTML = sellable
     .map(({ variant, index }) => {
       const label = variant.label || variant.name || variant.value || variant.rating || variant.colour || `${index + 1}`;
-      const bits = [label, (variant.colour && label !== variant.colour) ? variant.colour : ""]
+      const colour = variant.colour || "";
+      const bits = [label, colour && colour !== label ? colour : ""]
         .filter(Boolean)
-        .join(" - ");
+        .join(" · ");
       const stock = Number(variant.quantity) || 0;
       const suffix = onOrder ? `Resale · ${resellerLeftFor(product?.id, index).left} left` : `${stock} in stock`;
-      return `<option value="${index}">${escapeHtml(bits)} - ${suffix}</option>`;
+      return `<option value="${index}">${escapeHtml(bits)} — ${suffix}</option>`;
     })
     .join("");
 
