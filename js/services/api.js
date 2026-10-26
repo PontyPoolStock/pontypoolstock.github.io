@@ -741,6 +741,26 @@ export async function updateData(endpoint, id, data, { optimistic = false } = {}
   }
 }
 
+export async function addProductStock(id, quantity, variantIndex = null) {
+  try {
+    const response = await fetchWithFallback(`products/${id}/stock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quantity, variantIndex }),
+    });
+    const result = await response.json();
+    if (result && result.id !== undefined && !result.error) {
+      applyOptimisticMutation("products", "PUT", result);
+      return result;
+    }
+    throw new Error(result?.error || "Unable to add product stock");
+  } catch (error) {
+    console.error("Error adding product stock:", error);
+    clearDataCache("products");
+    return { error: error.message || "Unable to add product stock" };
+  }
+}
+
 //* Returns { ok, status, error } rather than a bare boolean: a rejected delete
 //* is almost always a real reason worth showing ("the product no longer
 //* exists", "not found"), not a generic failure, so the caller needs both the

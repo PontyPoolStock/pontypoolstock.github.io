@@ -223,6 +223,7 @@ export function staffBlocked(
   method: string,
   typedResource: StaffResource,
   id: string,
+  action = "",
 ): { blocked: boolean; error?: string } {
   if (role === "admin") return { blocked: false };
   const resource = String(typedResource);
@@ -234,6 +235,9 @@ export function staffBlocked(
     && (STAFF_WRITE_RESOURCES.has(resource) || STAFF_EDIT_RESOURCES.has(resource))) {
     return { blocked: false };
   }
+  if (method === "POST" && id && resource === "products" && action === "stock") {
+    return { blocked: false };
+  }
   if (method === "PUT" && id
     && (STAFF_WRITE_RESOURCES.has(resource) || STAFF_EDIT_RESOURCES.has(resource))) {
     return { blocked: false };
@@ -243,11 +247,140 @@ export function staffBlocked(
 }
 
 //* Staff can record and edit shop purchases, but only administrators can
-//* delete them. Product writes remain administrator-only.
+//* delete them. Product writes are admin-only except for stock additions.
 
 function getRoute(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
-  return { resource: parts[0] || "", id: parts[1] || "" };
+  return {
+    resource: parts[0] || "",
+    id: parts[1] || "",
+    action: parts[2] || "",
+    segmentCount: parts.length,
+  };
+}
+
+async function addProductStock(
+  id: string,
+  body: Record<string, unknown>,
+  token: string,
+) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { error: "Invalid stock addition request", status: 400 };
+  }
+  if (Object.keys(body).some((key) => !["quantity", "variantIndex"].includes(key))) {
+    return { error: "Staff can only add product stock", status: 403 };
+  }
+
+  const addedQuantity = Number(body.quantity);
+  if (!Number.isInteger(addedQuantity) || addedQuantity <= 0) {
+    return { error: "Quantity must be a whole number greater than 0", status: 400 };
+  }
+
+  const requestedVariantIndex = body.variantIndex;
+  if (
+    requestedVariantIndex !== undefined &&
+    requestedVariantIndex !== null &&
+    (!Number.isInteger(Number(requestedVariantIndex)) || Number(requestedVariantIndex) < 0)
+  ) {
+    return { error: "Select a valid product variant", status: 400 };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      "SELECT * FROM products WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    const product = result.rows[0];
+    if (!product) {
+      await client.query("ROLLBACK");
+      return { error: "Product not found", status: 404 };
+    }
+    if (product.not_stocked === true) {
+      await client.query("ROLLBACK");
+      return { error: "Stock for resale products must be recorded as a shop purchase", status: 400 };
+    }
+
+    const variants = Array.isArray(product.variants) ? product.variants : [];
+    let nextQuantity: number;
+    let nextVariants = variants;
+    let oldQuantity: number;
+    let productName = String(product.name || "Product");
+
+    if (variants.length) {
+      const variantIndex = Number(requestedVariantIndex);
+      if (
+        requestedVariantIndex === undefined ||
+        requestedVariantIndex === null ||
+        !Number.isInteger(variantIndex) ||
+        variantIndex < 0 ||
+        variantIndex >= variants.length
+      ) {
+        await client.query("ROLLBACK");
+        return { error: "Select a valid product variant", status: 400 };
+      }
+      const variant = variants[variantIndex];
+      oldQuantity = Number(variant.quantity) || 0;
+      nextVariants = variants.map((item: Record<string, unknown>, index: number) =>
+        index === variantIndex
+          ? { ...item, quantity: oldQuantity + addedQuantity }
+          : item,
+      );
+      nextQuantity = nextVariants.reduce(
+        (sum: number, item: Record<string, unknown>) => sum + (Number(item.quantity) || 0),
+        0,
+      );
+      const suffix = [variant.label, variant.colour]
+        .map((value: unknown) => String(value ?? "").trim())
+        .filter(Boolean)
+        .join(" · ");
+      if (suffix) productName = `${productName} ${suffix}`;
+    } else {
+      if (requestedVariantIndex !== undefined && requestedVariantIndex !== null) {
+        await client.query("ROLLBACK");
+        return { error: "This product has no variants", status: 400 };
+      }
+      oldQuantity = Number(product.quantity) || 0;
+      nextQuantity = oldQuantity + addedQuantity;
+    }
+    if (nextQuantity > 2147483647) {
+      await client.query("ROLLBACK");
+      return { error: "The resulting stock quantity is too large", status: 400 };
+    }
+
+    const updated = variants.length
+      ? await client.query(
+          "UPDATE products SET quantity = $1, variants = $2::jsonb, updated_at = NOW() WHERE id = $3 RETURNING *",
+          [nextQuantity, JSON.stringify(nextVariants), id],
+        )
+      : await client.query(
+          "UPDATE products SET quantity = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+          [nextQuantity, id],
+        );
+
+    await client.query(
+      `INSERT INTO stock_adjustments
+        (product_id, product_name, type, quantity, reason, date, old_quantity, new_quantity)
+       VALUES ($1, $2, 'increase', $3, $4, NOW(), $5, $6)`,
+      [
+        id,
+        productName,
+        addedQuantity,
+        `Stock added by ${await tokenUserName(token)}`,
+        oldQuantity,
+        oldQuantity + addedQuantity,
+      ],
+    );
+
+    await client.query("COMMIT");
+    return { product: toCamel(updated.rows[0]) };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function getFields(resource: keyof typeof fieldMap, body: Record<string, unknown>) {
@@ -819,7 +952,7 @@ async function api(request: Request): Promise<Response> {
 
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
 
-  const { resource, id } = getRoute(new URL(request.url).pathname);
+  const { resource, id, action, segmentCount } = getRoute(new URL(request.url).pathname);
 
   try {
     if (resource === "auth" && id === "login" && request.method === "POST") {
@@ -914,8 +1047,20 @@ async function api(request: Request): Promise<Response> {
     //* before any query runs, so hiding the pages in the UI is backed by the
     //* server itself (a hand-crafted request gets the same 403).
     const requesterRole = String(await tokenRole(token));
-    const gate = staffBlocked(requesterRole, request.method, typedResource, id);
+    const gate = staffBlocked(requesterRole, request.method, typedResource, id, action);
     if (gate.blocked) return json({ error: gate.error || "Not available for staff accounts" }, 403);
+
+    if (
+      request.method === "POST" &&
+      typedResource === "products" &&
+      id &&
+      action === "stock" &&
+      segmentCount === 3
+    ) {
+      const result = await addProductStock(id, await readBody(request), token);
+      if ("error" in result) return json({ error: result.error }, result.status);
+      return json(result.product);
+    }
 
     if (request.method === "GET") {
       // Optional ?fields=id,name,price projection to avoid transferring megabytes of inline images on list views

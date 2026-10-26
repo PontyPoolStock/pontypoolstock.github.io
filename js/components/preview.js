@@ -197,7 +197,7 @@ function productCardHtml(product, categories) {
     PRODUCT_CARD_ID,
     "bi-eye",
     "Product preview",
-    "Edit",
+    isStaffView() ? "Add stock" : "Edit",
     `
       <div class="product-preview">
         <div class="product-preview-media" data-preview-media>
@@ -226,7 +226,7 @@ function productCardHtml(product, categories) {
 
       <div class="mt-3">${ratingsHtml(product, variants, unit)}</div>
     `,
-    !isStaffView(),
+    !isStaffView() || !onOrder,
   );
 }
 
@@ -247,7 +247,7 @@ function cardShell(modalId, icon, title, actionLabel, bodyHtml, showEdit = true)
           <div class="modal-body">${bodyHtml}</div>
           <div class="modal-footer">
             ${showEdit ? `<button type="button" class="btn btn-primary" data-preview-edit>
-              <i class="bi bi-pencil"></i> ${actionLabel}
+              <i class="bi ${actionLabel === "Add stock" ? "bi-plus-circle" : "bi-pencil"}"></i> ${actionLabel}
             </button>` : ""}
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
           </div>

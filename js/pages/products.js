@@ -2,6 +2,7 @@ import renderTable from "../components/table.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import {
   fetchData,
+  addProductStock,
   updateData,
   postData,
   deleteData,
@@ -21,8 +22,9 @@ import {
   getCategoryLabel,
   getProductStock,
   getProductVariants,
-  getProductStatusCode,
+  getVariantQuantity,
   getVariantSuffix,
+  getProductStatusCode,
   getVariantPriceRange,
   isNotStockedProduct,
   productThumbnailHtml,
@@ -153,7 +155,7 @@ function getTableHtml(filteredProducts = products) {
     "status",
   ];
   return (
-    renderTable(tableData, columns, true)
+    renderTable(tableData, columns, !isStaffView())
     + renderPagination(filteredProducts.length, currentPage, PAGE_SIZE)
   );
 }
@@ -301,24 +303,58 @@ function previewRow(row) {
 
 //* UPDATE — reuse the cached row for an instant modal; the preview image fills
 //* from the image cache and the save itself goes out optimistically.
-function handleEdit(id) {
+async function handleEdit(id) {
   if (isStaffView()) {
-    //* Staff may only add stock (increase), never subtract or change other fields.
+    //* Staff add inventory through a dedicated server-side increment, never by
+    //* submitting an editable product record.
     const product = products.find((p) => String(p.id) === String(id));
     if (!product) return;
+    if (isNotStockedProduct(product)) {
+      showToast("Record resale stock through Shop Purchases.", "warning");
+      return;
+    }
+
+    const variants = getProductVariants(product);
+    let variantIndex = null;
+    if (variants.length) {
+      const choices = variants
+        .map((variant, index) =>
+          `${index + 1}. ${getVariantSuffix(variant) || `Variant ${index + 1}`} (current: ${getVariantQuantity(variant)})`,
+        )
+        .join("\n");
+      const selection = window.prompt(
+        `Choose the rating to add stock to:\n${choices}\nEnter its number:`,
+      );
+      if (selection === null) return;
+      variantIndex = Number(selection) - 1;
+      if (!Number.isInteger(variantIndex) || variantIndex < 0 || variantIndex >= variants.length) {
+        showToast("Choose a valid product rating.", "warning");
+        return;
+      }
+    }
+
     const currentStock = getProductStock(product);
-    const addQty = window.prompt(`Add stock to "${getProductDisplayName(product)}"\nCurrent stock: ${currentStock}\nEnter amount to add:`);
+    const currentSelectionStock = variantIndex === null
+      ? currentStock
+      : getVariantQuantity(variants[variantIndex]);
+    const addQty = window.prompt(
+      `Add stock to "${getProductDisplayName(product)}"\nCurrent stock: ${currentSelectionStock}\nEnter amount to add:`,
+    );
     if (addQty === null) return;
     const qty = Number(addQty);
     if (!Number.isInteger(qty) || qty <= 0) {
       showToast("Please enter a positive whole number.", "warning");
       return;
     }
-    const newQty = currentStock + qty;
-    updateData("products", id, { quantity: newQty, stock: newQty }).then(() => {
-      showToast(`Added ${qty} to stock.`, "success");
-      loadData().then(() => { lastFiltered = [...products]; filterProducts(); });
-    }).catch((err) => showToast(describeApiError(err), "danger"));
+    const result = await addProductStock(id, qty, variantIndex);
+    if (result?.error) {
+      showToast(describeApiError(result.error, "Unable to add product stock."), "danger");
+      return;
+    }
+    showToast(`Added ${qty} to stock.`, "success");
+    await loadData();
+    lastFiltered = [...products];
+    filterProducts();
     return;
   }
   const cached = products.find((e) => String(e.id) === String(id));

@@ -105,7 +105,7 @@ function previewRow(row) {
     categories,
     products,
     onEdit: isStaffView() ? undefined : handleEdit,
-    onProductEdit: handleProductEdit,
+    onProductEdit: isStaffView() ? undefined : handleProductEdit,
   });
 }
 
