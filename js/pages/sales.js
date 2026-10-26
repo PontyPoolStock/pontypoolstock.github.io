@@ -1337,10 +1337,9 @@ function openEditSaleModal(sale) {
                   <label class="form-label" for="editSaleUnitPrice">Selling price (KSh) *</label>
                   <input type="number" min="0" step="0.01" id="editSaleUnitPrice" class="form-control" value="${Number(sale.unitPrice) || 0}">
                   <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
-          <div class="col-12 col-lg-6"${isStaffView() ? ' style="display:none"' : ""}>
-            <label class="form-label" for="saleDate">Sale date (optional)</label>
+          <div class="col-12 col-lg-6">
+            <label class="form-label" for="saleDate">Sale date</label>
             <input type="date" id="saleDate" class="form-control">
-            <div class="small text-muted mt-1">Leave blank for today. Admin only.</div>
           </div>
         </div>
               <div class="small text-muted">
