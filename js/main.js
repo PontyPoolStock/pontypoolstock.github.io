@@ -150,7 +150,7 @@ function navigateTo(text) {
       //* not the second argument of .then — so runtime failures inside
       //* loadResellerPurchases() surface here too, not as an unhandled
       //* rejection with a blank page.
-      import("./pages/reseller.js?v=20261027-8")
+      import("./pages/reseller.js?v=20261027-9")
         .then((module) => module.loadResellerPurchases())
         .catch((error) => {
           console.error("Shop Purchases failed to load:", error);

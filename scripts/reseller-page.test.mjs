@@ -32,6 +32,7 @@ const serverProducts = [
   { id: 13, name: "Glass Panels", quantity: 200, notStocked: true,
     variants: [{ label: "5W", price: 75, quantity: 0 }] },
   { id: 14, name: "Regular Bulb", quantity: 50, notStocked: false },
+  { id: 15, name: "Neon Sign", quantity: 0, notStocked: true, variants: [] },
 ];
 let requests = [];
 let postedPurchases = [];
@@ -72,7 +73,16 @@ assert.strictEqual(rows(), 1, "the seeded purchase row rendered");
 const options = [...document.querySelectorAll("#resellerProductSelect option")]
   .map((o) => o.textContent);
 assert.ok(options.some((o) => o.includes("Glass Panels")), "On-order product offered");
+assert.ok(options.some((o) => o.includes("Neon Sign")), "zero-purchase resale product offered");
 assert.ok(!options.some((o) => o.includes("Regular Bulb")), "in-stock product excluded");
+
+const resaleRows = [...document.querySelectorAll("#resaleProductsTable tbody tr")]
+  .map((row) => row.textContent.replace(/\s+/g, " ").trim());
+assert.strictEqual(resaleRows.length, 2, "all resale products are listed");
+assert.ok(
+  resaleRows.some((row) => row.includes("Neon Sign")),
+  "zero-purchase resale product is visible in the resale list",
+);
 
 const employeeInput = document.getElementById("resellerEmployeeName");
 assert.strictEqual(employeeInput.getAttribute("placeholder"), null, "Employee placeholder removed");

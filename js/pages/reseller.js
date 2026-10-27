@@ -81,6 +81,55 @@ function displayName(p) {
   if (n) return n;
   return "Product";
 }
+
+function renderResaleProductTable() {
+  if (!products.length) return "";
+  const rows = [];
+  const sorted = [...products].sort((a, b) => displayName(a).localeCompare(displayName(b)));
+  for (const product of sorted) {
+    const variants = variantList(product);
+    if (!variants.length) {
+      const key = resellerKey(product.id, null);
+      rows.push({
+        name: displayName(product),
+        variant: "",
+        bought: stockMaps.bought[key] || 0,
+        sold: stockMaps.sold[key] || 0,
+        left: stockMaps.left[key] || 0,
+      });
+      continue;
+    }
+    variants.forEach((variant, index) => {
+      const key = resellerKey(product.id, index);
+      rows.push({
+        name: displayName(product),
+        variant: variantLabel(product, index),
+        bought: stockMaps.bought[key] || 0,
+        sold: stockMaps.sold[key] || 0,
+        left: stockMaps.left[key] || 0,
+      });
+    });
+  }
+  let body = "";
+  for (const row of rows) {
+    const badge = row.left <= 0 ? "status-out" : "status-in";
+    body += "<tr><td>" + escapeHtml(row.name) + "</td>";
+    body += "<td class='small text-muted'>" + escapeHtml(row.variant || "-") + "</td>";
+    body += "<td class='text-end'>" + row.bought + "</td>";
+    body += "<td class='text-end'>" + row.sold + "</td>";
+    body += "<td class='text-end'><span class='status-badge " + badge + "'>" + row.left + "</span></td></tr>";
+  }
+  let html = '<div class="card border-0 shadow-sm mb-3"><div class="card-body">';
+  html += '<div class="d-flex justify-content-between align-items-start gap-3 mb-2 flex-wrap">';
+  html += '<div><h5 class="mb-1">Resale products</h5>';
+  html += '<p class="small text-muted mb-0">Every product marked Resale in Products, including items with no purchases yet.</p></div>';
+  html += '<span class="badge text-bg-light border">' + products.length + " marked</span></div>";
+  html += '<div class="table-responsive"><table class="table align-middle mb-0" id="resaleProductsTable">';
+  html += "<thead><tr><th>Product</th><th>Rating</th><th class='text-end'>Bought</th><th class='text-end'>Sold</th><th class='text-end'>Left</th></tr></thead>";
+  html += "<tbody>" + body + "</tbody></table></div></div></div>";
+  return html;
+}
+
 function renderPage() {
   const maps = stockMaps;
   let onHand = 0;
@@ -113,6 +162,7 @@ function renderPage() {
   html += '<div class="sale-hero-stat"><span>Reseller stock left</span><strong>' + onHand.toLocaleString("en-US") + "</strong></div>";
   html += '<div class="sale-hero-stat"><span>Spent on stock</span><strong>' + formatCurrency(spent) + "</strong></div>";
   html += "</div></section>";
+  html += renderResaleProductTable();
   html += '<div class="card border-0 shadow-sm mb-3"><div class="card-body">';
   html += '<form id="resellerPurchaseForm" novalidate><div class="row g-2 align-items-end">';
   html += '<div class="col-12 col-md-4"><label class="form-label small text-muted" for="resellerProductSelect">Resale product</label>';
