@@ -14,7 +14,7 @@ import {
   getInventoryValueRowsSorted,
   getTotalInventoryValue,
   productThumbnailHtml,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-7";
 
 let products = [];
 let categories = [];

@@ -2,7 +2,7 @@ import renderTable from "../components/table.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
 import { fetchData, postData, updateData, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
 import { getModal } from "../components/modal.js";
-import { escapeHtml, getProductDisplayName, debounce, isNotStockedProduct, getProductVariants, getVariantsTotalQuantity } from "../utils/helpers.js";
+import { escapeHtml, formatCurrency, getProductDisplayName, debounce, isNotStockedProduct, getProductVariants, getVariantsTotalQuantity } from "../utils/helpers.js?v=20261027-7";
 import { showToast } from "../components/toast.js";
 
 let adjustments = [];
@@ -178,16 +178,23 @@ function handleBulkOps() {
 
     const rows = prods.map((p) => {
       const variants = getProductVariants(p);
-      const qty = variants.length ? getVariantsTotalQuantity(variants) : Number(p.quantity) || 0;
+      const hasVariants = variants.length > 0;
+      const qty = hasVariants ? getVariantsTotalQuantity(variants) : Number(p.quantity) || 0;
+      //* A bulk row has no way to say WHICH rating to change. Sending a total
+      //* would only rewrite products.quantity while the variant rows (the real
+      //* stock) stayed put, so variant products are price-only here.
+      const stockInputAttrs = hasVariants
+        ? 'disabled title="Use New Adjustment to change a rating row"'
+        : "";
       return `
-        <tr data-product-id="${p.id}" data-product-name="${escapeHtml(getProductDisplayName(p))}" data-original-qty="${qty}" data-original-price="${Number(p.price) || 0}">
-          <td class="fw-medium">${escapeHtml(getProductDisplayName(p))}</td>
+        <tr data-product-id="${p.id}" data-product-name="${escapeHtml(getProductDisplayName(p))}" data-original-qty="${qty}" data-original-price="${Number(p.price) || 0}" data-has-variants="${hasVariants ? "1" : "0"}">
+          <td class="fw-medium">${escapeHtml(getProductDisplayName(p))}${hasVariants ? ' <span class="badge text-bg-light border">ratings</span>' : ""}</td>
           <td class="text-end text-muted current-qty">${qty}</td>
           <td class="text-center">
-            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-add-qty text-center" placeholder="0" style="width:70px;margin:0 auto;">
+            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-add-qty text-center" placeholder="0" style="width:70px;margin:0 auto;" ${stockInputAttrs}>
           </td>
           <td class="text-center">
-            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-remove-qty text-center" placeholder="0" style="width:70px;margin:0 auto;">
+            <input type="number" min="0" step="1" class="form-control form-control-sm bulk-remove-qty text-center" placeholder="0" style="width:70px;margin:0 auto;" ${stockInputAttrs}>
           </td>
           <td class="text-end">
             <input type="number" min="0" step="0.01" class="form-control form-control-sm bulk-price text-end" value="${Number(p.price) || 0}" style="width:80px;margin:0 auto;">
@@ -286,8 +293,9 @@ function handleBulkOps() {
         const name = row.dataset.productName || row.querySelector("td:first-child")?.textContent || "";
         const pid = row.dataset.productId;
         const currentQty = Number(row.dataset.originalQty || 0);
-        const addQty = Number(row.querySelector(".bulk-add-qty")?.value || 0);
-        const removeQty = Number(row.querySelector(".bulk-remove-qty")?.value || 0);
+        const hasVariants = row.dataset.hasVariants === "1";
+        const addQty = hasVariants ? 0 : Number(row.querySelector(".bulk-add-qty")?.value || 0);
+        const removeQty = hasVariants ? 0 : Number(row.querySelector(".bulk-remove-qty")?.value || 0);
         const newPrice = Number(row.querySelector(".bulk-price")?.value || 0);
         const originalPrice = Number(row.dataset.originalPrice || 0);
         if (addQty > 0) changes.push({ name, pid, action: "Add", detail: `+${addQty} stock (new total: ${currentQty + addQty})` });
@@ -322,8 +330,9 @@ function handleBulkOps() {
         const pid = row.dataset.productId;
         const pname = row.dataset.productName;
         const currentQty = Number(row.dataset.originalQty || 0);
-        const addQty = Math.trunc(Number(row.querySelector(".bulk-add-qty")?.value || 0));
-        const removeQty = Math.trunc(Number(row.querySelector(".bulk-remove-qty")?.value || 0));
+        const hasVariants = row.dataset.hasVariants === "1";
+        const addQty = hasVariants ? 0 : Math.trunc(Number(row.querySelector(".bulk-add-qty")?.value || 0));
+        const removeQty = hasVariants ? 0 : Math.trunc(Number(row.querySelector(".bulk-remove-qty")?.value || 0));
         const newPrice = Number(row.querySelector(".bulk-price")?.value || 0);
         const originalPrice = Number(row.dataset.originalPrice || 0);
         if (addQty <= 0 && removeQty <= 0 && newPrice === originalPrice) continue;
@@ -339,9 +348,17 @@ function handleBulkOps() {
       const now = new Date().toISOString();
       const promises = tasks.map(async (t) => {
         try {
-          const prod = await fetchData(`products/${t.pid}`);
-          const currentQty = Number(prod?.quantity) || t.currentQty;
           const netChange = t.addQty - t.removeQty;
+          let currentQty = t.currentQty;
+          if (netChange !== 0) {
+            //* Re-read only the stock columns so a concurrent sale cannot be
+            //* overwritten by the value the modal opened with.
+            const prod = await fetchData(`products/${t.pid}?fields=quantity`);
+            if (!prod || Array.isArray(prod) || prod.error || prod.quantity === undefined) {
+              throw new Error("Could not read the current stock. Nothing was changed.");
+            }
+            currentQty = Number(prod.quantity) || 0;
+          }
           const newQty = Math.max(0, currentQty + netChange);
           const updates = [];
           // Stock adjustments
@@ -367,14 +384,16 @@ function handleBulkOps() {
               newQuantity: Math.max(0, currentQty - t.removeQty),
             }));
           }
-          // Product update
+          // Product update — changed columns only.
           const productUpdate = {};
           if (netChange !== 0) productUpdate.quantity = newQty;
           if (t.newPrice !== t.originalPrice) productUpdate.price = t.newPrice;
           if (Object.keys(productUpdate).length) {
             updates.push(updateData("products", t.pid, productUpdate));
           }
-          await Promise.all(updates);
+          const results = await Promise.all(updates);
+          const failed = results.find((result) => result?.error);
+          if (failed) throw new Error(failed.error);
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e?.message || "Failed" };

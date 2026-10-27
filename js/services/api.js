@@ -19,7 +19,7 @@ export const CATEGORY_EDIT_FIELDS = `${CATEGORY_LIST_FIELDS},imageUrl`;
 // One canonical projection for the stock-adjustment form dropdown, its save-time
 // validation lookup and the page-level prewarm — same string = same cache key,
 // so the modal always hits a warm cache.
-export const PRODUCT_ADJUSTMENT_FIELDS = "id,name,quantity,unit,variants,notStocked";
+export const PRODUCT_ADJUSTMENT_FIELDS = "id,name,price,quantity,unit,variants,notStocked";
 
 const dataCache = new Map();
 const pendingRequests = new Map();
@@ -663,7 +663,7 @@ export function prewarmAppCache({ forRole = "staff" } = {}) {
   return Promise.allSettled(prewarmEndpoints.map((ep) => fetchData(ep)));
 }
 
-export async function postData(endpoint, data) {
+export async function postData(endpoint, data, { revalidate = true } = {}) {
   try {
     const response = await fetchWithFallback(endpoint, {
       method: "POST",
@@ -677,8 +677,9 @@ export async function postData(endpoint, data) {
     const result = await response.json();
     const collection = collectionEndpoint(endpoint);
     if (collection !== "auth" && result && result.id !== undefined && !result.error) {
-      // Optimistic patch + background refresh — the next render is instant.
-      applyOptimisticMutation(collection, "POST", result);
+      // Optimistic patch + optional background refresh — a batch writer can
+      // defer the refresh until it has finished all of its rows.
+      applyOptimisticMutation(collection, "POST", result, { revalidate });
     } else {
       clearDataCache(endpoint);
     }
@@ -711,22 +712,9 @@ export async function updateData(endpoint, id, data, { optimistic = false } = {}
     });
     const result = await response.json();
     if (collection !== "auth" && result && result.id !== undefined && !result.error) {
+      //* PUT already returns the full saved row, including notStocked. A second
+      //* GET here only added a round trip (and another full image download).
       applyOptimisticMutation(collection, "PUT", result);
-      //* A full single-record GET (no ?fields=) always carries every column the
-      //* deployed API knows — including notStocked on a fresh deploy. Merge it
-      //* into the cached lists so a slim GET from a stale cache key can never
-      //* hide a just-saved flag behind an "unknown" row.
-      if ((collection === "products" || collection === "categories") && result) {
-        try {
-          const verifyResponse = await fetchWithFallback(`${collection}/${id}`);
-          const verifyRow = await verifyResponse.json();
-          if (verifyRow && verifyRow.id !== undefined && !verifyRow.error) {
-            applyOptimisticMutation(collection, "PUT", verifyRow, { revalidate: false });
-          }
-        } catch {
-          // Verification is best-effort — the PUT already succeeded.
-        }
-      }
     } else {
       clearDataCache(endpoint);
     }

@@ -15,11 +15,14 @@ import {
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantName,
+  getVariantSuffix,
   getVariantPrice,
   getVariantLabels,
   getVariantGlasses,
   getVariantColours,
   getVariantRatingLabel,
+  getResellerKey,
+  getResellerStockMap,
   getProductDisplayName,
   isNotStockedProduct,
   normalizeVariantColour,
@@ -28,7 +31,7 @@ import {
   productThumbnailHtml,
   describeApiError,
   debounce,
-} from "../utils/helpers.js?v=20261027-6";
+} from "../utils/helpers.js?v=20261027-7";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
@@ -40,6 +43,9 @@ let sales = [];
 let products = [];
 let categories = [];
 let resellerPurchases = [];
+//* Bought/sold/shop stock rebuilt once per data load instead of scanning both
+//* ledgers for every product tile and stock hint.
+let resellerStock = getResellerStockMap([], []);
 let lastFiltered = [];
 let currentPage = 1;
 let PAGE_SIZE = 5;
@@ -86,6 +92,11 @@ async function loadData({ freshSales = false, freshProducts = false } = {}) {
   products = Array.isArray(productData) ? productData : [];
   categories = Array.isArray(categoryData) ? categoryData : [];
   resellerPurchases = Array.isArray(resellerData) ? resellerData : [];
+  rebuildResellerStock();
+}
+
+function rebuildResellerStock() {
+  resellerStock = getResellerStockMap(resellerPurchases, sales);
 }
 
 //* Newest first — shared with the background refresh so a repaint caused by
@@ -352,18 +363,7 @@ function getCategoryOptionsHtml() {
 //* category gets a tap-to-select thumbnail strip. Order-based products show
 //* reseller stock (bought minus sold) instead of an own-stock count.
 function resellerLeftFor(productId, variantIndex = "") {
-  let bought = 0;
-  let sold = 0;
-  const key = `${String(productId ?? "")}::${variantIndex === null || variantIndex === undefined || variantIndex === "" ? "" : String(variantIndex)}`;
-  for (const item of resellerPurchases) {
-    const itemKey = `${String(item.productId ?? "")}::${item.variantIndex === null || item.variantIndex === undefined || item.variantIndex === "" ? "" : String(item.variantIndex)}`;
-    if (itemKey === key) bought += Number(item.quantity) || 0;
-  }
-  for (const sale of sales) {
-    const saleKey = `${String(sale.productId ?? "")}::${sale.variantIndex === null || sale.variantIndex === undefined || sale.variantIndex === "" ? "" : String(sale.variantIndex)}`;
-    if (saleKey === key) sold += Number(sale.quantity) || 0;
-  }
-  return { bought, sold, left: bought - sold };
+  return { left: resellerStock.stock.get(getResellerKey(productId, variantIndex)) || 0 };
 }
 
 function resellerProductLeft(product) {
@@ -941,17 +941,9 @@ function getSelectedStock() {
 //* On-order hint backed by the reseller ledger: bought minus sold per
 //* product/variant, always separate from products.quantity own-stock.
 function resellerHintFor(productId, variantIndex) {
-  let bought = 0;
-  let sold = 0;
-  const key = `${String(productId ?? "")}::${variantIndex === null || variantIndex === undefined || variantIndex === "" ? "" : String(variantIndex)}`;
-  for (const item of resellerPurchases) {
-    const itemKey = `${String(item.productId ?? "")}::${item.variantIndex === null || item.variantIndex === undefined || item.variantIndex === "" ? "" : String(item.variantIndex)}`;
-    if (itemKey === key) bought += Number(item.quantity) || 0;
-  }
-  for (const sale of sales) {
-    const saleKey = `${String(sale.productId ?? "")}::${sale.variantIndex === null || sale.variantIndex === undefined || sale.variantIndex === "" ? "" : String(sale.variantIndex)}`;
-    if (saleKey === key) sold += Number(sale.quantity) || 0;
-  }
+  const key = getResellerKey(productId, variantIndex);
+  const bought = resellerStock.bought.get(key) || 0;
+  const sold = resellerStock.sold.get(key) || 0;
   const left = bought - sold;
   if (!bought) {
     //* Both roles can open Shop Purchases (see STAFF_PAGES in js/utils/role.js),
@@ -1109,7 +1101,7 @@ async function handleRecordSale(event) {
       soldAt: document.getElementById("saleDate")?.value
         ? new Date(document.getElementById("saleDate").value + "T12:00:00").toISOString()
         : undefined,
-    });
+    }, { revalidate: false });
     if (!result || result.error) {
       failed.push({ line, error: result?.error || "Unable to record this sale." });
     } else {
@@ -1500,7 +1492,7 @@ function openEditSaleModal(sale) {
                 <div class="text-danger fw-bold errorMes errorMes-productId"></div>
               </div>
               <div class="mb-3 d-none" id="editSaleVariantWrapper">
-                <label class="form-label" for="editSaleVariantSelect">Rating *</label>
+                <label class="form-label" for="editSaleVariantSelect">Rating / glass / colour *</label>
                 <select name="variantIndex" id="editSaleVariantSelect" class="form-select"></select>
                 <div class="text-danger fw-bold errorMes errorMes-variantIndex"></div>
               </div>
@@ -1630,10 +1622,9 @@ function populateEditVariantSelect(variantSelect, preferredIndex) {
   wrapper?.classList.remove("d-none");
   variantSelect.innerHTML = variants
     .map((variant, index) => {
-      const bits = [
-        getVariantRatingLabel(variant) || `Row ${index + 1}`,
-        normalizeVariantColour(variant.colour),
-      ].filter(Boolean).join(" - ");
+      //* The suffix carries rating, glass, colour and amps, so two rows that
+      //* share a rating can never collapse into the same dropdown label.
+      const bits = getVariantSuffix(variant) || `Row ${index + 1}`;
       const stock = Number(variant.quantity) || 0;
       const out = stock <= 0 ? " (out of stock)" : ` - ${stock} in stock`;
       return `<option value="${index}">${escapeHtml(bits)}${out}</option>`;
@@ -1736,7 +1727,10 @@ function formatSaleDate(value) {
 //* place; the Record Sale form, which may be half-filled, is left alone.
 function salesSignature(list) {
   return list
-    .map((sale) => `${sale.id}:${sale.quantity}:${sale.unitPrice}:${sale.total}`)
+    .map((sale) =>
+      `${sale.id}:${sale.productId}:${sale.variantIndex}:${sale.productName}:`
+      + `${sale.quantity}:${sale.unitPrice}:${sale.total}:${sale.soldAt}:${sale.branch}:${sale.soldBy}`,
+    )
     .sort()
     .join("|");
 }
@@ -1765,6 +1759,7 @@ function applyFreshSales(rows) {
   if (salesSignature(list) === salesSignature(sales)) return;
 
   sales = sortSales(list);
+  rebuildResellerStock();
   const search = document.getElementById("searchSales");
   const period = document.getElementById("salePeriodFilter");
   if (search && period) {

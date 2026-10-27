@@ -1,6 +1,6 @@
 import { fetchData } from "../services/api.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { activityRowHtml, sortData, debounce } from "../utils/helpers.js";
+import { activityRowHtml, sortData, debounce } from "../utils/helpers.js?v=20261027-7";
 
 let activities = [];
 let lastFiltered = [];
@@ -113,6 +113,8 @@ function updateStats() {
       : "";
 }
 
+let pageListenersBound = false;
+
 function setupEventListeners() {
   //* 1. search (debounced)
   document
@@ -124,7 +126,11 @@ function setupEventListeners() {
     .getElementById("typeFilter")
     ?.addEventListener("change", filterActivities);
 
-  //* 3. pagination and page size — event delegation on pageContent
+  //* 3. pagination and page size — #pageContent survives every repaint, so
+  //* these delegated listeners are bound once instead of stacking on reopen.
+  if (pageListenersBound) return;
+  pageListenersBound = true;
+
   document
     .getElementById("pageContent")
     .addEventListener("click", function (e) {

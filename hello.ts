@@ -19,6 +19,9 @@ const tableNames = {
   resellerPurchases: "reseller_purchases",
 };
 
+const PRODUCT_STOCK_COLUMNS =
+  "id, name, sku, category_id, price, quantity, reorder_level, unit, variants, not_stocked, created_at, updated_at";
+
 const fieldMap = {
   users: ["name", "email", "password", "role"],
   products: ["name", "sku", "category_id", "price", "quantity", "reorder_level", "unit", "image_url", "variants", "not_stocked"],
@@ -285,11 +288,15 @@ async function addProductStock(
     return { error: "Select a valid product variant", status: 400 };
   }
 
+  //* Resolve the actor BEFORE taking a pooled client. tokenUserName runs its
+  //* own query; doing that inside the open transaction can deadlock when the
+  //* five-connection pool is already busy.
+  const actor = await tokenUserName(token);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      "SELECT * FROM products WHERE id = $1 FOR UPDATE",
+      `SELECT ${PRODUCT_STOCK_COLUMNS} FROM products WHERE id = $1 FOR UPDATE`,
       [id],
     );
     const product = result.rows[0];
@@ -348,11 +355,13 @@ async function addProductStock(
 
     const updated = variants.length
       ? await client.query(
-          "UPDATE products SET quantity = $1, variants = $2::jsonb, updated_at = NOW() WHERE id = $3 RETURNING *",
+          `UPDATE products SET quantity = $1, variants = $2::jsonb, updated_at = NOW()
+           WHERE id = $3 RETURNING ${PRODUCT_STOCK_COLUMNS}`,
           [nextQuantity, JSON.stringify(nextVariants), id],
         )
       : await client.query(
-          "UPDATE products SET quantity = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+          `UPDATE products SET quantity = $1, updated_at = NOW()
+           WHERE id = $2 RETURNING ${PRODUCT_STOCK_COLUMNS}`,
           [nextQuantity, id],
         );
 
@@ -364,7 +373,7 @@ async function addProductStock(
         id,
         productName,
         addedQuantity,
-        `Stock added by ${await tokenUserName(token)}`,
+        `Stock added by ${actor}`,
         oldQuantity,
         oldQuantity + addedQuantity,
       ],
@@ -528,9 +537,11 @@ async function recordSale(body: Record<string, unknown>, token: string) {
   try {
     await client.query("BEGIN");
 
-    //* Lock the product row so two simultaneous sales cannot oversell it
+    //* Lock the product row so two simultaneous sales cannot oversell it.
+    //* Only stock-relevant columns: pulling the inline image here would copy
+    //* megabytes through the function for every recorded line.
     const productResult = await client.query(
-      "SELECT * FROM products WHERE id = $1 FOR UPDATE",
+      `SELECT ${PRODUCT_STOCK_COLUMNS} FROM products WHERE id = $1 FOR UPDATE`,
       [productId],
     );
     const product = productResult.rows[0];
@@ -554,8 +565,8 @@ async function recordSale(body: Record<string, unknown>, token: string) {
       || (product.not_stocked as unknown) === "t";
 
     if (variants.length) {
-      const index = Number.parseInt(String(variantRaw ?? ""), 10);
-      const variant = Number.isNaN(index) ? undefined : variants[index];
+      const index = parseVariantIndex(variantRaw);
+      const variant = index === null || index === undefined ? undefined : variants[index];
       if (!variant) {
         await client.query("ROLLBACK");
         return { error: "Select the rating being sold" };
@@ -603,9 +614,7 @@ async function recordSale(body: Record<string, unknown>, token: string) {
       [
         productId,
         productName,
-        Number.isNaN(Number.parseInt(String(variantRaw ?? ""), 10))
-          ? null
-          : Number.parseInt(String(variantRaw), 10),
+        parseVariantIndex(variantRaw) ?? null,
         quantity,
         unitPrice,
         total,
@@ -687,9 +696,11 @@ async function updateSale(
     }
 
     //* 2. Take the corrected amount out
-    const newVariantIndex = variantRaw === null || variantRaw === undefined || variantRaw === ""
-      ? null
-      : Number(variantRaw);
+    const newVariantIndex = parseVariantIndex(variantRaw);
+    if (newVariantIndex === undefined) {
+      await client.query("ROLLBACK");
+      return { error: "Select a valid rating being sold", status: 400 };
+    }
     const take = await applyStockDelta(client, productId, newVariantIndex, -quantity, false);
     if (take.error) {
       //* Undo the give-back so a refused edit leaves stock untouched
@@ -742,13 +753,10 @@ async function updateSale(
 //* Sales recorded before variant_index existed have no stored rating. Recover it
 //* by matching the saved product_name against the product's rating rows, so an
 //* old sale can still be edited and its stock returned to the right rating.
-async function resolveOriginalVariantIndex(
+export async function resolveOriginalVariantIndex(
   client: { query: (sql: string, values?: unknown[]) => Promise<any> },
   sale: Record<string, unknown>,
 ) {
-  const stored = Number.parseInt(String(sale.variant_index ?? ""), 10);
-  if (!Number.isNaN(stored)) return stored;
-
   const result = await client.query(
     "SELECT name, variants FROM products WHERE id = $1",
     [sale.product_id],
@@ -759,28 +767,47 @@ async function resolveOriginalVariantIndex(
     : [];
   if (!variants.length) return null;
 
-  const savedName = String(sale.product_name || "").toLowerCase();
-  const found = variants.findIndex((variant) => {
-    const label = displayVariantRating(variant.label);
-    const rawLabel = String(variant.label ?? "").trim();
-    const ampsRaw = variant.amps;
-    const amps =
-      ampsRaw !== "" && ampsRaw !== null && ampsRaw !== undefined && Number.isFinite(Number(ampsRaw))
-        ? `${Number(ampsRaw)}A`
-        : "";
-    const groups = [
-      [label, rawLabel],
-      [String(variant.glass ?? "").trim()],
-      [String(variant.colour ?? "").trim()],
-      [amps && amps.toLowerCase() !== label.toLowerCase() ? amps : ""],
-    ]
-      .map((group) => group.map((part) => part.toLowerCase()).filter(Boolean))
-      .filter((group) => group.length > 0);
-    return groups.length > 0 && groups.every((group) =>
-      group.some((part) => savedName.includes(part)),
-    );
-  });
-  return found >= 0 ? found : null;
+  const savedName = String(sale.product_name || "").trim().replace(/\s+/g, " ").toLowerCase();
+  const stored = parseVariantIndex(sale.variant_index);
+  if (stored !== undefined && stored !== null) {
+    const storedVariant = variants[stored];
+    //* The stored index is authoritative only while it still describes the
+    //* variant named on the sale. If a row was deleted/reordered, match the
+    //* saved suffix instead; refusing is safer than returning stock to the
+    //* wrong rating.
+    if (storedVariant && matchesVariantSuffix(savedName, storedVariant)) {
+      return stored;
+    }
+    const suffixMatches = variants
+      .map((variant, index) => (matchesVariantSuffix(savedName, variant) ? index : -1))
+      .filter((index) => index >= 0);
+    if (suffixMatches.length === 1) return suffixMatches[0];
+    if (storedVariant) {
+      const rating = displayVariantRating(storedVariant.label).toLowerCase();
+      const sameRating = rating
+        ? variants.filter((variant) => displayVariantRating(variant.label).toLowerCase() === rating)
+        : [];
+      if (sameRating.length === 1 && containsVariantToken(savedName, rating)) return stored;
+    }
+    return null;
+  }
+
+  //* Legacy rows have no variant_index: accept only a unique suffix match,
+  //* then a unique rating token. Ambiguous "White"/"Warm White" names are
+  //* rejected rather than guessed.
+  const suffixMatches = variants
+    .map((variant, index) => (matchesVariantSuffix(savedName, variant) ? index : -1))
+    .filter((index) => index >= 0);
+  if (suffixMatches.length === 1) return suffixMatches[0];
+  if (suffixMatches.length > 1) return null;
+
+  const ratingMatches = variants
+    .map((variant, index) => {
+      const rating = displayVariantRating(variant.label).toLowerCase();
+      return rating && containsVariantToken(savedName, rating) ? index : -1;
+    })
+    .filter((index) => index >= 0);
+  return ratingMatches.length === 1 ? ratingMatches[0] : null;
 }
 
 //* Move one product's stock by `delta` (positive = add, negative = remove),
@@ -794,7 +821,7 @@ async function applyStockDelta(
   isGiveBack: boolean,
 ): Promise<{ error?: string; productName?: string }> {
   const result = await client.query(
-    "SELECT * FROM products WHERE id = $1 FOR UPDATE",
+    `SELECT ${PRODUCT_STOCK_COLUMNS} FROM products WHERE id = $1 FOR UPDATE`,
     [productId],
   );
   const product = result.rows[0];
@@ -817,8 +844,8 @@ async function applyStockDelta(
   let productName = String(product.name || "");
   if (notStocked) {
     if (variants.length) {
-      const index = Number.parseInt(String(variantIndex ?? ""), 10);
-      const variant = Number.isNaN(index) ? undefined : variants[index];
+      const index = parseVariantIndex(variantIndex);
+      const variant = index === null || index === undefined ? undefined : variants[index];
       if (!variant) {
         return {
           error: isGiveBack
@@ -835,8 +862,8 @@ async function applyStockDelta(
   let nextVariants: Record<string, unknown>[] | null = null;
 
   if (variants.length) {
-    const index = Number.parseInt(String(variantIndex ?? ""), 10);
-    const variant = Number.isNaN(index) ? undefined : variants[index];
+    const index = parseVariantIndex(variantIndex);
+    const variant = index === null || index === undefined ? undefined : variants[index];
     if (!variant) {
       return {
         error: isGiveBack
@@ -975,6 +1002,30 @@ function saleVariantName(productName: string, variant: Record<string, unknown>) 
   return suffix ? `${productName} ${suffix}` : productName;
 }
 
+function variantSuffix(variant: Record<string, unknown>) {
+  return variantNameParts(variant).join(" · ").trim().toLowerCase();
+}
+
+function matchesVariantSuffix(savedName: string, variant: Record<string, unknown>) {
+  const suffix = variantSuffix(variant);
+  return Boolean(suffix) && savedName.endsWith(suffix);
+}
+
+function containsVariantToken(name: string, token: string) {
+  if (!name || !token) return false;
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, "iu").test(name);
+}
+
+//* null = explicitly no variant; undefined = malformed input. Integers only so
+//* "1abc" or 1.5 can never silently address a different rating row.
+export function parseVariantIndex(value: unknown): number | null | undefined {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "number" && typeof value !== "string") return undefined;
+  const index = Number(value);
+  return Number.isInteger(index) && index >= 0 ? index : undefined;
+}
+
 async function api(request: Request): Promise<Response> {
   const origin = request.headers.get("Origin");
   const headers = getCorsHeaders(origin);
@@ -1109,7 +1160,13 @@ async function api(request: Request): Promise<Response> {
           oldQuantity: "old_quantity",
           newQuantity: "new_quantity",
           unitPrice: "unit_price",
+          unitCost: "unit_cost",
+          totalCost: "total_cost",
+          purchasedAt: "purchased_at",
           soldAt: "sold_at",
+          soldBy: "sold_by",
+          shopName: "shop_name",
+          employeeName: "employee_name",
           variantIndex: "variant_index",
           notStocked: "not_stocked",
           createdAt: "created_at",

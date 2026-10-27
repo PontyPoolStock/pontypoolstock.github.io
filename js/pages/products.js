@@ -32,10 +32,12 @@ import {
   getProductDisplayName,
   describeApiError,
   debounce,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-7";
 
 let products = [];
 let categories = [];
+//* Lower-cased searchable text per product, rebuilt when the data loads.
+let productSearchIndex = new Map();
 let lastFiltered = [];
 let currentPage = 1;
 let PAGE_SIZE = 5;
@@ -75,6 +77,30 @@ async function loadData() {
   ]);
   products = sortData(productData);
   categories = categoryData;
+  rebuildProductSearchIndex();
+}
+
+function rebuildProductSearchIndex() {
+  const categoryNames = new Map(
+    categories.map((category) => [String(category.id), String(category.name || "")]),
+  );
+  productSearchIndex = new Map(
+    products.map((product) => {
+      const variants = getProductVariants(product)
+        .map((variant) => `${getVariantSuffix(variant)} ${variant.sku || ""}`)
+        .join(" ");
+      const text = [
+        product.name,
+        product.sku,
+        categoryNames.get(String(product.categoryId)),
+        variants,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return [String(product.id), text];
+    }),
+  );
 }
 
 //* render the whole html of Products page
@@ -254,18 +280,9 @@ function filterProducts() {
   let statusFilter = document.getElementById("statusFilter").value;
 
   let filtered = products.filter((p) => {
-    //^ Search by name, sku, or category name
-    if (searchTerm) {
-      const ratingsText = getProductVariants(p)
-        .map((variant) => `${variant.label || ""} ${variant.sku || ""} ${variant.glass || ""} ${variant.colour || ""} ${variant.amps ?? ""}`)
-        .join(" ")
-        .toLowerCase();
-      let matches =
-        String(p.name || "").toLowerCase().includes(searchTerm)
-        || String(p.sku || "").toLowerCase().includes(searchTerm)
-        || getCategoryLabel(categories, p.categoryId).toLowerCase().includes(searchTerm)
-        || ratingsText.includes(searchTerm);
-      if (!matches) return false;
+    //^ Search by prefixed name, SKU, category or variant text
+    if (searchTerm && !(productSearchIndex.get(String(p.id)) || "").includes(searchTerm)) {
+      return false;
     }
     //^ Filter by category
     if (categoryId && p.categoryId != categoryId) return false;

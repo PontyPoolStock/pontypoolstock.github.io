@@ -104,7 +104,7 @@ async function handleLogin(event) {
     //* A stale saved URL must not lock the user out of the Neon database
     if ((!user || user.error) && getConfiguredApiUrl() !== DEFAULT_API_URL) {
       setConfiguredApiUrl(DEFAULT_API_URL);
-      user = await postData("auth/login", { email, password, rememberMe });
+      user = await postData("auth/login", { username, email: username, password, rememberMe });
     }
 
     if (!user || user.error) {

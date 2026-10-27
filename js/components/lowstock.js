@@ -3,7 +3,7 @@ import {
   escapeHtml,
   getCategoryLabel,
   productThumbnailHtml,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-7";
 
 //* One shared Low Stock list for the whole app: the Dashboard card and alert,
 //* the Statistics card and the Reports summary all open this modal, so the

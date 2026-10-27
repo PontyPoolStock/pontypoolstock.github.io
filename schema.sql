@@ -97,11 +97,15 @@ CREATE INDEX IF NOT EXISTS products_updated_at_idx ON products(updated_at DESC, 
 CREATE INDEX IF NOT EXISTS categories_updated_at_idx ON categories(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS categories_parent_id_idx ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS stock_adjustments_product_id_idx ON stock_adjustments(product_id);
+CREATE INDEX IF NOT EXISTS stock_adjustments_updated_at_idx ON stock_adjustments(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS activity_log_timestamp_idx ON activity_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS activity_log_updated_at_idx ON activity_log(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS sales_sold_at_idx ON sales(sold_at DESC);
+CREATE INDEX IF NOT EXISTS sales_updated_at_idx ON sales(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS sales_branch_sold_at_idx ON sales(branch, sold_at DESC);
 CREATE INDEX IF NOT EXISTS reseller_purchases_product_id_idx ON reseller_purchases(product_id);
 CREATE INDEX IF NOT EXISTS reseller_purchases_purchased_at_idx ON reseller_purchases(purchased_at DESC);
+CREATE INDEX IF NOT EXISTS reseller_purchases_updated_at_idx ON reseller_purchases(updated_at DESC, id DESC);
 
 -- Seed admin account with scrypt-hashed password (pontypool1964). The owner
 -- signs in with the plain username "admin".

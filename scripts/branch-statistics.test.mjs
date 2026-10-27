@@ -77,28 +77,45 @@ globalThis.fetch = window.fetch = async (url) => {
 const { loadStatistics } = await import("../js/pages/statistics.js");
 await loadStatistics();
 
+const headers = [...document.querySelectorAll("#branchSalesTable thead th")]
+  .map((cell) => cell.textContent.replace(/\s+/g, " ").trim());
+assert.equal(headers.length, 5, "branch table shows one column per calendar period");
+assert.match(headers[1], /Daily total/, "branch table shows today's total");
+assert.match(headers[2], /Weekly total/, "branch table shows this week's total");
+assert.match(headers[3], /Monthly total/, "branch table shows this month's total");
+assert.match(headers[4], /Yearly total/, "branch table shows this year's total");
+
 const rows = [...document.querySelectorAll("#branchSalesTable tbody tr")];
 assert.equal(rows.length, 3, "statistics show both branches and an overall totals row");
 assert.match(rows[0].textContent, /Ambala Road/, "Ambala Road appears as a separate row");
-assert.match(rows[0].cells[1].textContent, /200/, "Ambala revenue is calculated independently");
-assert.equal(rows[0].cells[2].textContent.trim(), "1", "Ambala transactions are counted");
-assert.equal(rows[0].cells[3].textContent.trim(), "2", "Ambala units are counted");
+assert.equal(rows[0].cells.length, 5, "each branch row shows all four calendar totals");
+for (let cell = 1; cell <= 4; cell += 1) {
+  assert.match(rows[0].cells[cell].textContent, /200/,
+    "Ambala revenue is calculated independently for every period");
+  assert.match(rows[0].cells[cell].textContent, /1 sale · 2 units/,
+    "Ambala transactions and units are counted for every period");
+}
 assert.match(rows[1].textContent, /Duruma Road/, "Duruma Road appears as a separate row");
-assert.match(rows[1].cells[1].textContent, /350/, "Duruma revenue is calculated independently");
-assert.equal(rows[1].cells[2].textContent.trim(), "1", "Duruma transactions are counted");
-assert.equal(rows[1].cells[3].textContent.trim(), "1", "Duruma units are counted");
+for (let cell = 1; cell <= 4; cell += 1) {
+  assert.match(rows[1].cells[cell].textContent, /350/,
+    "Duruma revenue is calculated independently for every period");
+  assert.match(rows[1].cells[cell].textContent, /1 sale · 1 unit/,
+    "Duruma transactions and units are counted for every period");
+}
 assert.equal(rows[2].cells[0].textContent.trim(), "Totals",
   "the combined row is labeled Totals");
-assert.match(rows[2].cells[1].textContent, /1,000/,
-  "totals revenue includes both branches and older sales without branch metadata");
-assert.equal(rows[2].cells[2].textContent.trim(), "3",
-  "totals transaction count includes all sales");
-assert.equal(rows[2].cells[3].textContent.trim(), "6",
-  "totals units include all sales");
+for (let cell = 1; cell <= 4; cell += 1) {
+  assert.match(rows[2].cells[cell].textContent, /1,000/,
+    "totals revenue includes both branches and sales without branch metadata");
+  assert.match(rows[2].cells[cell].textContent, /3 sales · 6 units/,
+    "totals transactions and units include all sales");
+}
 assert.match(document.getElementById("pageContent").textContent, /1,000/,
   "existing overall sales totals continue to include unassigned history");
 assert.doesNotMatch(document.getElementById("pageContent").textContent, /Unassigned \(legacy\)|Older sales without a saved branch/,
   "statistics do not show the legacy explanation");
+assert.equal(document.querySelectorAll("[data-branch-granularity]").length, 0,
+  "branch totals are shown together instead of behind a period picker");
 
 const roles = fs.readFileSync(new URL("../js/utils/role.js", import.meta.url), "utf8");
 assert.match(roles, /"Statistics"/, "Statistics remains an admin page");

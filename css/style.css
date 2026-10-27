@@ -734,6 +734,35 @@ body.sidebar-open .sidebar-backdrop {
   white-space: nowrap;
 }
 
+.statistics-branch-caption {
+  margin-bottom: 0.35rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.statistics-th-note {
+  display: block;
+  margin-top: 0.1rem;
+  color: #94a3b8;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.statistics-total-row td {
+  border-top: 2px solid #e2e8f0;
+  background: #fafafa;
+}
+
+.statistics-cell-note {
+  display: block;
+  margin-top: 0.1rem;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
 .category-mark {
   display: inline-block;
   width: 8px;

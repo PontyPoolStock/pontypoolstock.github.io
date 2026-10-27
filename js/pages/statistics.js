@@ -14,7 +14,7 @@ import {
   getTotalInventoryValue,
   getResellerTotals,
   isNotStockedProduct,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-7";
 
 let statisticsData = {
   products: [],
@@ -24,6 +24,13 @@ let statisticsData = {
   resellerPurchases: [],
 };
 let selectedPeriod = "month";
+
+const BRANCH_TOTAL_PERIODS = [
+  { value: "day", label: "Daily total", currentLabel: "Today" },
+  { value: "week", label: "Weekly total", currentLabel: "This week" },
+  { value: "month", label: "Monthly total", currentLabel: "This month" },
+  { value: "year", label: "Yearly total", currentLabel: "This year" },
+];
 
 export async function loadStatistics() {
   const [products, categories, adjustments, sales, resellerPurchases] = await Promise.all([
@@ -50,10 +57,6 @@ function renderStatistics() {
   const periodSales = filterByPeriod(sales, selectedPeriod, "soldAt");
   const salesToday = filterByPeriod(sales, "day", "soldAt");
   const dailySales = groupSalesByDay(periodSales);
-  const branchSales = BRANCHES.map((branch) => ({
-    branch,
-    sales: periodSales.filter((sale) => sale.branch === branch),
-  }));
   //* Bought-for-resale is fully separate from own stock: bought units + spent
   //* from the purchase ledger, reseller sales = On-order product sales only.
   const periodPurchases = filterByPeriod(resellerPurchases, selectedPeriod, "purchasedAt");
@@ -222,12 +225,12 @@ function renderStatistics() {
           <section class="statistics-panel">
             <div class="statistics-panel-header">
               <div>
-                <span class="statistics-kicker">Sales performance</span>
+                <span class="statistics-kicker">Sales performance · calendar totals</span>
                 <h4>Sales by branch</h4>
               </div>
               <i class="bi bi-shop"></i>
             </div>
-            ${renderBranchSalesTable(branchSales, periodSales)}
+            ${renderBranchPerformance(sales)}
           </section>
         </div>
       </div>
@@ -303,31 +306,115 @@ function getSalesTotal(sales) {
   return sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
 }
 
-function renderBranchSalesTable(branches, allSales) {
-  const rows = [
-    ...branches.map(({ branch, sales }) => ({ branch, sales })),
-    { branch: "Totals", sales: allSales },
-  ];
+function renderBranchPerformance(sales) {
+  const timedSales = getTimedSales(sales);
+  const periods = BRANCH_TOTAL_PERIODS.map((period) => {
+    const bucket = getBranchBucket(period.value);
+    return { ...period, summary: summarizeBranchSales(timedSales, bucket) };
+  });
 
   return `
+    <div class="statistics-branch-caption">
+      <span>Calendar totals · the week starts Monday.</span>
+    </div>
     <div class="table-responsive">
       <table id="branchSalesTable" class="table statistics-table align-middle mb-0">
         <thead>
-          <tr><th>Branch</th><th class="text-end">Revenue</th><th>Transactions</th><th>Units sold</th></tr>
+          <tr>
+            <th>Branch</th>
+            ${periods.map((period) => `
+              <th class="text-end">
+                ${period.label}
+                <span class="statistics-th-note">${period.currentLabel}</span>
+              </th>
+            `).join("")}
+          </tr>
         </thead>
         <tbody>
-          ${rows.map(({ branch, sales }) => `
+          ${BRANCHES.map((branch, index) => `
             <tr>
               <td><strong>${escapeHtml(branch)}</strong></td>
-              <td class="text-end fw-semibold">${formatCurrency(getSalesTotal(sales))}</td>
-              <td>${sales.length.toLocaleString("en-US")}</td>
-              <td>${sales.reduce((sum, sale) => sum + (Number(sale.quantity) || 0), 0).toLocaleString("en-US")}</td>
+              ${periods.map((period) => renderBranchTotalCell(period.summary.rows[index])).join("")}
             </tr>
           `).join("")}
+          <tr class="statistics-total-row">
+            <td><strong>Totals</strong></td>
+            ${periods.map((period) => renderBranchTotalCell(period.summary.total)).join("")}
+          </tr>
         </tbody>
       </table>
     </div>
   `;
+}
+
+function renderBranchTotalCell(row) {
+  const salesLabel = row.transactions === 1 ? "sale" : "sales";
+  const unitsLabel = row.units === 1 ? "unit" : "units";
+  return `
+    <td class="text-end">
+      <strong>${formatCurrency(row.revenue)}</strong>
+      <span class="statistics-cell-note">${row.transactions.toLocaleString("en-US")} ${salesLabel} · ${row.units.toLocaleString("en-US")} ${unitsLabel}</span>
+    </td>
+  `;
+}
+
+function getTimedSales(sales) {
+  const timed = [];
+  for (const sale of Array.isArray(sales) ? sales : []) {
+    const time = new Date(sale.soldAt || sale.createdAt).getTime();
+    if (Number.isFinite(time)) timed.push({ sale, time });
+  }
+  return timed;
+}
+
+function getBranchBucketStart(granularity, reference = new Date()) {
+  const start = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+  if (granularity === "week") {
+    const daysSinceMonday = (start.getDay() + 6) % 7;
+    start.setDate(start.getDate() - daysSinceMonday);
+  } else if (granularity === "month") {
+    start.setDate(1);
+  } else if (granularity === "year") {
+    start.setMonth(0, 1);
+  }
+  return start;
+}
+
+function shiftBranchBucket(start, granularity, amount) {
+  const next = new Date(start);
+  if (granularity === "day") next.setDate(next.getDate() + amount);
+  else if (granularity === "week") next.setDate(next.getDate() + amount * 7);
+  else if (granularity === "month") next.setMonth(next.getMonth() + amount);
+  else next.setFullYear(next.getFullYear() + amount);
+  return next;
+}
+
+function getBranchBucket(granularity) {
+  const start = getBranchBucketStart(granularity);
+  const end = shiftBranchBucket(start, granularity, 1);
+  return { startTime: start.getTime(), endTime: end.getTime() };
+}
+
+function summarizeBranchSales(timedSales, bucket) {
+  const rows = new Map(
+    BRANCHES.map((branch) => [branch, { branch, revenue: 0, transactions: 0, units: 0 }]),
+  );
+  const total = { revenue: 0, transactions: 0, units: 0 };
+
+  for (const { sale, time } of timedSales) {
+    if (time < bucket.startTime || time >= bucket.endTime) continue;
+    addSaleToTotal(total, sale);
+    const branchRow = rows.get(sale.branch);
+    if (branchRow) addSaleToTotal(branchRow, sale);
+  }
+
+  return { rows: BRANCHES.map((branch) => rows.get(branch)), total };
+}
+
+function addSaleToTotal(total, sale) {
+  total.revenue += Number(sale.total) || 0;
+  total.transactions += 1;
+  total.units += Number(sale.quantity) || 0;
 }
 
 //* Per-product bought-for-resale breakdown: bought units + spent from the

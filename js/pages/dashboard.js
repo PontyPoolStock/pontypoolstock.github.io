@@ -14,7 +14,7 @@ import {
   productThumbnailHtml,
   activityRowHtml,
   normalizeActivity,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-7";
 
 let products = [];
 let categories = [];

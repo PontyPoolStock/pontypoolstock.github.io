@@ -13,7 +13,7 @@ import {
   getVariantSuffix,
   isNotStockedProduct,
   productThumbnailHtml,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-7";
 import { isStaffView } from "../utils/role.js";
 
 //* The cards behind a click on a list row: a product card (picture + the numbers

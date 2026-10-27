@@ -11,7 +11,7 @@ import { getModal } from "../components/modal.js";
 import { openCategoryPreview } from "../components/preview.js";
 import { showToast, confirmAction } from "../components/toast.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml, describeApiError } from "../utils/helpers.js";
+import { escapeHtml, GetCurrentDate, sortData, debounce, productThumbnailHtml, describeApiError } from "../utils/helpers.js?v=20261027-7";
 import { isStaffView } from "../utils/role.js";
 
 let products = [];

@@ -4,13 +4,14 @@ import { fetchData, postData, updateData, deleteData, hydrateEntityImages, PRODU
 //* loaded the page and then threw ReferenceError, which the router showed as
 //* "Shop Purchases could not be loaded". scripts/reseller-page.test.mjs now
 //* executes this module in jsdom so that failure mode can't ship again.
-import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml } from "../utils/helpers.js";
+import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml } from "../utils/helpers.js?v=20261027-7";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 
 let purchases = [];
 let products = [];
 let sales = [];
+let stockMaps = { bought: {}, sold: {}, left: {} };
 let lastFiltered = [];
 let currentPage = 1;
 let PAGE_SIZE = 5;
@@ -27,13 +28,16 @@ export async function loadResellerPurchases() {
 
 async function loadData(opts = {}) {
   const fresh = opts.fresh ? { fresh: true } : undefined;
-  const pd = await fetchData("resellerPurchases", fresh);
-  const pr = await fetchData("products?fields=" + PRODUCT_LIST_FIELDS);
-  const sl = await fetchData("sales");
+  const [pd, pr, sl] = await Promise.all([
+    fetchData("resellerPurchases", fresh),
+    fetchData("products?fields=" + PRODUCT_LIST_FIELDS),
+    fetchData("sales"),
+  ]);
   purchases = Array.isArray(pd) ? [...pd] : [];
   purchases.sort((a, b) => new Date(b.purchasedAt || b.createdAt) - new Date(a.purchasedAt || a.createdAt));
   products = Array.isArray(pr) ? pr.filter((p) => isOnOrder(p)) : [];
   sales = Array.isArray(sl) ? sl : [];
+  stockMaps = stockMap();
 }
 
 function isOnOrder(p) {
@@ -78,7 +82,7 @@ function displayName(p) {
   return "Product";
 }
 function renderPage() {
-  const maps = stockMap();
+  const maps = stockMaps;
   let onHand = 0;
   const keys = Object.keys(maps.left);
   for (let i = 0; i < keys.length; i++) onHand += Number(maps.left[keys[i]]) || 0;
@@ -176,7 +180,7 @@ function getTableHtml(list) {
   const canDeletePurchases = !isStaffView();
   const rows = list || lastFiltered;
   const paged = paginateData(rows, currentPage, PAGE_SIZE);
-  const maps = stockMap();
+  const maps = stockMaps;
   let body = "";
   for (let i = 0; i < paged.length; i++) {
     const item = paged[i];
@@ -369,7 +373,7 @@ function paintProductPreview() {
   const varSel = document.getElementById("resellerVariantSelect");
   const list = variantList(product);
   const vIdx = list.length && varSel && varSel.value !== "" ? varSel.value : "";
-  const maps = stockMap();
+  const maps = stockMaps;
   const k = resellerKey(pid, vIdx);
   const bits = [];
   if (list.length && vIdx !== "") bits.push(variantLabel(product, vIdx));

@@ -20,7 +20,7 @@ import {
   getVariantSuffix,
   getProductDisplayName,
   describeApiError,
-} from "../utils/helpers.js?v=20261027-6";
+} from "../utils/helpers.js?v=20261027-7";
 import { showToast } from "./toast.js";
 
 import { postData, updateData, fetchData, fetchEntityImage, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
@@ -250,8 +250,10 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
 
         //* The adjustment row and the stock write are independent — run them
         //* together so the modal closes after ONE round trip instead of two.
+        //* Send only the changed columns: spreading the whole product used to
+        //* re-upload its inline image and rewrite stale fields.
         setSaveBusy(saveButton, true);
-        await Promise.all([
+        const [adjustmentResult, productResult] = await Promise.all([
           postData("stockAdjustments", {
             productId: product.id,
             productName: getVariantName(product, rating),
@@ -263,13 +265,20 @@ async function saveBtnEvent(obj, action, id, modal, modalElement, onAfterSave) {
           }),
           updateData("products", product.id, nextVariants
             ? {
-              ...product,
               variants: nextVariants,
               quantity: getVariantsTotalQuantity(nextVariants),
             }
-            : { ...product, quantity: newQty }),
+            : { quantity: newQty }),
         ]);
         setSaveBusy(saveButton, false);
+
+        if (adjustmentResult?.error || productResult?.error) {
+          showToast(
+            adjustmentResult?.error || productResult?.error || "Could not save the stock adjustment.",
+            "danger",
+          );
+          return;
+        }
 
         const sign = type === "increase" ? "+" : "−";
         //* The log entry is cosmetic — never hold the modal open for it.
