@@ -26,10 +26,23 @@ export function normalizeVariantColour(value) {
   return RATING_COLOURS.find((option) => option.toLowerCase() === colour.toLowerCase()) || colour;
 }
 
+//* Amperes are often the only rating a product carries (32A light bulbs), so a
+//* blank Rating field still means "32A" when the Amperes field holds 32.
+export function formatVariantAmps(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const amps = Number(value);
+  return Number.isFinite(amps) ? `${amps}A` : normalizeVariantText(value);
+}
+
+export function getVariantRatingLabel(variant) {
+  return normalizeVariantText(variant?.label) || formatVariantAmps(variant?.amps);
+}
+
 //* One stable identity for a rating + colour pair. Two rows with the same key
 //* would be impossible to tell apart in Record Sale, so saving rejects them.
-export function variantSelectionKey(label, colour) {
-  return `${normalizeVariantText(label).toLowerCase()}::${normalizeVariantColour(colour).toLowerCase()}`;
+export function variantSelectionKey(label, colour, amps = "") {
+  const rating = normalizeVariantText(label) || formatVariantAmps(amps);
+  return `${rating.toLowerCase()}::${normalizeVariantColour(colour).toLowerCase()}`;
 }
 
 //* Numeric ratings (32, 63) come first in value order; text ratings (4W, 9W)
@@ -48,7 +61,7 @@ function compareVariantLabels(a, b) {
 export function getVariantLabels(variants) {
   const labels = [...new Set(
     (Array.isArray(variants) ? variants : [])
-      .map((variant) => normalizeVariantText(variant?.label))
+      .map(getVariantRatingLabel)
       .filter(Boolean),
   )];
   return labels.sort(compareVariantLabels);
@@ -84,12 +97,14 @@ function isValidVariantRows(variants) {
         ? ""
         : Math.max(0, Number(variant.amps) || 0);
 
-    if (!variant.label && !variant.colour) {
-      if (errorBox) errorBox.innerHTML = `Rating row ${index + 1}: add a rating or colour.`;
+    if (!variant.label && !variant.colour && variant.amps === "") {
+      if (errorBox) {
+        errorBox.innerHTML = `Rating row ${index + 1}: add a rating, colour or amperage.`;
+      }
       return false;
     }
 
-    const key = variantSelectionKey(variant.label, variant.colour);
+    const key = variantSelectionKey(variant.label, variant.colour, variant.amps);
     if (seen.has(key)) {
       if (errorBox) {
         errorBox.innerHTML =
@@ -278,13 +293,10 @@ export function getProductDisplayName(productOrName) {
 }
 //* "4W · White · 0.05A" — the rating text every list, alert and preview shows
 export function getVariantSuffix(variant) {
-  const ampsRaw = variant?.amps;
-  const amps =
-    ampsRaw !== "" && ampsRaw !== null && ampsRaw !== undefined && Number.isFinite(Number(ampsRaw))
-      ? `${Number(ampsRaw)}A`
-      : "";
-  return [variant?.label, variant?.colour, amps]
-    .map((part) => String(part ?? "").trim())
+  const rating = getVariantRatingLabel(variant);
+  const amps = formatVariantAmps(variant?.amps);
+  const showAmps = amps && amps.toLowerCase() !== rating.toLowerCase();
+  return [rating, normalizeVariantColour(variant?.colour), showAmps ? amps : ""]
     .filter(Boolean)
     .join(" · ");
 }

@@ -71,6 +71,19 @@ const products = [
     quantity: 0,
     variants: [{ label: "9W", price: 90, quantity: 2 }],
   },
+  {
+    id: "p6",
+    name: "Amp Only",
+    categoryId: "c1",
+    price: 0,
+    quantity: 0,
+    variants: [
+      { label: "", colour: "", amps: 10, price: 70, quantity: 4 },
+      { label: "", colour: "", amps: 20, price: 80, quantity: 2 },
+      { label: "", colour: "", amps: 32, price: 90, quantity: 3 },
+      { label: "", colour: "", amps: 63, price: 100, quantity: 1 },
+    ],
+  },
 ];
 const posts = [];
 let serverSales = [];
@@ -125,12 +138,13 @@ await loadSales();
 
 // 1. One option per product (the old dropdown duplicated every variant row).
 const productOptions = optionLabels("saleProductSelect");
-assert.equal(productOptions.length, 6, "placeholder + one option per product");
+assert.equal(productOptions.length, 7, "placeholder + one option per product");
 assert.match(productOptions[1], /Panel Light — 10 in stock/);
 assert.match(productOptions[2], /Colour Bulb — 4 in stock/);
 assert.match(productOptions[3], /Simple — 9 in stock/);
 assert.match(productOptions[4], /Single Rating — 4 in stock/);
 assert.match(productOptions[5], /Rating Only — 2 in stock/);
+assert.match(productOptions[6], /Amp Only — 10 in stock/);
 assert.ok(
   [...document.querySelectorAll("#saleProductSelect option")]
     .every((option) => !option.value.includes("::")),
@@ -223,23 +237,42 @@ assert.ok(hidden("saleVariantColourGroup"), "colour picker hidden when the produ
 assert.equal(document.getElementById("saleUnitPrice").value, "90");
 assert.match(document.getElementById("saleStockHint").textContent, /9W — Stock: 2/);
 
-// 9. Recording sends the resolved indices, not the hidden dropdown position.
+// 9. Old products often carry only Amperes (32A) with blank Rating/Colour;
+//    the amperage becomes the visible rating instead of hiding the picker.
+pickProduct("p6");
+assert.ok(!hidden("saleVariantWrapper"), "amperage-only variants show the picker");
+assert.ok(!hidden("saleVariantRatingGroup"), "amperage is shown as the rating");
+assert.deepEqual(optionLabels("saleVariantSelect"),
+  ["Select rating", "10A", "20A", "32A", "63A"],
+  "amperages are formatted and sorted as ratings");
+assert.ok(hidden("saleVariantColourGroup"), "no colour picker when colours are blank");
+pick("saleVariantSelect", "32A");
+assert.equal(document.getElementById("saleUnitPrice").value, "90",
+  "the amperage row price is prefilled");
+assert.match(document.getElementById("saleStockHint").textContent, /32A — Stock: 3/);
+setField("saleQuantity", 1);
+document.getElementById("addSaleLineBtn").click();
+assert.equal(lines().length, 4, "amperage-only line staged");
+
+// 10. Recording sends the resolved indices, not the hidden dropdown position.
 posts.length = 0;
 setField("saleQuantity", "");
 document.getElementById("recordSaleForm").dispatchEvent(
   new window.Event("submit", { bubbles: true, cancelable: true }),
 );
 await settle(120);
-assert.equal(posts.length, 3, "one POST per staged line");
+assert.equal(posts.length, 4, "one POST per staged line");
 assert.deepEqual(posts.map((post) => [post.productId, post.variantIndex]), [
   ["p1", 1],
   ["p1", 0],
   ["p2", 0],
-], "each sale stores the exact variant index resolved from label + colour");
-assert.ok(posts.every((post) => post.unitPrice === 125 || post.unitPrice === 120 || post.unitPrice === 60),
+  ["p6", 2],
+], "each sale stores the exact variant index resolved from rating + colour");
+assert.ok(posts.every((post) =>
+  [125, 120, 60, 90].includes(post.unitPrice)),
   "each sale stores its variant price");
 
-// 10. The owner account renders the same pickers — this page has no role split.
+// 11. The owner account renders the same pickers — this page has no role split.
 window.localStorage.setItem("currentUser", JSON.stringify({
   name: "Admin",
   role: "admin",

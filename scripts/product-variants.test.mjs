@@ -80,4 +80,22 @@ assert.match(document.querySelector(".errorMes-variants").textContent,
   /Rating rows 1 and 2 repeat the same rating and colour/,
   "the duplicate row numbers are shown");
 
-console.log("OK — product variants: duplicate, previews, canonical colours, duplicate-pair rejection");
+set(row, "label", "");
+set(row, "colour", "");
+set(row, "amps", "32");
+set(clone, "label", "");
+set(clone, "colour", "");
+set(clone, "amps", "63");
+const ampsRows = collectProductVariants();
+assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", ampsRows), true,
+  "rows identified only by amperage are valid");
+assert.match(row.querySelector("[data-variant-preview]").textContent,
+  /Shown in Record Sale as: 32A/,
+  "amperage alone is previewed as the rating");
+
+set(clone, "amps", "32");
+const duplicateAmpsRows = collectProductVariants();
+assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", duplicateAmpsRows), false,
+  "the same amperage twice is rejected");
+
+console.log("OK — product variants: duplicate, previews, canonical colours, amperage-only rows, duplicate rejection");

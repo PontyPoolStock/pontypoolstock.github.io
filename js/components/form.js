@@ -3,13 +3,14 @@ import {
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantPriceRange,
+  getVariantSuffix,
   RATING_COLOURS,
   getProductDisplayName,
   isNotStockedProduct,
   normalizeVariantColour,
   normalizeVariantText,
   UNIT_SUGGESTIONS,
-} from "../utils/helpers.js?v=20261027-2";
+} from "../utils/helpers.js?v=20261027-3";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
   //^ Edit reuses the row you already have so opening the modal is instant —
   //^ no extra product fetch, and categories come from the slim cached list
@@ -243,14 +244,14 @@ export function setupProductVariants() {
       const preview = row.querySelector("[data-variant-preview]");
       if (!preview) return;
       const valueOf = (field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
-      const parts = [
-        normalizeVariantText(valueOf("label")),
-        normalizeVariantColour(valueOf("colour")),
-        valueOf("amps") ? `${valueOf("amps")}A` : "",
-      ].filter(Boolean);
-      preview.textContent = parts.length
-        ? `Shown in Record Sale as: ${parts.join(" · ")}`
-        : "Add a rating or colour so this row can be picked in Record Sale.";
+      const suffix = getVariantSuffix({
+        label: valueOf("label"),
+        colour: valueOf("colour"),
+        amps: valueOf("amps"),
+      });
+      preview.textContent = suffix
+        ? `Shown in Record Sale as: ${suffix}`
+        : "Add a rating, colour or amperage so this row can be picked in Record Sale.";
     });
   };
 

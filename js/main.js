@@ -11,7 +11,7 @@ import { loadReports } from "./pages/reports.js";
 import { loadActivityLog } from "./pages/activity.js";
 import { loadDashboard } from "./pages/dashboard.js";
 import { loadStockAdjustments } from "./pages/stockadjustment.js";
-import { loadSales } from "./pages/sales.js?v=20261027-2";
+import { loadSales } from "./pages/sales.js?v=20261027-3";
 //* Shop Purchases loads lazily (see the router below): a static import would
 //* run its module at boot, so any fault in that one page would blank the
 //* entire app — including Dashboard on a fresh login.

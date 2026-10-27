@@ -18,6 +18,7 @@ import {
   getVariantPrice,
   getVariantLabels,
   getVariantColours,
+  getVariantRatingLabel,
   getProductDisplayName,
   isNotStockedProduct,
   normalizeVariantColour,
@@ -25,7 +26,7 @@ import {
   productThumbnailHtml,
   describeApiError,
   debounce,
-} from "../utils/helpers.js?v=20261027-2";
+} from "../utils/helpers.js?v=20261027-3";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
@@ -789,7 +790,7 @@ function populateVariantSelect(variantSelect, preferred = {}) {
       ? String(variantSelect.value || "")
       : (labels[0] || "");
     const candidates = hasRating
-      ? variants.filter((variant) => normalizeVariantText(variant.label) === rating)
+      ? variants.filter((variant) => getVariantRatingLabel(variant) === rating)
       : variants;
     const colours = getVariantColours(candidates);
     const wanted = normalizeVariantColour(wantedColour);
@@ -847,7 +848,7 @@ function getVariantSelectionState() {
   }
 
   let candidates = labels.length
-    ? variants.filter((variant) => normalizeVariantText(variant.label) === rating)
+    ? variants.filter((variant) => getVariantRatingLabel(variant) === rating)
     : variants;
   let colour = normalizeVariantColour(document.getElementById("saleVariantColour")?.value);
   const colours = getVariantColours(candidates);
@@ -1566,7 +1567,10 @@ function populateEditVariantSelect(variantSelect, preferredIndex) {
   wrapper?.classList.remove("d-none");
   variantSelect.innerHTML = variants
     .map((variant, index) => {
-      const bits = [variant.label || `Row ${index + 1}`, variant.colour || ""].filter(Boolean).join(" - ");
+      const bits = [
+        getVariantRatingLabel(variant) || `Row ${index + 1}`,
+        normalizeVariantColour(variant.colour),
+      ].filter(Boolean).join(" - ");
       const stock = Number(variant.quantity) || 0;
       const out = stock <= 0 ? " (out of stock)" : ` - ${stock} in stock`;
       return `<option value="${index}">${escapeHtml(bits)}${out}</option>`;
