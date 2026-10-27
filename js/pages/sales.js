@@ -25,7 +25,7 @@ import {
   productThumbnailHtml,
   describeApiError,
   debounce,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-2";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
@@ -737,9 +737,11 @@ function getSelectedProduct() {
   return products.find((product) => String(product.id) === productId) || null;
 }
 
-//* Rating/colour pickers are derived from the product's variants: a select
-//* only appears when there is a real choice to make. The pair resolves exactly
-//* one stock row, so the sale line never depends on a hidden variant index.
+//* Rating/colour pickers are derived from the product's variants. Any rating
+//* or colour is shown, even when there is only one, so the sold row is always
+//* visible; only the placeholder is skipped when there is nothing to choose.
+//* The pair resolves exactly one stock row, so the line never depends on a
+//* hidden variant index.
 function populateVariantSelect(variantSelect, preferred = {}) {
   const wrapper = document.getElementById("saleVariantWrapper");
   const ratingGroup = document.getElementById("saleVariantRatingGroup");
@@ -762,24 +764,31 @@ function populateVariantSelect(variantSelect, preferred = {}) {
   }
 
   const labels = getVariantLabels(variants);
-  const showRating = labels.length > 1;
+  const hasRating = labels.length > 0;
+  const hasRatingChoice = labels.length > 1;
   const preferredRating = normalizeVariantText(preferred.rating);
   const preferredColour = normalizeVariantColour(preferred.colour);
 
-  ratingGroup?.classList.toggle("d-none", !showRating);
+  ratingGroup?.classList.toggle("d-none", !hasRating);
   variantSelect.innerHTML = "";
-  if (showRating) {
-    variantSelect.innerHTML = '<option value="">Select rating</option>' + labels
-      .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
-      .join("");
-    variantSelect.value = labels.includes(preferredRating) ? preferredRating : "";
+  if (hasRating) {
+    if (hasRatingChoice) {
+      variantSelect.innerHTML = '<option value="">Select rating</option>' + labels
+        .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
+        .join("");
+      variantSelect.value = labels.includes(preferredRating) ? preferredRating : "";
+    } else {
+      variantSelect.innerHTML =
+        `<option value="${escapeHtml(labels[0])}">${escapeHtml(labels[0])}</option>`;
+      variantSelect.value = labels[0];
+    }
   }
 
   const paintColours = (wantedColour = "") => {
-    const rating = labels.length
-      ? (showRating ? String(variantSelect.value || "") : labels[0])
-      : "";
-    const candidates = labels.length
+    const rating = hasRatingChoice
+      ? String(variantSelect.value || "")
+      : (labels[0] || "");
+    const candidates = hasRating
       ? variants.filter((variant) => normalizeVariantText(variant.label) === rating)
       : variants;
     const colours = getVariantColours(candidates);
@@ -797,13 +806,9 @@ function populateVariantSelect(variantSelect, preferred = {}) {
       colourSelect.value = colours[0];
     }
 
-    colourGroup?.classList.toggle("d-none", colours.length <= 1);
-    if (colourLabel) {
-      colourLabel.textContent = !showRating && labels.length
-        ? `Colour (${labels[0]})`
-        : "Colour";
-    }
-    wrapper?.classList.toggle("d-none", !showRating && colours.length <= 1);
+    colourGroup?.classList.toggle("d-none", colours.length === 0);
+    if (colourLabel) colourLabel.textContent = "Colour";
+    wrapper?.classList.toggle("d-none", !hasRating && colours.length === 0);
   };
 
   paintColours(preferredColour);

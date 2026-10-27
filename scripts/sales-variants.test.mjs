@@ -55,6 +55,22 @@ const products = [
     ],
   },
   { id: "p3", name: "Simple", categoryId: "c1", price: 40, quantity: 9 },
+  {
+    id: "p4",
+    name: "Single Rating",
+    categoryId: "c1",
+    price: 0,
+    quantity: 0,
+    variants: [{ label: "32A", colour: "White", price: 300, quantity: 4 }],
+  },
+  {
+    id: "p5",
+    name: "Rating Only",
+    categoryId: "c1",
+    price: 0,
+    quantity: 0,
+    variants: [{ label: "9W", price: 90, quantity: 2 }],
+  },
 ];
 const posts = [];
 let serverSales = [];
@@ -109,10 +125,12 @@ await loadSales();
 
 // 1. One option per product (the old dropdown duplicated every variant row).
 const productOptions = optionLabels("saleProductSelect");
-assert.equal(productOptions.length, 4, "placeholder + one option per product");
+assert.equal(productOptions.length, 6, "placeholder + one option per product");
 assert.match(productOptions[1], /Panel Light — 10 in stock/);
 assert.match(productOptions[2], /Colour Bulb — 4 in stock/);
 assert.match(productOptions[3], /Simple — 9 in stock/);
+assert.match(productOptions[4], /Single Rating — 4 in stock/);
+assert.match(productOptions[5], /Rating Only — 2 in stock/);
 assert.ok(
   [...document.querySelectorAll("#saleProductSelect option")]
     .every((option) => !option.value.includes("::")),
@@ -186,7 +204,26 @@ assert.ok(hidden("saleVariantWrapper"), "no variant picker for a simple product"
 assert.equal(document.getElementById("saleUnitPrice").value, "40");
 assert.match(document.getElementById("saleStockHint").textContent, /9 in stock/);
 
-// 7. Recording sends the resolved indices, not the hidden dropdown position.
+// 7. One rating and one colour are still shown, so the sold row is visible
+//    even when there is nothing else to choose.
+pickProduct("p4");
+assert.ok(!hidden("saleVariantWrapper"), "single-variant picker stays visible");
+assert.ok(!hidden("saleVariantRatingGroup"), "the one rating is shown");
+assert.deepEqual(optionLabels("saleVariantSelect"), ["32A"]);
+assert.ok(!hidden("saleVariantColourGroup"), "the one colour is shown");
+assert.deepEqual(optionLabels("saleVariantColour"), ["White"]);
+assert.equal(document.getElementById("saleUnitPrice").value, "300");
+assert.match(document.getElementById("saleStockHint").textContent, /32A · White — Stock: 4/);
+
+// 8. A single rating without a colour still shows the rating picker.
+pickProduct("p5");
+assert.ok(!hidden("saleVariantRatingGroup"), "the one rating is shown without a colour");
+assert.deepEqual(optionLabels("saleVariantSelect"), ["9W"]);
+assert.ok(hidden("saleVariantColourGroup"), "colour picker hidden when the product has none");
+assert.equal(document.getElementById("saleUnitPrice").value, "90");
+assert.match(document.getElementById("saleStockHint").textContent, /9W — Stock: 2/);
+
+// 9. Recording sends the resolved indices, not the hidden dropdown position.
 posts.length = 0;
 setField("saleQuantity", "");
 document.getElementById("recordSaleForm").dispatchEvent(
@@ -202,4 +239,16 @@ assert.deepEqual(posts.map((post) => [post.productId, post.variantIndex]), [
 assert.ok(posts.every((post) => post.unitPrice === 125 || post.unitPrice === 120 || post.unitPrice === 60),
   "each sale stores its variant price");
 
-console.log("OK — sales variants: dependent pickers, variant stock, colour-only, simple, exact indices");
+// 10. The owner account renders the same pickers — this page has no role split.
+window.localStorage.setItem("currentUser", JSON.stringify({
+  name: "Admin",
+  role: "admin",
+  expiresAt: tokenExpiry,
+}));
+await loadSales();
+pickProduct("p4");
+assert.ok(!hidden("saleVariantRatingGroup"), "admin sees the rating picker too");
+assert.deepEqual(optionLabels("saleVariantSelect"), ["32A"]);
+assert.ok(!hidden("saleVariantColourGroup"), "admin sees the colour picker too");
+
+console.log("OK — sales variants: dependent pickers, variant stock, colour-only, simple, exact indices, admin and staff");

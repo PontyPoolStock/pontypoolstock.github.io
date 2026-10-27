@@ -9,7 +9,7 @@ import {
   normalizeVariantColour,
   normalizeVariantText,
   UNIT_SUGGESTIONS,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-2";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
   //^ Edit reuses the row you already have so opening the modal is instant —
   //^ no extra product fetch, and categories come from the slim cached list
