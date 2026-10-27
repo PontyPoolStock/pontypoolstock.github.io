@@ -439,10 +439,11 @@ function getProductOptionsHtml(selectedId = "") {
       return;
     }
     variants.forEach((variant, idx) => {
-      const label = String(variant.label || "").trim() || `Variant ${idx + 1}`;
+      const label = String(variant.label || "").trim();
       const stock = Number(variant.quantity) || 0;
       const isSelected = `${product.id}::${idx}` === String(selectedId);
-      html += `<option value="${product.id}::${idx}" ${isSelected ? "selected" : ""}>${name} — ${label} (${stock})</option>`;
+      const labelPart = label ? ` — ${label}` : "";
+      html += `<option value="${product.id}::${idx}" ${isSelected ? "selected" : ""}>${name}${labelPart} (${stock})</option>`;
     });
   });
   return html;
