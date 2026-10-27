@@ -425,20 +425,27 @@ function getProductOptionsHtml(selectedId = "") {
   if (!filtered.length) {
     return `<option value="" disabled>${saleCategoryFilter !== "" ? "No products in this category" : "No products in stock"}</option>`;
   }
-  return filtered
-    .map((product) => {
+  let html = "";
+  filtered.forEach((product) => {
+    const variants = getProductVariants(product);
+    const name = escapeHtml(getProductDisplayName(product));
+    if (!variants.length) {
       const onOrder = isNotStockedProduct(product);
-      const variants = getProductVariants(product);
-      const stock = variants.length
-        ? getVariantsTotalQuantity(variants)
-        : Number(product.quantity) || 0;
+      const stock = Number(product.quantity) || 0;
       const out = !onOrder && stock <= 0;
-      const name = escapeHtml(getProductDisplayName(product));
       const isSelected = String(product.id) === String(selectedId);
       const label = onOrder ? `${name} — Resale product` : `${name} — ${stock} in stock`;
-      return `<option value="${product.id}" ${isSelected ? "selected" : ""} ${out ? "disabled" : ""}>${label}</option>`;
-    })
-    .join("");
+      html += `<option value="${product.id}::" ${isSelected ? "selected" : ""} ${out ? "disabled" : ""}>${label}</option>`;
+      return;
+    }
+    variants.forEach((variant, idx) => {
+      const label = String(variant.label || "").trim() || `Variant ${idx + 1}`;
+      const stock = Number(variant.quantity) || 0;
+      const isSelected = `${product.id}::${idx}` === String(selectedId);
+      html += `<option value="${product.id}::${idx}" ${isSelected ? "selected" : ""}>${name} — ${label} (${stock})</option>`;
+    });
+  });
+  return html;
 }
 
 //* Units of this product/rating already waiting in the basket — stock checks
@@ -550,17 +557,14 @@ function handleCategoryChange() {
 function handleAddToCart() {
   if (isSubmitting) return false;
 
-  const productId = document.getElementById("saleProductSelect")?.value || "";
+  const raw = document.getElementById("saleProductSelect")?.value || "";
+  const [productId, variantIdxStr] = raw.split("::");
   const quantity = Number(document.getElementById("saleQuantity")?.value);
   const unitPrice = Number(document.getElementById("saleUnitPrice")?.value);
-  const ratingSelect = document.getElementById("saleVariantSelect");
-  const colourSelect = document.getElementById("saleVariantColour");
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
   const hasVariants = variants.length > 0;
-  const rating = ratingSelect?.value || "";
-  const colour = colourSelect?.value || "";
-  const variantIndex = hasVariants ? findVariantIndexByRatingColour(rating, colour, variants) : null;
+  const variantIndex = hasVariants ? Number(variantIdxStr) : null;
 
   if (!isValidSaleData({ productId, quantity, unitPrice, variantIndex: variantIndex == null ? "" : String(variantIndex), hasVariants })) {
     return false;
@@ -622,9 +626,15 @@ function setupEventListeners() {
     ?.addEventListener("change", handleCategoryChange);
 
   productSelect?.addEventListener("change", () => {
+    const raw = productSelect.value || "";
+    const [productId, variantIdx] = raw.split("::");
+    if (variantIdx !== undefined && variantIdx !== "") {
+      variantSelect.value = variantIdx;
+      variantSelect.dispatchEvent(new Event("change"));
+    }
     populateVariantSelect(variantSelect);
     updatePriceDefault(priceInput);
-    paintSaleProductVisuals(productSelect.value);
+    paintSaleProductVisuals(productId);
     updateSalePreview();
   });
   //* Tapping a photo picks the same product as the dropdown — both stay in
@@ -725,7 +735,8 @@ function setupEventListeners() {
 function getSelectedProduct() {
   const select = document.getElementById("saleProductSelect");
   if (!select?.value) return null;
-  return products.find((product) => String(product.id) === select.value) || null;
+  const productId = String(select.value).split("::")[0];
+  return products.find((product) => String(product.id) === productId) || null;
 }
 
 //* Only in-stock ratings are offered, so an out-of-stock row can never be picked.
@@ -1227,8 +1238,6 @@ function showSaleFormMessage(message, tone) {
 function captureSaleFormState() {
   return {
     productId: document.getElementById("saleProductSelect")?.value || "",
-    variantRating: document.getElementById("saleVariantSelect")?.value ?? "",
-    variantColour: document.getElementById("saleVariantColour")?.value ?? "",
     quantity: document.getElementById("saleQuantity")?.value ?? "",
     unitPrice: document.getElementById("saleUnitPrice")?.value ?? "",
   };
@@ -1252,11 +1261,6 @@ function restoreSaleFormState(state) {
   }
 
   populateVariantSelect(document.getElementById("saleVariantSelect"));
-  const variantSelect = document.getElementById("saleVariantSelect");
-  const colourSelect = document.getElementById("saleVariantColour");
-  if (variantSelect && state.variantRating) variantSelect.value = state.variantRating;
-  if (colourSelect && state.variantColour) colourSelect.value = state.variantColour;
-  if (variantSelect && state.variantRating) variantSelect.dispatchEvent(new Event("change"));
 
   const quantityInput = document.getElementById("saleQuantity");
   const priceInput = document.getElementById("saleUnitPrice");
