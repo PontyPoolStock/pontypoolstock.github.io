@@ -144,6 +144,8 @@ function renderSalesPage() {
           <div class="col-12 col-lg-6 d-none" id="saleVariantWrapper">
             <label class="form-label" for="saleVariantSelect">Rating</label>
             <select name="variantIndex" id="saleVariantSelect" class="form-select"></select>
+            <label class="form-label" for="saleVariantColour">Colour</label>
+            <select name="variantColour" id="saleVariantColour" class="form-select"></select>
             <div class="text-danger fw-bold errorMes errorMes-variantIndex"></div>
           </div>
           <div class="col-12 col-lg-6">
@@ -551,17 +553,20 @@ function handleAddToCart() {
   const productId = document.getElementById("saleProductSelect")?.value || "";
   const quantity = Number(document.getElementById("saleQuantity")?.value);
   const unitPrice = Number(document.getElementById("saleUnitPrice")?.value);
-  const variantSelect = document.getElementById("saleVariantSelect");
+  const ratingSelect = document.getElementById("saleVariantSelect");
+  const colourSelect = document.getElementById("saleVariantColour");
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
   const hasVariants = variants.length > 0;
-  const variantIndex = hasVariants ? String(variantSelect?.value ?? "") : "";
+  const rating = ratingSelect?.value || "";
+  const colour = colourSelect?.value || "";
+  const variantIndex = hasVariants ? findVariantIndexByRatingColour(rating, colour, variants) : null;
 
-  if (!isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants })) {
+  if (!isValidSaleData({ productId, quantity, unitPrice, variantIndex: variantIndex == null ? "" : String(variantIndex), hasVariants })) {
     return false;
   }
 
-  const resolvedVariantIndex = hasVariants ? Number(variantIndex) : null;
+  const resolvedVariantIndex = hasVariants ? variantIndex : null;
   saleCart.push({
     productId,
     variantIndex: resolvedVariantIndex,
@@ -728,6 +733,7 @@ function getSelectedProduct() {
 function populateVariantSelect(variantSelect) {
   if (!variantSelect) return;
   const wrapper = document.getElementById("saleVariantWrapper");
+  const colourSelect = document.getElementById("saleVariantColour");
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
   const onOrder = isNotStockedProduct(product);
@@ -735,51 +741,73 @@ function populateVariantSelect(variantSelect) {
   if (!product || !variants.length) {
     wrapper?.classList.add("d-none");
     variantSelect.innerHTML = "";
+    colourSelect.innerHTML = "";
     updateStockHint("");
     return;
   }
 
-  const sellable = variants
-    .map((variant, index) => ({ variant, index }))
-    .filter(({ variant }) => onOrder || (Number(variant.quantity) || 0) > 0)
-    .sort((a, b) => {
-      const la = String(a.variant.label || a.variant.name || "").trim();
-      const lb = String(b.variant.label || b.variant.name || "").trim();
-      const na = Number(la);
-      const nb = Number(lb);
-      if (!isNaN(na) && !isNaN(nb)) return na - nb;
-      return la.localeCompare(lb, undefined, { numeric: true, sensitivity: "base" });
-    });
+  // Unique ratings, sorted numerically then alphabetically
+  const ratingMap = new Map();
+  variants.forEach((v) => {
+    const label = String(v.label || "").trim();
+    if (label && !ratingMap.has(label)) ratingMap.set(label, v);
+  });
+  const ratings = Array.from(ratingMap.keys());
 
-  if (!sellable.length) {
-    wrapper?.classList.remove("d-none");
-    variantSelect.innerHTML = '<option value="">Out of stock</option>';
-    updateStockHint("Every rating for this product is out of stock.");
+  if (!ratings.length) {
+    wrapper?.classList.add("d-none");
+    variantSelect.innerHTML = "";
+    colourSelect.innerHTML = "";
+    updateStockHint("");
     return;
   }
 
-  wrapper?.classList.remove("d-none");
-  variantSelect.innerHTML = sellable
-    .map(({ variant, index }) => {
-      const label = variant.label || variant.name || variant.value || variant.rating || variant.colour || `Variant ${index + 1}`;
-      const colour = variant.colour || "";
-      const parts = [];
-      if (label) parts.push(label);
-      if (colour && colour !== label) parts.push(colour);
-      const bits = parts.join(" · ");
-      const stock = Number(variant.quantity) || 0;
-      const suffix = onOrder ? `Resale · ${resellerLeftFor(product?.id, index).left} left` : `Stock: ${stock}`;
-      const display = bits ? `${bits} — ${suffix}` : `${suffix}`;
-      return `<option value="${index}">${escapeHtml(display)}</option>`;
-    })
-    .join("");
+  ratings.sort((a, b) => {
+    const na = Number(a), nb = Number(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  });
 
-  const first = sellable[0].variant;
-  updateStockHint(
-    onOrder
-      ? resellerHintFor(product?.id, sellable[0].index)
-      : `${Number(first.quantity) || 0} available in "${first.label || "this rating"}".`,
-  );
+  wrapper?.classList.remove("d-none");
+  variantSelect.innerHTML = '<option value="">Select rating</option>' + ratings
+    .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
+    .join("");
+  colourSelect.innerHTML = '<option value="">Select colour</option>';
+
+  const populateColours = (rating) => {
+    const matching = variants.filter((v) => String(v.label || "").trim() === rating);
+    const colours = [...new Set(matching.map((v) => String(v.colour || "")).filter(Boolean))];
+    colours.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    colourSelect.innerHTML = '<option value="">Select colour</option>' + colours
+      .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
+      .join("");
+    updateStockHintForSelection(rating, colourSelect.value, variants, onOrder);
+  };
+
+  variantSelect.onchange = () => populateColours(variantSelect.value);
+  colourSelect.onchange = () => updateStockHintForSelection(variantSelect.value, colourSelect.value, variants, onOrder);
+
+  variantSelect.value = ratings[0];
+  variantSelect.dispatchEvent(new Event("change"));
+}
+
+function updateStockHintForSelection(rating, colour, variants, onOrder) {
+  const hint = document.getElementById("saleStockHint");
+  if (!hint || !rating) { hint.textContent = ""; return; }
+  const matching = variants.filter((v) => String(v.label || "").trim() === rating);
+  const target = colour ? matching.find((v) => String(v.colour || "") === colour) : matching[0];
+  if (!target) { hint.textContent = ""; return; }
+  const stock = Number(target.quantity) || 0;
+  const parts = [rating];
+  if (target.colour) parts.push(target.colour);
+  hint.textContent = `${parts.join(" · ")} — Stock: ${stock}`;
+}
+
+function findVariantIndexByRatingColour(rating, colour, variants) {
+  if (!rating) return null;
+  const matching = variants.filter((v) => String(v.label || "").trim() === rating);
+  const target = colour ? matching.find((v) => String(v.colour || "") === colour) : matching[0];
+  return target ? variants.indexOf(target) : null;
 }
 
 function getSelectedStock() {
@@ -787,12 +815,13 @@ function getSelectedStock() {
   if (!product) return 0;
   const variants = getProductVariants(product);
   if (!variants.length) return Number(product.quantity) || 0;
-  const index = Number.parseInt(
-    String(document.getElementById("saleVariantSelect")?.value ?? ""),
-    10,
-  );
-  const variant = Number.isNaN(index) ? undefined : variants[index];
-  return variant ? Number(variant.quantity) || 0 : 0;
+  const ratingSelect = document.getElementById("saleVariantSelect");
+  const colourSelect = document.getElementById("saleVariantColour");
+  const rating = ratingSelect?.value || "";
+  const colour = colourSelect?.value || "";
+  const matching = variants.filter((v) => String(v.label || "").trim() === rating);
+  const target = colour ? matching.find((v) => String(v.colour || "") === colour) : matching[0];
+  return target ? Number(target.quantity) || 0 : 0;
 }
 
 //* Base hint text (stock for the current selection) kept separately from the
@@ -839,11 +868,11 @@ function paintStockHint() {
     const variants = getProductVariants(product);
     let variantIndex = null;
     if (variants.length) {
-      const parsed = Number.parseInt(
-        String(document.getElementById("saleVariantSelect")?.value ?? ""),
-        10,
-      );
-      variantIndex = Number.isNaN(parsed) ? null : parsed;
+      const ratingSelect = document.getElementById("saleVariantSelect");
+      const colourSelect = document.getElementById("saleVariantColour");
+      const rating = ratingSelect?.value || "";
+      const colour = colourSelect?.value || "";
+      variantIndex = findVariantIndexByRatingColour(rating, colour, variants);
     }
     const staged = getCartQuantityFor(product.id, variantIndex);
     if (staged > 0) stagedNote = ` ${staged} unit${staged === 1 ? "" : "s"} already added to this sale.`;
@@ -861,11 +890,12 @@ function updatePriceDefault(priceInput) {
   }
   const variants = getProductVariants(product);
   if (variants.length) {
-    const index = Number.parseInt(
-      String(document.getElementById("saleVariantSelect")?.value ?? ""),
-      10,
-    );
-    const variant = Number.isNaN(index) ? undefined : variants[index];
+    const ratingSelect = document.getElementById("saleVariantSelect");
+    const colourSelect = document.getElementById("saleVariantColour");
+    const rating = ratingSelect?.value || "";
+    const colour = colourSelect?.value || "";
+    const variantIndex = findVariantIndexByRatingColour(rating, colour, variants);
+    const variant = variantIndex !== null ? variants[variantIndex] : undefined;
     priceInput.value = variant ? String(getVariantPrice(variant)) : "";
   } else {
     priceInput.value = String(Number(product.price) || 0);
@@ -1197,7 +1227,8 @@ function showSaleFormMessage(message, tone) {
 function captureSaleFormState() {
   return {
     productId: document.getElementById("saleProductSelect")?.value || "",
-    variantIndex: document.getElementById("saleVariantSelect")?.value ?? "",
+    variantRating: document.getElementById("saleVariantSelect")?.value ?? "",
+    variantColour: document.getElementById("saleVariantColour")?.value ?? "",
     quantity: document.getElementById("saleQuantity")?.value ?? "",
     unitPrice: document.getElementById("saleUnitPrice")?.value ?? "",
   };
@@ -1222,7 +1253,10 @@ function restoreSaleFormState(state) {
 
   populateVariantSelect(document.getElementById("saleVariantSelect"));
   const variantSelect = document.getElementById("saleVariantSelect");
-  if (variantSelect && state.variantIndex) variantSelect.value = state.variantIndex;
+  const colourSelect = document.getElementById("saleVariantColour");
+  if (variantSelect && state.variantRating) variantSelect.value = state.variantRating;
+  if (colourSelect && state.variantColour) colourSelect.value = state.variantColour;
+  if (variantSelect && state.variantRating) variantSelect.dispatchEvent(new Event("change"));
 
   const quantityInput = document.getElementById("saleQuantity");
   const priceInput = document.getElementById("saleUnitPrice");
