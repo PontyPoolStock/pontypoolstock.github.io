@@ -217,6 +217,8 @@ function isValidName(name) {
 //* Suggested units for the unit field — anything else typed in is still accepted
 export const UNIT_SUGGESTIONS = ["pcs", "box", "bundle", "roll", "kg"];
 
+export const SELLER_SUGGESTIONS = ["Mwaura", "Edu", "Peter", "Jane", "Alvo", "Martha"];
+
 //* Units are free text, but the common ones are canonicalised so badges, tables
 //* and stock text stay tidy: "Boxes" -> "box", "2 bundles" -> quantity 2 + "bundle"
 function normalizeProductUnit(data) {

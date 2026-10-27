@@ -4,7 +4,7 @@ import { fetchData, postData, updateData, deleteData, hydrateEntityImages, PRODU
 //* loaded the page and then threw ReferenceError, which the router showed as
 //* "Shop Purchases could not be loaded". scripts/reseller-page.test.mjs now
 //* executes this module in jsdom so that failure mode can't ship again.
-import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml } from "../utils/helpers.js?v=20261027-7";
+import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml, SELLER_SUGGESTIONS } from "../utils/helpers.js?v=20261027-8";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 
@@ -30,8 +30,8 @@ async function loadData(opts = {}) {
   const fresh = opts.fresh ? { fresh: true } : undefined;
   const [pd, pr, sl] = await Promise.all([
     fetchData("resellerPurchases", fresh),
-    fetchData("products?fields=" + PRODUCT_LIST_FIELDS),
-    fetchData("sales"),
+    fetchData("products?fields=" + PRODUCT_LIST_FIELDS, { fresh: true }),
+    fetchData("sales", fresh),
   ]);
   purchases = Array.isArray(pd) ? [...pd] : [];
   purchases.sort((a, b) => new Date(b.purchasedAt || b.createdAt) - new Date(a.purchasedAt || a.createdAt));
@@ -135,7 +135,13 @@ function renderPage() {
   html += '<div class="text-danger small errorMes-shopName"></div></div>';
   html += '<div class="col-6 col-md-3"><label class="form-label small text-muted" for="resellerEmployeeName">'
     + (isStaffView() ? "Employee" : "Who went") + "</label>";
-  html += '<input type="text" id="resellerEmployeeName" class="form-control" placeholder="Employee name">';
+  html += '<input type="text" id="resellerEmployeeName" class="form-control">';
+  html += '<div class="small text-muted mt-2 mb-1">Quick pick a name</div>';
+  html += '<div class="d-flex flex-wrap gap-2" role="group" aria-label="Quick pick employee name">';
+  html += SELLER_SUGGESTIONS.map((name) =>
+    '<button type="button" class="btn btn-sm btn-outline-secondary" data-reseller-employee-name="'
+    + escapeHtml(name) + '" aria-pressed="false">' + escapeHtml(name) + "</button>").join("");
+  html += "</div>";
   html += '<div class="text-danger small errorMes-employeeName"></div></div>';
   html += '<div class="col-12 col-md-1 d-grid"><button type="submit" class="btn btn-primary" id="resellerSaveBtn">Add</button>'
     + '<button type="button" class="btn btn-outline-secondary mt-1 d-none" id="resellerCancelEdit">Cancel</button></div>';
@@ -148,6 +154,7 @@ function renderPage() {
   html += '<div id="searchStats" class="mb-2 small text-muted"></div>';
   document.getElementById("pageContent").innerHTML = html;
   paintProductPreview();
+  paintEmployeeQuickPicks();
 }
 
 function variantList(product) {
@@ -268,6 +275,7 @@ function handleEdit(id) {
   if (shopInput) shopInput.value = String(item.shopName || item.shop_name || "");
   const empInput = document.getElementById("resellerEmployeeName");
   if (empInput) empInput.value = String(item.employeeName || item.employee_name || "");
+  paintEmployeeQuickPicks();
   const errs = document.querySelectorAll("#resellerPurchaseForm .errorMes-product, #resellerPurchaseForm .errorMes-quantity, #resellerPurchaseForm .errorMes-unitCost");
   for (let i = 0; i < errs.length; i++) errs[i].textContent = "";
   const btn = document.getElementById("resellerSaveBtn");
@@ -286,6 +294,7 @@ function resetEditState() {
   editingId = null;
   const form = document.getElementById("resellerPurchaseForm");
   if (form) form.reset();
+  paintEmployeeQuickPicks();
   const btn = document.getElementById("resellerSaveBtn");
   if (btn) btn.textContent = "Add";
   const cancel = document.getElementById("resellerCancelEdit");
@@ -294,6 +303,17 @@ function resetEditState() {
   if (alertBox) alertBox.innerHTML = "";
   fillVariants();
   paintProductPreview();
+}
+
+function paintEmployeeQuickPicks() {
+  const input = document.getElementById("resellerEmployeeName");
+  const selected = String(input ? input.value : "").trim();
+  document.querySelectorAll("[data-reseller-employee-name]").forEach((button) => {
+    const isSelected = button.dataset.resellerEmployeeName === selected;
+    button.classList.toggle("btn-primary", isSelected);
+    button.classList.toggle("btn-outline-secondary", !isSelected);
+    button.setAttribute("aria-pressed", String(isSelected));
+  });
 }
 
 function setupEventListeners() {
@@ -305,6 +325,16 @@ function setupEventListeners() {
   if (varSel) varSel.addEventListener("change", paintProductPreview);
   const form = document.getElementById("resellerPurchaseForm");
   if (form) form.addEventListener("submit", handleSave);
+  const employeeInput = document.getElementById("resellerEmployeeName");
+  employeeInput?.addEventListener("input", paintEmployeeQuickPicks);
+  document.querySelector('[aria-label="Quick pick employee name"]')?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-reseller-employee-name]");
+    if (!button || !employeeInput) return;
+    employeeInput.value = button.dataset.resellerEmployeeName;
+    employeeInput.dispatchEvent(new Event("input", { bubbles: true }));
+    employeeInput.focus();
+  });
+  paintEmployeeQuickPicks();
   const cancel = document.getElementById("resellerCancelEdit");
   if (cancel) cancel.addEventListener("click", resetEditState);
   const box = document.getElementById("resellerTableContainer");

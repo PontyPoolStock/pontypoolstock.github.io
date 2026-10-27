@@ -31,13 +31,12 @@ import {
   productThumbnailHtml,
   describeApiError,
   debounce,
-} from "../utils/helpers.js?v=20261027-7";
+  SELLER_SUGGESTIONS,
+} from "../utils/helpers.js?v=20261027-8";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
 import { getSavedBranch, BRANCHES, saveBranch } from "../config.js";
-
-const SELLER_SUGGESTIONS = ["Mwaura", "Edu", "Peter", "Jane", "Alvo", "Martha"];
 
 let sales = [];
 let products = [];

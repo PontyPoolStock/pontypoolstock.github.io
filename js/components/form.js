@@ -72,7 +72,7 @@ export async function makeProductForm(id, categoryId = "", opts = {}) {
         <div class="text-danger fw-bold errorMes errorMes-quantity"></div>
         <div class="form-check mt-2">
           <input type="checkbox" class="form-check-input" name="notStocked" id="notStockedCheck" value="1" ${(id && (product.notStocked || product.not_stocked)) ? "checked" : ""}>
-          <label class="form-check-label small" for="notStockedCheck">Resale product (quantity is tracked through shop purchases)</label>
+          <label class="form-check-label small" for="notStockedCheck">Resale product (appears in Shop Purchases)</label>
         </div>
       </div>
       <div class="col-6">

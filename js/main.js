@@ -11,7 +11,7 @@ import { loadReports } from "./pages/reports.js";
 import { loadActivityLog } from "./pages/activity.js";
 import { loadDashboard } from "./pages/dashboard.js";
 import { loadStockAdjustments } from "./pages/stockadjustment.js";
-import { loadSales } from "./pages/sales.js?v=20261027-7";
+import { loadSales } from "./pages/sales.js?v=20261027-8";
 //* Shop Purchases loads lazily (see the router below): a static import would
 //* run its module at boot, so any fault in that one page would blank the
 //* entire app — including Dashboard on a fresh login.
@@ -150,7 +150,7 @@ function navigateTo(text) {
       //* not the second argument of .then — so runtime failures inside
       //* loadResellerPurchases() surface here too, not as an unhandled
       //* rejection with a blank page.
-      import("./pages/reseller.js?v=20261027-7")
+      import("./pages/reseller.js?v=20261027-8")
         .then((module) => module.loadResellerPurchases())
         .catch((error) => {
           console.error("Shop Purchases failed to load:", error);

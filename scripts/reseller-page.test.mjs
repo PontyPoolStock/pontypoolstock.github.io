@@ -34,6 +34,7 @@ const serverProducts = [
   { id: 14, name: "Regular Bulb", quantity: 50, notStocked: false },
 ];
 let requests = [];
+let postedPurchases = [];
 
 globalThis.fetch = window.fetch = async (url, opts = {}) => {
   const u = String(url);
@@ -43,6 +44,7 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
     new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
   if (method === "POST" && u.includes("/resellerPurchases")) {
     const body = JSON.parse(opts.body);
+    postedPurchases.push(body);
     const row = { id: serverPurchases.length + 1, ...body };
     serverPurchases.push(row);
     return json(row, 201);
@@ -71,6 +73,23 @@ const options = [...document.querySelectorAll("#resellerProductSelect option")]
   .map((o) => o.textContent);
 assert.ok(options.some((o) => o.includes("Glass Panels")), "On-order product offered");
 assert.ok(!options.some((o) => o.includes("Regular Bulb")), "in-stock product excluded");
+
+const employeeInput = document.getElementById("resellerEmployeeName");
+assert.strictEqual(employeeInput.getAttribute("placeholder"), null, "Employee placeholder removed");
+const employeePicks = [...document.querySelectorAll("[data-reseller-employee-name]")];
+assert.deepStrictEqual(
+  employeePicks.map((button) => button.textContent),
+  ["Mwaura", "Edu", "Peter", "Jane", "Alvo", "Martha"],
+  "Employee quick picks match Record Sale names",
+);
+employeePicks.find((button) => button.textContent === "Edu")
+  .dispatchEvent(new window.Event("click", { bubbles: true }));
+assert.strictEqual(employeeInput.value, "Edu", "Employee quick pick fills the field");
+assert.strictEqual(
+  employeePicks.find((button) => button.textContent === "Edu").getAttribute("aria-pressed"),
+  "true",
+  "Selected employee quick pick is highlighted",
+);
 
 //* Search runs through debounce — dispatch input and let it fire.
 const search = document.getElementById("searchReseller");
@@ -111,6 +130,7 @@ assert.ok(
   requests.some((r) => r.startsWith("POST") && r.includes("/resellerPurchases")),
   "purchase was POSTed",
 );
+assert.strictEqual(postedPurchases.at(-1)?.employeeName, "Edu", "quick-picked employee saved");
 assert.strictEqual(rows(), 2, "second purchase appears after save");
 assert.match(hero(), /25/, "hero now shows 25 bought units");
 assert.match(hero(), /1,550/, "hero now shows KSh 1,550 spent");
