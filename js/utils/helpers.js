@@ -11,11 +11,11 @@ export function isValidProductData(data, id, variants = []) {
   return isValidProductIdentity(data) && isValidVariantRows(ratingRows);
 }
 
-//* Suggested glow colours for a rating — the field also accepts any colour typed in
+//* Suggested colours for a rating — the field also accepts any colour typed in
 export const RATING_COLOURS = ["White", "Warm White", "Cool White", "Daylight", "RGB"];
 
-//* Bulbs often have both a glass colour and a glow colour: clear glass that
-//* glows warm white is a different stock row from amber glass that glows warm white.
+//* Bulbs often have both a glass colour and a colour: clear glass with warm
+//* white light is a different stock row from amber glass with warm white light.
 export const GLASS_COLOURS = ["Clear", "Amber", "Frosted", "Smoked", "White"];
 
 //* Ratings and colours are free text, so the same choice can arrive with messy
@@ -62,7 +62,7 @@ export function getVariantRatingLabel(variant) {
   return normalizeVariantRating(variant?.label) || formatVariantAmps(variant?.amps);
 }
 
-//* One stable identity for a rating + glass + glow row. Two rows with the same
+//* One stable identity for a rating + glass + colour row. Two rows with the same
 //* key would be impossible to tell apart in Record Sale, so saving rejects them.
 export function variantSelectionKey(label, colour, amps = "", glass = "") {
   const rating = normalizeVariantRating(label) || formatVariantAmps(amps);
@@ -117,8 +117,8 @@ export function getVariantGlasses(variants) {
   );
 }
 
-//* Rating rows are freely combinable (rating + glass + glow + amperes), but each
-//* row must be identifiable and a rating/glass/glow row may only appear once.
+//* Rating rows are freely combinable (rating + glass + colour + amperes), but each
+//* row must be identifiable and a rating/glass/colour row may only appear once.
 function isValidVariantRows(variants) {
   const errorBox = document.querySelector(".errorMes-variants");
   if (errorBox) errorBox.innerHTML = "";
@@ -140,7 +140,7 @@ function isValidVariantRows(variants) {
     if (!variant.label && !variant.colour && !variant.glass && variant.amps === "") {
       if (errorBox) {
         errorBox.innerHTML =
-          `Rating row ${index + 1}: add a rating, glass/glow colour or amperage.`;
+          `Rating row ${index + 1}: add a rating, glass/colour or amperage.`;
       }
       return false;
     }
@@ -154,7 +154,7 @@ function isValidVariantRows(variants) {
     if (seen.has(key)) {
       if (errorBox) {
         errorBox.innerHTML =
-          `Rating rows ${seen.get(key) + 1} and ${index + 1} repeat the same rating, glass and glow colour.`;
+          `Rating rows ${seen.get(key) + 1} and ${index + 1} repeat the same rating, glass and colour.`;
       }
       return false;
     }

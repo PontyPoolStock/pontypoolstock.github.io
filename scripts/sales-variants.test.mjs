@@ -179,11 +179,11 @@ assert.match(document.getElementById("saleStockHint").textContent, /Choose a rat
 
 pick("saleVariantSelect", "32A");
 assert.ok(!hidden("saleVariantColourGroup"), "colour picker appears for the chosen rating");
-assert.deepEqual(optionLabels("saleVariantColour"), ["Select glow colour", "Warm White", "White"],
-  "only glow colours of that rating are offered, sorted");
+assert.deepEqual(optionLabels("saleVariantColour"), ["Select colour", "Warm White", "White"],
+  "only colours of that rating are offered, sorted");
 assert.equal(document.getElementById("saleUnitPrice").value, "",
-  "no price guessed before a glow colour is chosen");
-assert.match(document.getElementById("saleStockHint").textContent, /Choose a glow colour/);
+  "no price guessed before a colour is chosen");
+assert.match(document.getElementById("saleStockHint").textContent, /Choose a colour/);
 
 pick("saleVariantColour", "Warm White");
 assert.equal(document.getElementById("saleUnitPrice").value, "125",
@@ -217,8 +217,8 @@ assert.equal(lines().length, 2, "second colour staged");
 pickProduct("p2");
 assert.ok(hidden("saleVariantRatingGroup"), "no rating picker for a colour-only product");
 assert.ok(!hidden("saleVariantColourGroup"), "colour picker shown");
-assert.equal(document.getElementById("saleVariantColourLabel").textContent, "Glow colour");
-assert.deepEqual(optionLabels("saleVariantColour"), ["Select glow colour", "RGB", "White"]);
+assert.equal(document.getElementById("saleVariantColourLabel").textContent, "Colour");
+assert.deepEqual(optionLabels("saleVariantColour"), ["Select colour", "RGB", "White"]);
 pick("saleVariantColour", "White");
 assert.equal(document.getElementById("saleUnitPrice").value, "60");
 assert.match(document.getElementById("saleStockHint").textContent, /White — Stock: 2/);
@@ -268,8 +268,8 @@ setField("saleQuantity", 1);
 document.getElementById("addSaleLineBtn").click();
 assert.equal(lines().length, 4, "amperage-only line staged");
 
-// 10. Glass and glow are separate choices: the same 4W + Clear can glow warm
-//     or cool white, while 4W + Amber only glows warm white.
+// 10. Glass and colour are separate choices: the same 4W + Clear can be warm
+//     or cool white, while 4W + Amber only has warm white.
 pickProduct("p7");
 assert.deepEqual(optionLabels("saleVariantSelect"), ["Select rating", "4W", "8W"]);
 assert.ok(hidden("saleVariantGlassGroup"), "glass waits for a rating");
@@ -277,33 +277,33 @@ pick("saleVariantSelect", "8W");
 assert.deepEqual(optionLabels("saleVariantGlass"), ["Clear"],
   "a single glass colour is shown already selected");
 assert.deepEqual(optionLabels("saleVariantColour"), ["Warm White"],
-  "a single glow colour is shown already selected");
+  "a single colour is shown already selected");
 assert.equal(document.getElementById("saleUnitPrice").value, "130");
 
 pick("saleVariantSelect", "4W");
 assert.deepEqual(optionLabels("saleVariantGlass"),
   ["Select glass colour", "Amber", "Clear"],
   "glass colours are offered for the chosen rating");
-assert.ok(hidden("saleVariantColourGroup"), "glow waits for a glass colour");
+assert.ok(hidden("saleVariantColourGroup"), "colour waits for a glass colour");
 pick("saleVariantGlass", "Amber");
 assert.deepEqual(optionLabels("saleVariantColour"), ["Warm White"],
-  "only glow colours for the chosen glass are offered");
+  "only colours for the chosen glass are offered");
 assert.equal(document.getElementById("saleUnitPrice").value, "120");
 assert.match(document.getElementById("saleStockHint").textContent,
   /4W · Amber · Warm White — Stock: 3/);
 
 pick("saleVariantGlass", "Clear");
 assert.deepEqual(optionLabels("saleVariantColour"),
-  ["Select glow colour", "Cool White", "Warm White"]);
+  ["Select colour", "Cool White", "Warm White"]);
 assert.equal(document.getElementById("saleUnitPrice").value, "",
-  "no price guessed before the glow colour is chosen");
+  "no price guessed before the colour is chosen");
 pick("saleVariantColour", "Warm White");
 assert.equal(document.getElementById("saleUnitPrice").value, "110");
 assert.match(document.getElementById("saleStockHint").textContent,
   /4W · Clear · Warm White — Stock: 4/);
 setField("saleQuantity", 1);
 document.getElementById("addSaleLineBtn").click();
-assert.equal(lines().length, 5, "glass + glow line staged");
+assert.equal(lines().length, 5, "glass + colour line staged");
 assert.match(lines()[4].textContent, /Glass Bulb 4W · Clear · Warm White/);
 
 // 11. Recording sends the resolved indices, not the hidden dropdown position.
@@ -320,7 +320,7 @@ assert.deepEqual(posts.map((post) => [post.productId, post.variantIndex]), [
   ["p2", 0],
   ["p6", 2],
   ["p7", 0],
-], "each sale stores the exact variant index resolved from rating + glass + glow");
+], "each sale stores the exact variant index resolved from rating + glass + colour");
 assert.ok(posts.every((post) =>
   [125, 120, 60, 90, 110].includes(post.unitPrice)),
   "each sale stores its variant price");
@@ -337,4 +337,4 @@ assert.ok(!hidden("saleVariantRatingGroup"), "admin sees the rating picker too")
 assert.deepEqual(optionLabels("saleVariantSelect"), ["32A"]);
 assert.ok(!hidden("saleVariantColourGroup"), "admin sees the colour picker too");
 
-console.log("OK — sales variants: rating/glass/glow pickers, stock, exact indices, admin and staff");
+console.log("OK — sales variants: rating/glass/colour pickers, stock, exact indices, admin and staff");

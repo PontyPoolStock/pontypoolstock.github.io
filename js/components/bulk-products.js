@@ -8,7 +8,7 @@ import {
   normalizeVariantColour,
   normalizeVariantGlass,
   normalizeVariantRating,
-} from "../utils/helpers.js?v=20261027-5";
+} from "../utils/helpers.js?v=20261027-6";
 import { isStaffView } from "../utils/role.js";
 
 let nextRowId = 0;
@@ -399,7 +399,7 @@ function variantRowHtml() {
         <div class="col-6 col-md-2"><label class="form-label small">Quantity</label><input type="number" min="0" step="1" class="form-control form-control-sm" data-variant-field="quantity" placeholder="0"></div>
         <div class="col-6 col-md-2"><label class="form-label small">Minimum</label><input type="number" min="0" step="1" class="form-control form-control-sm" data-variant-field="reorderLevel" placeholder="0"></div>
         <div class="col-6 col-md-2"><label class="form-label small">Glass</label><input class="form-control form-control-sm" data-variant-field="glass" placeholder="Clear"></div>
-        <div class="col-6 col-md-2"><label class="form-label small">Glow</label><input class="form-control form-control-sm" data-variant-field="colour" placeholder="Warm White"></div>
+        <div class="col-6 col-md-2"><label class="form-label small">Colour</label><input class="form-control form-control-sm" data-variant-field="colour" placeholder="White"></div>
         <div class="col-6 col-md-2"><label class="form-label small">Amps</label><div class="input-group input-group-sm"><input type="number" min="0" step="0.01" class="form-control form-control-sm" data-variant-field="amps" placeholder="0.05"><span class="input-group-text">A</span></div></div>
       </div>
       <div class="d-flex justify-content-end mt-2">

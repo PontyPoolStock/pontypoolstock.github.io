@@ -12,7 +12,7 @@ import {
   normalizeVariantGlass,
   normalizeVariantRating,
   UNIT_SUGGESTIONS,
-} from "../utils/helpers.js?v=20261027-5";
+} from "../utils/helpers.js?v=20261027-6";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
   //^ Edit reuses the row you already have so opening the modal is instant —
   //^ no extra product fetch, and categories come from the slim cached list
@@ -181,10 +181,10 @@ function variantRowHtml(variant = {}) {
             placeholder="Clear / Amber / any">
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label small text-secondary mb-1">Glow colour</label>
+          <label class="form-label small text-secondary mb-1">Colour</label>
           <input type="text" class="form-control form-control-sm" data-field="colour"
             list="ratingColourSuggestions" value="${escAttr(normalizeVariantColour(variant.colour) || "")}"
-            placeholder="Warm White / Cool White / RGB">
+            placeholder="White / Warm White / RGB / any">
         </div>
         <div class="col-4 col-md-2">
           <label class="form-label small text-secondary mb-1">Amperes</label>
@@ -267,7 +267,7 @@ export function setupProductVariants() {
       });
       preview.textContent = suffix
         ? `Shown in Record Sale as: ${suffix}`
-        : "Add a rating, glass/glow colour or amperage so this row can be picked in Record Sale.";
+        : "Add a rating, glass/colour or amperage so this row can be picked in Record Sale.";
     });
   };
 
@@ -292,8 +292,8 @@ export function setupProductVariants() {
     if (duplicateBtn) {
       const row = duplicateBtn.closest("[data-variant-row]");
       if (!row) return;
-      //* The common follow-up is the same rating + glass with a different glow,
-      //* so the copy keeps those but starts with a blank glow and 0 on hand.
+      //* The common follow-up is the same rating + glass with a different colour,
+      //* so the copy keeps those but starts with a blank colour and 0 on hand.
       const clone = row.cloneNode(true);
       const glassInput = clone.querySelector('[data-field="glass"]');
       const colourInput = clone.querySelector('[data-field="colour"]');

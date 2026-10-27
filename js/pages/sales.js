@@ -28,7 +28,7 @@ import {
   productThumbnailHtml,
   describeApiError,
   debounce,
-} from "../utils/helpers.js?v=20261027-5";
+} from "../utils/helpers.js?v=20261027-6";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
@@ -159,7 +159,7 @@ function renderSalesPage() {
                 <select name="variantGlass" id="saleVariantGlass" class="form-select"></select>
               </div>
               <div id="saleVariantColourGroup" class="d-none">
-                <label class="form-label" for="saleVariantColour" id="saleVariantColourLabel">Glow colour</label>
+                <label class="form-label" for="saleVariantColour" id="saleVariantColourLabel">Colour</label>
                 <select name="variantColour" id="saleVariantColour" class="form-select"></select>
               </div>
             </div>
@@ -830,7 +830,7 @@ function populateVariantSelect(variantSelect, preferred = {}) {
     const wanted = normalizeVariantColour(wantedColour);
     colourSelect.innerHTML = "";
     if (colours.length > 1) {
-      colourSelect.innerHTML = '<option value="">Select glow colour</option>' + colours
+      colourSelect.innerHTML = '<option value="">Select colour</option>' + colours
         .map((colour) => `<option value="${escapeHtml(colour)}">${escapeHtml(colour)}</option>`)
         .join("");
       colourSelect.value = colours.includes(wanted) ? wanted : "";
@@ -982,7 +982,7 @@ function paintStockHint() {
       hint.textContent = state.error === "glass"
         ? "Choose a glass colour to see the available stock."
         : state.error === "colour"
-          ? "Choose a glow colour to see the available stock."
+          ? "Choose a colour to see the available stock."
           : "Choose a rating to see the available stock.";
       return;
     }

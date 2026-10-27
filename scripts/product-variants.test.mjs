@@ -56,7 +56,7 @@ set(row, "amps", "0.05");
 
 assert.match(row.querySelector("[data-variant-preview]").textContent,
   /Shown in Record Sale as: 32A · Clear · White · 0\.05A/,
-  "preview uses the canonical rating, glass, glow and amps");
+  "preview uses the canonical rating, glass, colour and amps");
 
 row.querySelector("[data-duplicate-variant]").click();
 assert.equal(rows().length, 2, "duplicate adds a second rating row");
@@ -66,11 +66,11 @@ assert.equal(field(clone, "price").value, "100", "duplicate keeps the price");
 assert.equal(field(clone, "amps").value, "0.05", "duplicate keeps the amps");
 assert.equal(field(clone, "reorderLevel").value, "1", "duplicate keeps the minimum");
 assert.equal(field(clone, "glass").value, "Clear", "duplicate keeps the glass colour");
-assert.equal(field(clone, "colour").value, "", "duplicate clears the glow colour");
+assert.equal(field(clone, "colour").value, "", "duplicate clears the colour");
 assert.equal(field(clone, "quantity").value, "", "duplicate clears the quantity");
 assert.match(clone.querySelector("[data-variant-preview]").textContent,
   /Shown in Record Sale as: 32A · Clear · 0\.05A/,
-  "the duplicate is still identifiable by its rating and glass until a glow is typed");
+  "the duplicate is still identifiable by its rating and glass until a colour is typed");
 
 set(clone, "colour", "warm white");
 assert.match(clone.querySelector("[data-variant-preview]").textContent,
@@ -83,20 +83,20 @@ assert.deepEqual(collected.map((variant) => [variant.label, variant.glass, varia
   ["32A", "Clear", "Warm White"],
 ], "collected rows are normalised before saving");
 assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", collected), true,
-  "two different glow colours for one rating and glass are valid");
+  "two different colours for one rating and glass are valid");
 
 set(clone, "colour", "WHITE");
 const duplicateRows = collectProductVariants();
 assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", duplicateRows), false,
-  "the same rating, glass and glow twice is rejected");
+  "the same rating, glass and colour twice is rejected");
 assert.match(document.querySelector(".errorMes-variants").textContent,
-  /Rating rows 1 and 2 repeat the same rating, glass and glow colour/,
+  /Rating rows 1 and 2 repeat the same rating, glass and colour/,
   "the duplicate row numbers are shown");
 
 set(clone, "glass", "amber");
 const glassRows = collectProductVariants();
 assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", glassRows), true,
-  "the same rating and glow with different glass is valid");
+  "the same rating and colour with different glass is valid");
 
 set(clone, "glass", "");
 const mixedGlassRows = collectProductVariants();
