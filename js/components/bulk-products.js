@@ -3,8 +3,10 @@ import {
   buildStorableImageUrl,
   escapeHtml,
   getVariantPriceRange,
+  getVariantSuffix,
   getVariantsTotalQuantity,
-} from "../utils/helpers.js";
+  normalizeVariantRating,
+} from "../utils/helpers.js?v=20261027-4";
 import { isStaffView } from "../utils/role.js";
 
 let nextRowId = 0;
@@ -207,6 +209,13 @@ export function openBulkProductsModal(categories, onSaved) {
     }
   });
 
+  rows.addEventListener("focusout", (event) => {
+    const input = event.target.closest?.('[data-variant-field="label"]');
+    if (!input) return;
+    const normalized = normalizeVariantRating(input.value);
+    if (normalized !== input.value) input.value = normalized;
+  });
+
   modalElement.querySelector("[data-bulk-add-row]").addEventListener("click", appendRow);
   modalElement.querySelectorAll("[data-bulk-close]").forEach((button) => {
     button.addEventListener("click", () => modal.hide());
@@ -378,12 +387,12 @@ function variantRowHtml() {
   return `
     <div class="bulk-variant-row" data-bulk-variant>
       <div class="row g-2 align-items-end">
-        <div class="col-6 col-md-2"><label class="form-label small">Rating</label><input class="form-control form-control-sm" data-variant-field="label" placeholder="e.g. 4W"></div>
+        <div class="col-6 col-md-2"><label class="form-label small">Rating</label><input class="form-control form-control-sm" data-variant-field="label" placeholder="e.g. 4 watts or 63A"></div>
         <div class="col-6 col-md-2"><label class="form-label small">Price</label><input type="number" min="0" step="0.01" class="form-control form-control-sm" data-variant-field="price" placeholder="0.00"></div>
         <div class="col-6 col-md-2"><label class="form-label small">Quantity</label><input type="number" min="0" step="1" class="form-control form-control-sm" data-variant-field="quantity" placeholder="0"></div>
         <div class="col-6 col-md-2"><label class="form-label small">Minimum</label><input type="number" min="0" step="1" class="form-control form-control-sm" data-variant-field="reorderLevel" placeholder="0"></div>
         <div class="col-6 col-md-2"><label class="form-label small">Colour</label><input class="form-control form-control-sm" data-variant-field="colour" placeholder="White"></div>
-        <div class="col-6 col-md-2"><label class="form-label small">Amps</label><input type="number" min="0" step="0.01" class="form-control form-control-sm" data-variant-field="amps" placeholder="0.05"></div>
+        <div class="col-6 col-md-2"><label class="form-label small">Amps</label><div class="input-group input-group-sm"><input type="number" min="0" step="0.01" class="form-control form-control-sm" data-variant-field="amps" placeholder="0.05"><span class="input-group-text">A</span></div></div>
       </div>
       <div class="d-flex justify-content-end mt-2">
         <button type="button" class="btn btn-sm btn-light text-danger" data-bulk-remove-variant><i class="bi bi-trash me-1"></i>Remove rating</button>
@@ -408,7 +417,7 @@ function readProductRow(row, imageUrl = "") {
       const value = (key) => variantRow.querySelector(`[data-variant-field="${key}"]`).value.trim();
       const ampsValue = value("amps");
       return {
-        label: value("label"),
+        label: normalizeVariantRating(value("label")),
         price: number(value("price"), "Rating price"),
         quantity: number(value("quantity"), "Rating quantity"),
         reorderLevel: number(value("reorderLevel"), "Rating minimum stock"),
@@ -466,7 +475,7 @@ function renderReview(container, items, categories) {
             </div>
             ${product.variants.length
               ? `<div class="bulk-review-variants"><strong>Ratings</strong>${product.variants.map((variant) => {
-                const label = variant.label || variant.colour || (variant.amps !== "" ? `${variant.amps}A` : "Rating");
+                const label = getVariantSuffix(variant) || "Rating";
                 return `<span>${escapeHtml(label)} <b>${escapeHtml(variant.price)}</b> <small>· Qty ${escapeHtml(variant.quantity)} · Min ${escapeHtml(variant.reorderLevel)}</small></span>`;
               }).join("")}</div>`
               : ""}

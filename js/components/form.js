@@ -8,9 +8,9 @@ import {
   getProductDisplayName,
   isNotStockedProduct,
   normalizeVariantColour,
-  normalizeVariantText,
+  normalizeVariantRating,
   UNIT_SUGGESTIONS,
-} from "../utils/helpers.js?v=20261027-3";
+} from "../utils/helpers.js?v=20261027-4";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
   //^ Edit reuses the row you already have so opening the modal is instant —
   //^ no extra product fetch, and categories come from the slim cached list
@@ -145,7 +145,8 @@ function variantRowHtml(variant = {}) {
         <div class="col-6 col-md-4">
           <label class="form-label small text-secondary mb-1">Rating / Watts</label>
           <input type="text" class="form-control form-control-sm" data-field="label"
-            value="${escAttr(variant.label || "")}" placeholder="e.g. 32A or 4W">
+            value="${escAttr(normalizeVariantRating(variant.label) || "")}"
+            placeholder="e.g. 4 watts or 63A">
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label small text-secondary mb-1">Price</label>
@@ -175,9 +176,12 @@ function variantRowHtml(variant = {}) {
             placeholder="White / Warm White / RGB / any">
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label small text-secondary mb-1">Amperes (A)</label>
-          <input type="number" class="form-control form-control-sm" data-field="amps"
-            value="${escAttr(variant.amps ?? "")}" min="0" step="0.01" placeholder="e.g. 0.05">
+          <label class="form-label small text-secondary mb-1">Amperes</label>
+          <div class="input-group input-group-sm">
+            <input type="number" class="form-control form-control-sm" data-field="amps"
+              value="${escAttr(variant.amps ?? "")}" min="0" step="0.01" placeholder="e.g. 0.05">
+            <span class="input-group-text">A</span>
+          </div>
         </div>
         <div class="col-12 col-md-3">
           <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-duplicate-variant>
@@ -301,6 +305,19 @@ export function setupProductVariants() {
     syncDerivedFields();
     paintVariantPreviews();
   });
+
+  //* Finish "4 watts" / "4 w" as "4W" when the field loses focus, so the saved
+  //* rating and the Record Sale picker read the same way.
+  list.addEventListener("focusout", (event) => {
+    const input = event.target.closest?.('[data-field="label"]');
+    if (!input) return;
+    const normalized = normalizeVariantRating(input.value);
+    if (normalized === input.value) return;
+    input.value = normalized;
+    syncDerivedFields();
+    paintVariantPreviews();
+  });
+
   syncDerivedFields();
   paintVariantPreviews();
   applyNotStocked();
@@ -316,7 +333,7 @@ export function collectProductVariants() {
       const valueOf = (field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
       const ampsRaw = valueOf("amps");
       return {
-        label: normalizeVariantText(valueOf("label")),
+        label: normalizeVariantRating(valueOf("label")),
         price: Number(valueOf("price")) || 0,
         quantity: Number(valueOf("quantity")) || 0,
         reorderLevel: Number(valueOf("reorderLevel")) || 0,

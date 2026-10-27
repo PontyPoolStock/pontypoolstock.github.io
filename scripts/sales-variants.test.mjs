@@ -69,7 +69,7 @@ const products = [
     categoryId: "c1",
     price: 0,
     quantity: 0,
-    variants: [{ label: "9W", price: 90, quantity: 2 }],
+    variants: [{ label: "9 watts", price: 90, quantity: 2 }],
   },
   {
     id: "p6",

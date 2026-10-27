@@ -26,6 +26,20 @@ export function normalizeVariantColour(value) {
   return RATING_COLOURS.find((option) => option.toLowerCase() === colour.toLowerCase()) || colour;
 }
 
+//* Ratings read best as a number + symbol: "4 watts" → "4W", "63 amps" → "63A".
+//* Long units are compacted and a bare number in the Rating field means Watts.
+export function normalizeVariantRating(value) {
+  let rating = normalizeVariantText(value);
+  if (!rating) return "";
+  rating = rating
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:watts?|w)\b/gi, "$1W")
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:amps?|amperes?|a)\b/gi, "$1A")
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:volts?|v)\b/gi, "$1V")
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:kelvins?|k)\b/gi, "$1K");
+  if (/^\d+(?:\.\d+)?$/.test(rating)) rating = `${Number(rating)}W`;
+  return rating;
+}
+
 //* Amperes are often the only rating a product carries (32A light bulbs), so a
 //* blank Rating field still means "32A" when the Amperes field holds 32.
 export function formatVariantAmps(value) {
@@ -35,13 +49,13 @@ export function formatVariantAmps(value) {
 }
 
 export function getVariantRatingLabel(variant) {
-  return normalizeVariantText(variant?.label) || formatVariantAmps(variant?.amps);
+  return normalizeVariantRating(variant?.label) || formatVariantAmps(variant?.amps);
 }
 
 //* One stable identity for a rating + colour pair. Two rows with the same key
 //* would be impossible to tell apart in Record Sale, so saving rejects them.
 export function variantSelectionKey(label, colour, amps = "") {
-  const rating = normalizeVariantText(label) || formatVariantAmps(amps);
+  const rating = normalizeVariantRating(label) || formatVariantAmps(amps);
   return `${rating.toLowerCase()}::${normalizeVariantColour(colour).toLowerCase()}`;
 }
 
@@ -86,7 +100,7 @@ function isValidVariantRows(variants) {
 
   const seen = new Map();
   for (const [index, variant] of variants.entries()) {
-    variant.label = normalizeVariantText(variant.label);
+    variant.label = normalizeVariantRating(variant.label);
     variant.sku = String(variant.sku ?? "").trim();
     variant.colour = normalizeVariantColour(variant.colour);
     variant.price = Math.max(0, Number(variant.price) || 0);

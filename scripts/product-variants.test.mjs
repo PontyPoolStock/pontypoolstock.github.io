@@ -21,7 +21,16 @@ globalThis.window = window;
 
 const { makeProductForm, setupProductVariants, collectProductVariants } =
   await import("../js/components/form.js");
-const { isValidProductData } = await import("../js/utils/helpers.js");
+const { isValidProductData, normalizeVariantRating } =
+  await import("../js/utils/helpers.js");
+
+assert.equal(normalizeVariantRating(" 4 watts "), "4W");
+assert.equal(normalizeVariantRating("4w"), "4W");
+assert.equal(normalizeVariantRating("4"), "4W", "a bare rating number means Watts");
+assert.equal(normalizeVariantRating("63 amps"), "63A");
+assert.equal(normalizeVariantRating("63a"), "63A");
+assert.equal(normalizeVariantRating("ST64 4 watts"), "ST64 4W");
+assert.equal(normalizeVariantRating("Warm White"), "Warm White", "colours are untouched");
 
 document.body.innerHTML = await makeProductForm("", "", { categories: [] });
 setupProductVariants();
@@ -98,4 +107,25 @@ const duplicateAmpsRows = collectProductVariants();
 assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", duplicateAmpsRows), false,
   "the same amperage twice is rejected");
 
-console.log("OK — product variants: duplicate, previews, canonical colours, amperage-only rows, duplicate rejection");
+set(row, "label", "4 watts");
+set(row, "colour", "");
+set(row, "amps", "");
+field(row, "label").dispatchEvent(new window.Event("focusout", { bubbles: true }));
+assert.equal(field(row, "label").value, "4W", "leaving the rating field adds W");
+assert.match(row.querySelector("[data-variant-preview]").textContent,
+  /Shown in Record Sale as: 4W/);
+
+set(clone, "label", "63 amps");
+set(clone, "colour", "");
+set(clone, "amps", "");
+field(clone, "label").dispatchEvent(new window.Event("focusout", { bubbles: true }));
+assert.equal(field(clone, "label").value, "63A", "leaving the rating field adds A");
+assert.match(clone.querySelector("[data-variant-preview]").textContent,
+  /Shown in Record Sale as: 63A/);
+
+const symbolRows = collectProductVariants();
+assert.deepEqual(symbolRows.map((variant) => variant.label), ["4W", "63A"],
+  "saving also normalises ratings that were not blurred");
+assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", symbolRows), true);
+
+console.log("OK — product variants: duplicate, previews, rating units, amperage-only rows, duplicate rejection");

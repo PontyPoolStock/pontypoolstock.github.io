@@ -17,9 +17,10 @@ import {
   getVariantsTotalQuantity,
   getVariantPriceRange,
   getVariantName,
+  getVariantSuffix,
   getProductDisplayName,
   describeApiError,
-} from "../utils/helpers.js";
+} from "../utils/helpers.js?v=20261027-4";
 import { showToast } from "./toast.js";
 
 import { postData, updateData, fetchData, fetchEntityImage, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";
@@ -464,15 +465,8 @@ function updateStockAdjustmentCurrentDisplay() {
     variants.forEach((variant, index) => {
       const option = document.createElement("option");
       option.value = String(index);
-      const bits = [
-        variant.label || `Row ${index + 1}`,
-        variant.colour || "",
-        variant.amps !== "" && variant.amps !== null && variant.amps !== undefined
-          && Number.isFinite(Number(variant.amps))
-          ? `${Number(variant.amps)}A`
-          : "",
-      ].filter(Boolean);
-      option.textContent = `${bits.join(" · ")} (Qty: ${Number(variant.quantity) || 0})`;
+      const label = getVariantSuffix(variant) || `Row ${index + 1}`;
+      option.textContent = `${label} (Qty: ${Number(variant.quantity) || 0})`;
       variantSelect.appendChild(option);
     });
   }

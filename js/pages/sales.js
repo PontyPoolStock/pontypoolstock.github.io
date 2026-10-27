@@ -26,7 +26,7 @@ import {
   productThumbnailHtml,
   describeApiError,
   debounce,
-} from "../utils/helpers.js?v=20261027-3";
+} from "../utils/helpers.js?v=20261027-4";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
