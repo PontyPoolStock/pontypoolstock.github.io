@@ -763,12 +763,14 @@ function populateVariantSelect(variantSelect) {
     .map(({ variant, index }) => {
       const label = variant.label || variant.name || variant.value || variant.rating || variant.colour || "";
       const colour = variant.colour || "";
-      const bits = [label, colour && colour !== label ? colour : ""]
-        .filter(Boolean)
-        .join(" · ");
+      const parts = [];
+      if (label) parts.push(`Rating: ${label}`);
+      if (colour && colour !== label) parts.push(`Colour: ${colour}`);
+      const bits = parts.join(" · ");
       const stock = Number(variant.quantity) || 0;
-      const suffix = onOrder ? `Resale · ${resellerLeftFor(product?.id, index).left} left` : `${stock} in stock`;
-      return `<option value="${index}">${escapeHtml(bits)} — ${suffix}</option>`;
+      const suffix = onOrder ? `Resale · ${resellerLeftFor(product?.id, index).left} left` : `Stock: ${stock}`;
+      const display = bits ? `${bits} — ${suffix}` : `${suffix}`;
+      return `<option value="${index}">${escapeHtml(display)}</option>`;
     })
     .join("");
 
