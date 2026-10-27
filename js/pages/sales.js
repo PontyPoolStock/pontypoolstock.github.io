@@ -761,11 +761,11 @@ function populateVariantSelect(variantSelect) {
   wrapper?.classList.remove("d-none");
   variantSelect.innerHTML = sellable
     .map(({ variant, index }) => {
-      const label = variant.label || variant.name || variant.value || variant.rating || variant.colour || "";
+      const label = variant.label || variant.name || variant.value || variant.rating || variant.colour || `Variant ${index + 1}`;
       const colour = variant.colour || "";
       const parts = [];
-      if (label) parts.push(`Rating: ${label}`);
-      if (colour && colour !== label) parts.push(`Colour: ${colour}`);
+      if (label) parts.push(label);
+      if (colour && colour !== label) parts.push(colour);
       const bits = parts.join(" · ");
       const stock = Number(variant.quantity) || 0;
       const suffix = onOrder ? `Resale · ${resellerLeftFor(product?.id, index).left} left` : `Stock: ${stock}`;
