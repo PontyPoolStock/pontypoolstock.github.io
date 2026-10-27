@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pontypool-v8';
+const CACHE_NAME = 'pontypool-v9';
 const urlsToCache = [
   './',
   './index.html',
@@ -45,25 +45,31 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(request);
-      if (cached && !shouldRefresh) return cached;
-
-      const refresh = fetch(request).then((response) => {
-        if (!response.ok) return response;
-        return cache.put(request, response.clone()).then(
-          () => response,
-          () => response,
-        );
-      });
-
-      if (cached) {
-        event.waitUntil(refresh.catch((error) => {
-          console.warn("App cache refresh failed:", error);
-        }));
-        return cached;
+      //* Navigations and code always ask the network first: a deploy must show
+      //* up on the next reload instead of one reload later. Offline still falls
+      //* back to the cached copy. Images/fonts stay cache-first.
+      if (shouldRefresh) {
+        try {
+          const response = await fetch(request, { cache: "no-cache" });
+          if (response.ok) {
+            await cache.put(request, response.clone()).catch(() => {});
+          }
+          return response;
+        } catch (error) {
+          const cached = await cache.match(request);
+          if (cached) return cached;
+          throw error;
+        }
       }
 
-      return refresh;
+      const cached = await cache.match(request);
+      if (cached) return cached;
+
+      const response = await fetch(request);
+      if (response.ok) {
+        await cache.put(request, response.clone()).catch(() => {});
+      }
+      return response;
     })
   );
 });

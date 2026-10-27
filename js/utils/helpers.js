@@ -14,16 +14,68 @@ export function isValidProductData(data, id, variants = []) {
 //* Suggested colours for a rating — the field also accepts any colour typed in
 export const RATING_COLOURS = ["White", "Warm White", "RGB"];
 
-//* Rating rows are freely combinable (watts + colour + amperes) and optional:
-//* nothing blocks the save — values are only trimmed and clamped to safe numbers.
+//* Ratings and colours are free text, so the same choice can arrive with messy
+//* spacing or casing. Canonicalise them once so the pickers and stock rows agree.
+export function normalizeVariantText(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+export function normalizeVariantColour(value) {
+  const colour = normalizeVariantText(value);
+  if (!colour) return "";
+  return RATING_COLOURS.find((option) => option.toLowerCase() === colour.toLowerCase()) || colour;
+}
+
+//* One stable identity for a rating + colour pair. Two rows with the same key
+//* would be impossible to tell apart in Record Sale, so saving rejects them.
+export function variantSelectionKey(label, colour) {
+  return `${normalizeVariantText(label).toLowerCase()}::${normalizeVariantColour(colour).toLowerCase()}`;
+}
+
+//* Numeric ratings (32, 63) come first in value order; text ratings (4W, 9W)
+//* follow in natural order, so 9W sits before 12W instead of after it.
+function compareVariantLabels(a, b) {
+  const numberA = Number(a);
+  const numberB = Number(b);
+  const numericA = a !== "" && Number.isFinite(numberA);
+  const numericB = b !== "" && Number.isFinite(numberB);
+  if (numericA && numericB && numberA !== numberB) return numberA - numberB;
+  if (numericA && !numericB) return -1;
+  if (!numericA && numericB) return 1;
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+export function getVariantLabels(variants) {
+  const labels = [...new Set(
+    (Array.isArray(variants) ? variants : [])
+      .map((variant) => normalizeVariantText(variant?.label))
+      .filter(Boolean),
+  )];
+  return labels.sort(compareVariantLabels);
+}
+
+export function getVariantColours(variants) {
+  const colours = [...new Set(
+    (Array.isArray(variants) ? variants : [])
+      .map((variant) => normalizeVariantColour(variant?.colour))
+      .filter(Boolean),
+  )];
+  return colours.sort(
+    (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+  );
+}
+
+//* Rating rows are freely combinable (rating + colour + amperes), but each row
+//* must be identifiable and a rating/colour pair may only appear once.
 function isValidVariantRows(variants) {
   const errorBox = document.querySelector(".errorMes-variants");
   if (errorBox) errorBox.innerHTML = "";
 
-  for (const variant of variants) {
-    variant.label = String(variant.label ?? "").trim();
+  const seen = new Map();
+  for (const [index, variant] of variants.entries()) {
+    variant.label = normalizeVariantText(variant.label);
     variant.sku = String(variant.sku ?? "").trim();
-    variant.colour = String(variant.colour ?? "").trim();
+    variant.colour = normalizeVariantColour(variant.colour);
     variant.price = Math.max(0, Number(variant.price) || 0);
     variant.quantity = Math.max(0, Number(variant.quantity) || 0);
     variant.reorderLevel = Math.max(0, Number(variant.reorderLevel) || 0);
@@ -31,6 +83,21 @@ function isValidVariantRows(variants) {
       variant.amps === "" || variant.amps === null || variant.amps === undefined
         ? ""
         : Math.max(0, Number(variant.amps) || 0);
+
+    if (!variant.label && !variant.colour) {
+      if (errorBox) errorBox.innerHTML = `Rating row ${index + 1}: add a rating or colour.`;
+      return false;
+    }
+
+    const key = variantSelectionKey(variant.label, variant.colour);
+    if (seen.has(key)) {
+      if (errorBox) {
+        errorBox.innerHTML =
+          `Rating rows ${seen.get(key) + 1} and ${index + 1} repeat the same rating and colour.`;
+      }
+      return false;
+    }
+    seen.set(key, index);
   }
   return true;
 }

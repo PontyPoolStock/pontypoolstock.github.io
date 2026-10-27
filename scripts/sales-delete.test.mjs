@@ -18,6 +18,10 @@ for (const key of ["window", "document", "localStorage", "sessionStorage", "Even
   globalThis[key] = window[key] ?? window;
 }
 globalThis.window = window;
+const tokenExpiry = Date.now() + 60 * 60 * 1000;
+const tokenPayload = Buffer.from(JSON.stringify({ e: tokenExpiry })).toString("base64url");
+window.localStorage.setItem("pontypool_token", `${tokenPayload}.test-signature`);
+window.localStorage.setItem("currentUser", JSON.stringify({ name: "Admin", role: "admin", expiresAt: tokenExpiry }));
 
 const seed = () => ([
   { id: 7, product_id: 1, product_name: "Mini 30W", productName: "Mini 30W", quantity: 2, unit_price: 10, unitPrice: 10, total: 20, sold_at: "2026-10-05T10:00:00Z" },

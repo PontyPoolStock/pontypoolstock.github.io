@@ -108,12 +108,13 @@ variant.querySelector('[data-variant-field="quantity"]').value = "5";
 variant.querySelector('[data-variant-field="reorderLevel"]').value = "1";
 
 modal.querySelector("[data-bulk-preview]").click();
-assert.equal(modal.querySelectorAll("[data-bulk-review] .border.rounded").length, 2,
+assert.equal(modal.querySelectorAll("[data-bulk-review] .bulk-review-card").length, 2,
   "review shows one preview card for each product");
 assert.match(modal.querySelector("[data-bulk-review]").textContent, /Panel Light/);
-assert.match(modal.querySelector("[data-bulk-review]").textContent, /Price 125.5 · Qty 12/);
-assert.match(modal.querySelector("[data-bulk-review]").textContent, /Minimum 3/);
-assert.match(modal.querySelector("[data-bulk-review]").textContent, /Ratings: 9W — 85 \/ Qty 5 \/ Min 1/);
+assert.match(modal.querySelector("[data-bulk-review]").textContent, /Price\s*125\.5/);
+assert.match(modal.querySelector("[data-bulk-review]").textContent, /Quantity\s*12/);
+assert.match(modal.querySelector("[data-bulk-review]").textContent, /Minimum\s*3/);
+assert.match(modal.querySelector("[data-bulk-review]").textContent, /Ratings\s*9W\s*85\s*·\s*Qty 5\s*·\s*Min 1/);
 assert.equal(modal.querySelectorAll("[data-bulk-review] img").length, 1,
   "review shows the selected picture and omits empty-image placeholders");
 

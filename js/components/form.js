@@ -6,6 +6,8 @@ import {
   RATING_COLOURS,
   getProductDisplayName,
   isNotStockedProduct,
+  normalizeVariantColour,
+  normalizeVariantText,
   UNIT_SUGGESTIONS,
 } from "../utils/helpers.js";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
@@ -140,9 +142,9 @@ function variantRowHtml(variant = {}) {
     <div class="variant-row border rounded p-2" data-variant-row>
       <div class="row g-2 align-items-end">
         <div class="col-6 col-md-4">
-          <label class="form-label small text-secondary mb-1">Watts</label>
+          <label class="form-label small text-secondary mb-1">Rating / Watts</label>
           <input type="text" class="form-control form-control-sm" data-field="label"
-            value="${escAttr(variant.label || "")}" placeholder="e.g. 4W">
+            value="${escAttr(variant.label || "")}" placeholder="e.g. 32A or 4W">
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label small text-secondary mb-1">Price</label>
@@ -176,7 +178,13 @@ function variantRowHtml(variant = {}) {
           <input type="number" class="form-control form-control-sm" data-field="amps"
             value="${escAttr(variant.amps ?? "")}" min="0" step="0.01" placeholder="e.g. 0.05">
         </div>
+        <div class="col-12 col-md-3">
+          <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-duplicate-variant>
+            <i class="bi bi-copy"></i> Duplicate
+          </button>
+        </div>
       </div>
+      <div class="small text-muted mt-1" data-variant-preview></div>
     </div>
   `;
 }
@@ -228,6 +236,24 @@ export function setupProductVariants() {
     }
   };
 
+  //* Show exactly how this row will read in Record Sale, so "32A + White" is
+  //* confirmed while the product is being added instead of at the till.
+  const paintVariantPreviews = () => {
+    list?.querySelectorAll("[data-variant-row]").forEach((row) => {
+      const preview = row.querySelector("[data-variant-preview]");
+      if (!preview) return;
+      const valueOf = (field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
+      const parts = [
+        normalizeVariantText(valueOf("label")),
+        normalizeVariantColour(valueOf("colour")),
+        valueOf("amps") ? `${valueOf("amps")}A` : "",
+      ].filter(Boolean);
+      preview.textContent = parts.length
+        ? `Shown in Record Sale as: ${parts.join(" · ")}`
+        : "Add a rating or colour so this row can be picked in Record Sale.";
+    });
+  };
+
   notStockedCheck?.addEventListener("change", () => {
     applyNotStocked();
     syncDerivedFields();
@@ -241,17 +267,41 @@ export function setupProductVariants() {
   addBtn.addEventListener("click", () => {
     list.insertAdjacentHTML("beforeend", variantRowHtml());
     syncDerivedFields();
+    paintVariantPreviews();
   });
 
   list.addEventListener("click", (event) => {
+    const duplicateBtn = event.target.closest("[data-duplicate-variant]");
+    if (duplicateBtn) {
+      const row = duplicateBtn.closest("[data-variant-row]");
+      if (!row) return;
+      //* The common follow-up is the same rating at a different colour, so the
+      //* copy keeps rating/price/amps/min but starts with a blank colour and 0 on hand.
+      const clone = row.cloneNode(true);
+      const colourInput = clone.querySelector('[data-field="colour"]');
+      const quantityInput = clone.querySelector('[data-field="quantity"]');
+      if (colourInput) colourInput.value = "";
+      if (quantityInput) quantityInput.value = "";
+      row.insertAdjacentElement("afterend", clone);
+      syncDerivedFields();
+      paintVariantPreviews();
+      colourInput?.focus();
+      return;
+    }
+
     const removeBtn = event.target.closest("[data-remove-variant]");
     if (!removeBtn) return;
     removeBtn.closest("[data-variant-row]")?.remove();
     syncDerivedFields();
+    paintVariantPreviews();
   });
 
-  list.addEventListener("input", syncDerivedFields);
+  list.addEventListener("input", () => {
+    syncDerivedFields();
+    paintVariantPreviews();
+  });
   syncDerivedFields();
+  paintVariantPreviews();
   applyNotStocked();
 }
 
@@ -265,11 +315,11 @@ export function collectProductVariants() {
       const valueOf = (field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
       const ampsRaw = valueOf("amps");
       return {
-        label: valueOf("label"),
+        label: normalizeVariantText(valueOf("label")),
         price: Number(valueOf("price")) || 0,
         quantity: Number(valueOf("quantity")) || 0,
         reorderLevel: Number(valueOf("reorderLevel")) || 0,
-        colour: valueOf("colour"),
+        colour: normalizeVariantColour(valueOf("colour")),
         amps: ampsRaw === "" ? "" : Number(ampsRaw),
       };
     })

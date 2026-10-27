@@ -16,8 +16,12 @@ import {
   getVariantsTotalQuantity,
   getVariantName,
   getVariantPrice,
+  getVariantLabels,
+  getVariantColours,
   getProductDisplayName,
   isNotStockedProduct,
+  normalizeVariantColour,
+  normalizeVariantText,
   productThumbnailHtml,
   describeApiError,
   debounce,
@@ -142,10 +146,16 @@ function renderSalesPage() {
             <div id="saleProductGallery" class="sale-product-gallery" role="listbox" aria-label="Product photos"></div>
           </div>
           <div class="col-12 col-lg-6 d-none" id="saleVariantWrapper">
-            <label class="form-label" for="saleVariantSelect">Rating</label>
-            <select name="variantIndex" id="saleVariantSelect" class="form-select"></select>
-            <label class="form-label" for="saleVariantColour">Colour</label>
-            <select name="variantColour" id="saleVariantColour" class="form-select"></select>
+            <div class="d-grid gap-2">
+              <div id="saleVariantRatingGroup" class="d-none">
+                <label class="form-label" for="saleVariantSelect">Rating</label>
+                <select name="variantIndex" id="saleVariantSelect" class="form-select"></select>
+              </div>
+              <div id="saleVariantColourGroup" class="d-none">
+                <label class="form-label" for="saleVariantColour" id="saleVariantColourLabel">Colour</label>
+                <select name="variantColour" id="saleVariantColour" class="form-select"></select>
+              </div>
+            </div>
             <div class="text-danger fw-bold errorMes errorMes-variantIndex"></div>
           </div>
           <div class="col-12 col-lg-6">
@@ -171,6 +181,8 @@ function renderSalesPage() {
             <input type="date" id="saleDate" class="form-control">
           </div>
         </div>
+
+        <div id="saleStockHint" class="small text-muted mt-2" aria-live="polite"></div>
 
         <div class="d-flex gap-2 mt-3 align-items-center flex-wrap">
           <button type="button" class="btn btn-outline-primary px-4" id="addSaleLineBtn">
@@ -199,7 +211,6 @@ function renderSalesPage() {
             <i class="bi bi-printer"></i> Reprint
           </button>
         </div>
-        <div id="saleStockHint" class="small text-muted mt-2"></div>
       </form>
     </section>
 
@@ -418,35 +429,29 @@ function paintSaleProductVisuals(selectedId = "") {
 }
 
 //* Product dropdown — filtered down to the chosen category, out-of-stock rows
-//* still disabled so nothing unsellable can be staged. Resale products are
-//* always enabled — they use shop-purchase stock rather than own stock.
+//* still disabled so nothing unsellable can be staged. The rating/colour
+//* pickers below resolve the exact stock row, so one product is one option.
 function getProductOptionsHtml(selectedId = "") {
   const filtered = getFilteredProducts();
   if (!filtered.length) {
     return `<option value="" disabled>${saleCategoryFilter !== "" ? "No products in this category" : "No products in stock"}</option>`;
   }
-  let html = "";
-  filtered.forEach((product) => {
-    const variants = getProductVariants(product);
-    const name = escapeHtml(getProductDisplayName(product));
-    if (!variants.length) {
+  return filtered
+    .map((product) => {
+      const variants = getProductVariants(product);
+      const name = escapeHtml(getProductDisplayName(product));
       const onOrder = isNotStockedProduct(product);
-      const stock = Number(product.quantity) || 0;
+      const stock = variants.length
+        ? getVariantsTotalQuantity(variants)
+        : Number(product.quantity) || 0;
       const out = !onOrder && stock <= 0;
       const isSelected = String(product.id) === String(selectedId);
-      const label = onOrder ? `${name} — Resale product` : `${name} — ${stock} in stock`;
-      html += `<option value="${product.id}::" ${isSelected ? "selected" : ""} ${out ? "disabled" : ""}>${label}</option>`;
-      return;
-    }
-    variants.forEach((variant, idx) => {
-      const label = String(variant.label || "").trim();
-      const stock = Number(variant.quantity) || 0;
-      const isSelected = `${product.id}::${idx}` === String(selectedId);
-      const labelPart = label ? ` — ${label}` : "";
-      html += `<option value="${product.id}::${idx}" ${isSelected ? "selected" : ""}>${name}${labelPart} (${stock})</option>`;
-    });
-  });
-  return html;
+      const label = onOrder
+        ? `${name} — Resale · ${resellerProductLeft(product)} left`
+        : `${name} — ${stock} in stock`;
+      return `<option value="${escapeHtml(String(product.id))}" ${isSelected ? "selected" : ""} ${out ? "disabled" : ""}>${label}</option>`;
+    })
+    .join("");
 }
 
 //* Units of this product/rating already waiting in the basket — stock checks
@@ -558,20 +563,21 @@ function handleCategoryChange() {
 function handleAddToCart() {
   if (isSubmitting) return false;
 
-  const raw = document.getElementById("saleProductSelect")?.value || "";
-  const [productId, variantIdxStr] = raw.split("::");
+  const productId = document.getElementById("saleProductSelect")?.value || "";
   const quantity = Number(document.getElementById("saleQuantity")?.value);
   const unitPrice = Number(document.getElementById("saleUnitPrice")?.value);
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
   const hasVariants = variants.length > 0;
-  const variantIndex = hasVariants ? Number(variantIdxStr) : null;
+  const selection = hasVariants
+    ? getVariantSelectionState()
+    : { index: null, error: "" };
 
-  if (!isValidSaleData({ productId, quantity, unitPrice, variantIndex: variantIndex == null ? "" : String(variantIndex), hasVariants })) {
+  if (!isValidSaleData({ productId, quantity, unitPrice, hasVariants, selection })) {
     return false;
   }
 
-  const resolvedVariantIndex = hasVariants ? variantIndex : null;
+  const resolvedVariantIndex = hasVariants ? selection.index : null;
   saleCart.push({
     productId,
     variantIndex: resolvedVariantIndex,
@@ -627,15 +633,10 @@ function setupEventListeners() {
     ?.addEventListener("change", handleCategoryChange);
 
   productSelect?.addEventListener("change", () => {
-    const raw = productSelect.value || "";
-    const [productId, variantIdx] = raw.split("::");
-    if (variantIdx !== undefined && variantIdx !== "") {
-      variantSelect.value = variantIdx;
-      variantSelect.dispatchEvent(new Event("change"));
-    }
     populateVariantSelect(variantSelect);
     updatePriceDefault(priceInput);
-    paintSaleProductVisuals(productId);
+    paintSaleProductVisuals(productSelect.value);
+    paintStockHint();
     updateSalePreview();
   });
   //* Tapping a photo picks the same product as the dropdown — both stay in
@@ -647,10 +648,6 @@ function setupEventListeners() {
     if (!select) return;
     select.value = card.dataset.productId;
     select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  variantSelect?.addEventListener("change", () => {
-    updatePriceDefault(priceInput);
-    updateSalePreview();
   });
   quantityInput?.addEventListener("input", updateSalePreview);
   priceInput?.addEventListener("input", updateSalePreview);
@@ -740,86 +737,131 @@ function getSelectedProduct() {
   return products.find((product) => String(product.id) === productId) || null;
 }
 
-//* Only in-stock ratings are offered, so an out-of-stock row can never be picked.
-//* Order-based products offer every rating — they need no stock on hand.
-function populateVariantSelect(variantSelect) {
-  if (!variantSelect) return;
+//* Rating/colour pickers are derived from the product's variants: a select
+//* only appears when there is a real choice to make. The pair resolves exactly
+//* one stock row, so the sale line never depends on a hidden variant index.
+function populateVariantSelect(variantSelect, preferred = {}) {
   const wrapper = document.getElementById("saleVariantWrapper");
+  const ratingGroup = document.getElementById("saleVariantRatingGroup");
+  const colourGroup = document.getElementById("saleVariantColourGroup");
+  const colourLabel = document.getElementById("saleVariantColourLabel");
   const colourSelect = document.getElementById("saleVariantColour");
+  if (!variantSelect || !colourSelect) return;
+
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
-  const onOrder = isNotStockedProduct(product);
 
   if (!product || !variants.length) {
     wrapper?.classList.add("d-none");
+    ratingGroup?.classList.add("d-none");
+    colourGroup?.classList.add("d-none");
     variantSelect.innerHTML = "";
     colourSelect.innerHTML = "";
-    updateStockHint("");
+    paintStockHint();
     return;
   }
 
-  // Unique ratings, sorted numerically then alphabetically
-  const ratingMap = new Map();
-  variants.forEach((v) => {
-    const label = String(v.label || "").trim();
-    if (label && !ratingMap.has(label)) ratingMap.set(label, v);
-  });
-  const ratings = Array.from(ratingMap.keys());
+  const labels = getVariantLabels(variants);
+  const showRating = labels.length > 1;
+  const preferredRating = normalizeVariantText(preferred.rating);
+  const preferredColour = normalizeVariantColour(preferred.colour);
 
-  if (!ratings.length) {
-    wrapper?.classList.add("d-none");
-    variantSelect.innerHTML = "";
-    colourSelect.innerHTML = "";
-    updateStockHint("");
-    return;
-  }
-
-  ratings.sort((a, b) => {
-    const na = Number(a), nb = Number(b);
-    if (!isNaN(na) && !isNaN(nb)) return na - nb;
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-  });
-
-  wrapper?.classList.remove("d-none");
-  variantSelect.innerHTML = '<option value="">Select rating</option>' + ratings
-    .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
-    .join("");
-  colourSelect.innerHTML = '<option value="">Select colour</option>';
-
-  const populateColours = (rating) => {
-    const matching = variants.filter((v) => String(v.label || "").trim() === rating);
-    const colours = [...new Set(matching.map((v) => String(v.colour || "")).filter(Boolean))];
-    colours.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-    colourSelect.innerHTML = '<option value="">Select colour</option>' + colours
-      .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
+  ratingGroup?.classList.toggle("d-none", !showRating);
+  variantSelect.innerHTML = "";
+  if (showRating) {
+    variantSelect.innerHTML = '<option value="">Select rating</option>' + labels
+      .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
       .join("");
-    updateStockHintForSelection(rating, colourSelect.value, variants, onOrder);
+    variantSelect.value = labels.includes(preferredRating) ? preferredRating : "";
+  }
+
+  const paintColours = (wantedColour = "") => {
+    const rating = labels.length
+      ? (showRating ? String(variantSelect.value || "") : labels[0])
+      : "";
+    const candidates = labels.length
+      ? variants.filter((variant) => normalizeVariantText(variant.label) === rating)
+      : variants;
+    const colours = getVariantColours(candidates);
+    const wanted = normalizeVariantColour(wantedColour);
+
+    colourSelect.innerHTML = "";
+    if (colours.length > 1) {
+      colourSelect.innerHTML = '<option value="">Select colour</option>' + colours
+        .map((colour) => `<option value="${escapeHtml(colour)}">${escapeHtml(colour)}</option>`)
+        .join("");
+      colourSelect.value = colours.includes(wanted) ? wanted : "";
+    } else if (colours.length === 1) {
+      colourSelect.innerHTML =
+        `<option value="${escapeHtml(colours[0])}">${escapeHtml(colours[0])}</option>`;
+      colourSelect.value = colours[0];
+    }
+
+    colourGroup?.classList.toggle("d-none", colours.length <= 1);
+    if (colourLabel) {
+      colourLabel.textContent = !showRating && labels.length
+        ? `Colour (${labels[0]})`
+        : "Colour";
+    }
+    wrapper?.classList.toggle("d-none", !showRating && colours.length <= 1);
   };
 
-  variantSelect.onchange = () => populateColours(variantSelect.value);
-  colourSelect.onchange = () => updateStockHintForSelection(variantSelect.value, colourSelect.value, variants, onOrder);
+  paintColours(preferredColour);
 
-  variantSelect.value = ratings[0];
-  variantSelect.dispatchEvent(new Event("change"));
+  const refreshSelection = () => {
+    updatePriceDefault(document.getElementById("saleUnitPrice"));
+    paintStockHint();
+    updateSalePreview();
+  };
+
+  variantSelect.onchange = () => {
+    paintColours();
+    refreshSelection();
+  };
+  colourSelect.onchange = refreshSelection;
+  paintStockHint();
 }
 
-function updateStockHintForSelection(rating, colour, variants, onOrder) {
-  const hint = document.getElementById("saleStockHint");
-  if (!hint || !rating) { hint.textContent = ""; return; }
-  const matching = variants.filter((v) => String(v.label || "").trim() === rating);
-  const target = colour ? matching.find((v) => String(v.colour || "") === colour) : matching[0];
-  if (!target) { hint.textContent = ""; return; }
-  const stock = Number(target.quantity) || 0;
-  const parts = [rating];
-  if (target.colour) parts.push(target.colour);
-  hint.textContent = `${parts.join(" · ")} — Stock: ${stock}`;
-}
+//* Resolve the current picker values to one stock row. The returned `error`
+//* tells callers whether the rating or the colour is the missing choice.
+function getVariantSelectionState() {
+  const product = getSelectedProduct();
+  const variants = getProductVariants(product);
+  if (!variants.length) {
+    return { variants, index: null, rating: "", colour: "", error: "" };
+  }
 
-function findVariantIndexByRatingColour(rating, colour, variants) {
-  if (!rating) return null;
-  const matching = variants.filter((v) => String(v.label || "").trim() === rating);
-  const target = colour ? matching.find((v) => String(v.colour || "") === colour) : matching[0];
-  return target ? variants.indexOf(target) : null;
+  const labels = getVariantLabels(variants);
+  const showRating = labels.length > 1;
+  const rating = showRating
+    ? normalizeVariantText(document.getElementById("saleVariantSelect")?.value)
+    : (labels[0] || "");
+
+  if (labels.length && !rating) {
+    return { variants, index: null, rating, colour: "", error: "rating" };
+  }
+
+  let candidates = labels.length
+    ? variants.filter((variant) => normalizeVariantText(variant.label) === rating)
+    : variants;
+  let colour = normalizeVariantColour(document.getElementById("saleVariantColour")?.value);
+  const colours = getVariantColours(candidates);
+
+  if (colours.length) {
+    if (colours.length > 1 && !colour) {
+      return { variants, index: null, rating, colour, error: "colour" };
+    }
+    colour = colour || colours[0];
+    candidates = candidates.filter(
+      (variant) => normalizeVariantColour(variant.colour) === colour,
+    );
+  }
+
+  if (!candidates.length) {
+    return { variants, index: null, rating, colour, error: "rating" };
+  }
+
+  return { variants, index: variants.indexOf(candidates[0]), rating, colour, error: "" };
 }
 
 function getSelectedStock() {
@@ -827,19 +869,9 @@ function getSelectedStock() {
   if (!product) return 0;
   const variants = getProductVariants(product);
   if (!variants.length) return Number(product.quantity) || 0;
-  const ratingSelect = document.getElementById("saleVariantSelect");
-  const colourSelect = document.getElementById("saleVariantColour");
-  const rating = ratingSelect?.value || "";
-  const colour = colourSelect?.value || "";
-  const matching = variants.filter((v) => String(v.label || "").trim() === rating);
-  const target = colour ? matching.find((v) => String(v.colour || "") === colour) : matching[0];
-  return target ? Number(target.quantity) || 0 : 0;
+  const state = getVariantSelectionState();
+  return state.index === null ? 0 : Number(variants[state.index]?.quantity) || 0;
 }
-
-//* Base hint text (stock for the current selection) kept separately from the
-//* staged-units note so the note can be re-painted after every basket change
-//* without re-deriving the whole sentence.
-let stockHintBase = "";
 
 //* On-order hint backed by the reseller ledger: bought minus sold per
 //* product/variant, always separate from products.quantity own-stock.
@@ -864,35 +896,50 @@ function resellerHintFor(productId, variantIndex) {
   return `Resale product — shop-purchase stock: ${left} left (${bought} bought − ${sold} sold).`;
 }
 
-function updateStockHint(text) {
-  stockHintBase = String(text ?? "");
-  paintStockHint();
-}
-
 function paintStockHint() {
   const hint = document.getElementById("saleStockHint");
   if (!hint) return;
+  const product = getSelectedProduct();
+  if (!product) {
+    hint.textContent = "";
+    return;
+  }
+
+  const variants = getProductVariants(product);
+  const onOrder = isNotStockedProduct(product);
+  let variantIndex = null;
+  let base = "";
+
+  if (variants.length) {
+    const state = getVariantSelectionState();
+    variantIndex = state.index;
+    if (variantIndex === null) {
+      hint.textContent = state.error === "colour"
+        ? "Choose a colour to see the available stock."
+        : "Choose a rating to see the available stock.";
+      return;
+    }
+    const variant = variants[variantIndex];
+    const label = [state.rating, state.colour].filter(Boolean).join(" · ");
+    base = onOrder
+      ? resellerHintFor(product.id, variantIndex)
+      : `${label ? `${label} — ` : ""}Stock: ${Number(variant.quantity) || 0}`;
+  } else {
+    base = onOrder
+      ? resellerHintFor(product.id, null)
+      : `${Number(product.quantity) || 0} in stock`;
+  }
+
   //* Tell the picker how many units of this exact line are already staged, so
   //* "Only 3 left to add" in the validation never comes out of nowhere.
-  let stagedNote = "";
-  const product = getSelectedProduct();
-  if (product) {
-    const variants = getProductVariants(product);
-    let variantIndex = null;
-    if (variants.length) {
-      const ratingSelect = document.getElementById("saleVariantSelect");
-      const colourSelect = document.getElementById("saleVariantColour");
-      const rating = ratingSelect?.value || "";
-      const colour = colourSelect?.value || "";
-      variantIndex = findVariantIndexByRatingColour(rating, colour, variants);
-    }
-    const staged = getCartQuantityFor(product.id, variantIndex);
-    if (staged > 0) stagedNote = ` ${staged} unit${staged === 1 ? "" : "s"} already added to this sale.`;
-  }
-  hint.textContent = `${stockHintBase}${stagedNote}`;
+  const staged = getCartQuantityFor(product.id, variantIndex);
+  const stagedNote = staged > 0
+    ? ` ${staged} unit${staged === 1 ? "" : "s"} already added to this sale.`
+    : "";
+  hint.textContent = `${base}${stagedNote}`;
 }
 
-//* Prefill the selling price from the selected rating, but let staff override it
+//* Prefill the selling price from the selected rating/colour, but let staff override it
 function updatePriceDefault(priceInput) {
   if (!priceInput) return;
   const product = getSelectedProduct();
@@ -902,12 +949,8 @@ function updatePriceDefault(priceInput) {
   }
   const variants = getProductVariants(product);
   if (variants.length) {
-    const ratingSelect = document.getElementById("saleVariantSelect");
-    const colourSelect = document.getElementById("saleVariantColour");
-    const rating = ratingSelect?.value || "";
-    const colour = colourSelect?.value || "";
-    const variantIndex = findVariantIndexByRatingColour(rating, colour, variants);
-    const variant = variantIndex !== null ? variants[variantIndex] : undefined;
+    const state = getVariantSelectionState();
+    const variant = state.index === null ? undefined : variants[state.index];
     priceInput.value = variant ? String(getVariantPrice(variant)) : "";
   } else {
     priceInput.value = String(Number(product.price) || 0);
@@ -1173,30 +1216,36 @@ async function reprintLastReceipt() {
   }
 }
 
-function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVariants }) {
+function isValidSaleData({ productId, quantity, unitPrice, hasVariants, selection }) {
   document.querySelectorAll(".errorMes").forEach((item) => { item.textContent = ""; });
   let valid = true;
   //* Order-based products skip every stock cap — any quantity can be sold.
   const onOrder = isNotStockedProduct(getSelectedProduct());
+  const selectionReady = !hasVariants || (selection?.index ?? null) !== null;
 
   if (!productId) {
     setSaleError("productId", "Product is required");
     valid = false;
   }
-  if (hasVariants && variantIndex === "") {
-    setSaleError("variantIndex", "Select the rating being sold");
+  if (!selectionReady) {
+    setSaleError(
+      "variantIndex",
+      selection?.error === "colour"
+        ? "Select the colour being sold"
+        : "Select the rating being sold",
+    );
     valid = false;
   }
   if (!Number.isInteger(quantity) || quantity <= 0) {
     setSaleError("quantity", "Quantity must be a whole number greater than 0");
     valid = false;
-  } else if (!onOrder) {
+  } else if (!onOrder && selectionReady) {
     const available = getSelectedStock();
     //* Units already waiting in the basket are spoken for — without this the
     //* form would happily stage more than the shelf holds.
     const staged = getCartQuantityFor(
       productId,
-      hasVariants && variantIndex !== "" ? Number(variantIndex) : null,
+      hasVariants ? selection.index : null,
     );
     const remaining = Math.max(0, available - staged);
     if (quantity > remaining) {
@@ -1209,13 +1258,17 @@ function isValidSaleData({ productId, quantity, unitPrice, variantIndex, hasVari
       valid = false;
     }
   }
-  const priceRaw = String(document.getElementById("saleUnitPrice")?.value ?? "").trim();
-  if (priceRaw === "") {
-    setSaleError("unitPrice", "Selling price is required");
-    valid = false;
-  } else if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-    setSaleError("unitPrice", "Selling price must be 0 or more");
-    valid = false;
+  //* A colour/rating that has not been picked yet leaves the price blank on
+  //* purpose — don't stack "price required" on top of the missing selection.
+  if (selectionReady) {
+    const priceRaw = String(document.getElementById("saleUnitPrice")?.value ?? "").trim();
+    if (priceRaw === "") {
+      setSaleError("unitPrice", "Selling price is required");
+      valid = false;
+    } else if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      setSaleError("unitPrice", "Selling price must be 0 or more");
+      valid = false;
+    }
   }
   return valid;
 }
@@ -1239,6 +1292,8 @@ function showSaleFormMessage(message, tone) {
 function captureSaleFormState() {
   return {
     productId: document.getElementById("saleProductSelect")?.value || "",
+    rating: document.getElementById("saleVariantSelect")?.value || "",
+    colour: document.getElementById("saleVariantColour")?.value || "",
     quantity: document.getElementById("saleQuantity")?.value ?? "",
     unitPrice: document.getElementById("saleUnitPrice")?.value ?? "",
   };
@@ -1261,7 +1316,10 @@ function restoreSaleFormState(state) {
     productSelect.value = state.productId;
   }
 
-  populateVariantSelect(document.getElementById("saleVariantSelect"));
+  populateVariantSelect(document.getElementById("saleVariantSelect"), {
+    rating: state.rating,
+    colour: state.colour,
+  });
 
   const quantityInput = document.getElementById("saleQuantity");
   const priceInput = document.getElementById("saleUnitPrice");
@@ -1388,11 +1446,8 @@ function openEditSaleModal(sale) {
                   <label class="form-label" for="editSaleUnitPrice">Selling price (KSh) *</label>
                   <input type="number" min="0" step="0.01" id="editSaleUnitPrice" class="form-control" value="${Number(sale.unitPrice) || 0}">
                   <div class="text-danger fw-bold errorMes errorMes-unitPrice"></div>
-          <div class="col-12 col-lg-6">
-            <label class="form-label" for="saleDate">Sale date</label>
-            <input type="date" id="saleDate" class="form-control">
-          </div>
-        </div>
+                </div>
+              </div>
               <div class="small text-muted">
                 <i class="bi bi-info-circle"></i>
                 Saving returns the original stock and takes the corrected amount.
