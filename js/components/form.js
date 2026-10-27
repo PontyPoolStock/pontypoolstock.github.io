@@ -5,12 +5,14 @@ import {
   getVariantPriceRange,
   getVariantSuffix,
   RATING_COLOURS,
+  GLASS_COLOURS,
   getProductDisplayName,
   isNotStockedProduct,
   normalizeVariantColour,
+  normalizeVariantGlass,
   normalizeVariantRating,
   UNIT_SUGGESTIONS,
-} from "../utils/helpers.js?v=20261027-4";
+} from "../utils/helpers.js?v=20261027-5";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
   //^ Edit reuses the row you already have so opening the modal is instant —
   //^ no extra product fetch, and categories come from the slim cached list
@@ -97,6 +99,9 @@ export async function makeProductForm(id, categoryId = "", opts = {}) {
         <datalist id="ratingColourSuggestions">
           ${RATING_COLOURS.map((option) => `<option value="${option}">`).join("")}
         </datalist>
+        <datalist id="glassColourSuggestions">
+          ${GLASS_COLOURS.map((option) => `<option value="${option}">`).join("")}
+        </datalist>
         <div class="text-danger fw-bold errorMes errorMes-variants"></div>
       </div>
     </div>
@@ -170,12 +175,18 @@ function variantRowHtml(variant = {}) {
       </div>
       <div class="row g-2 mt-1 align-items-end">
         <div class="col-6 col-md-3">
-          <label class="form-label small text-secondary mb-1">Colour</label>
-          <input type="text" class="form-control form-control-sm" data-field="colour"
-            list="ratingColourSuggestions" value="${escAttr(variant.colour || "")}"
-            placeholder="White / Warm White / RGB / any">
+          <label class="form-label small text-secondary mb-1">Glass colour</label>
+          <input type="text" class="form-control form-control-sm" data-field="glass"
+            list="glassColourSuggestions" value="${escAttr(normalizeVariantGlass(variant.glass) || "")}"
+            placeholder="Clear / Amber / any">
         </div>
         <div class="col-6 col-md-3">
+          <label class="form-label small text-secondary mb-1">Glow colour</label>
+          <input type="text" class="form-control form-control-sm" data-field="colour"
+            list="ratingColourSuggestions" value="${escAttr(normalizeVariantColour(variant.colour) || "")}"
+            placeholder="Warm White / Cool White / RGB">
+        </div>
+        <div class="col-4 col-md-2">
           <label class="form-label small text-secondary mb-1">Amperes</label>
           <div class="input-group input-group-sm">
             <input type="number" class="form-control form-control-sm" data-field="amps"
@@ -183,7 +194,7 @@ function variantRowHtml(variant = {}) {
             <span class="input-group-text">A</span>
           </div>
         </div>
-        <div class="col-12 col-md-3">
+        <div class="col-8 col-md-2">
           <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-duplicate-variant>
             <i class="bi bi-copy"></i> Duplicate
           </button>
@@ -250,12 +261,13 @@ export function setupProductVariants() {
       const valueOf = (field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
       const suffix = getVariantSuffix({
         label: valueOf("label"),
+        glass: valueOf("glass"),
         colour: valueOf("colour"),
         amps: valueOf("amps"),
       });
       preview.textContent = suffix
         ? `Shown in Record Sale as: ${suffix}`
-        : "Add a rating, colour or amperage so this row can be picked in Record Sale.";
+        : "Add a rating, glass/glow colour or amperage so this row can be picked in Record Sale.";
     });
   };
 
@@ -280,11 +292,13 @@ export function setupProductVariants() {
     if (duplicateBtn) {
       const row = duplicateBtn.closest("[data-variant-row]");
       if (!row) return;
-      //* The common follow-up is the same rating at a different colour, so the
-      //* copy keeps rating/price/amps/min but starts with a blank colour and 0 on hand.
+      //* The common follow-up is the same rating + glass with a different glow,
+      //* so the copy keeps those but starts with a blank glow and 0 on hand.
       const clone = row.cloneNode(true);
+      const glassInput = clone.querySelector('[data-field="glass"]');
       const colourInput = clone.querySelector('[data-field="colour"]');
       const quantityInput = clone.querySelector('[data-field="quantity"]');
+      if (glassInput) glassInput.value = normalizeVariantGlass(glassInput.value);
       if (colourInput) colourInput.value = "";
       if (quantityInput) quantityInput.value = "";
       row.insertAdjacentElement("afterend", clone);
@@ -306,12 +320,17 @@ export function setupProductVariants() {
     paintVariantPreviews();
   });
 
-  //* Finish "4 watts" / "4 w" as "4W" when the field loses focus, so the saved
-  //* rating and the Record Sale picker read the same way.
+  //* Finish "4 watts" / "clear" / "warm white" when the field loses focus, so
+  //* the saved row and the Record Sale picker read the same way.
   list.addEventListener("focusout", (event) => {
-    const input = event.target.closest?.('[data-field="label"]');
+    const input = event.target.closest?.("[data-field]");
     if (!input) return;
-    const normalized = normalizeVariantRating(input.value);
+    const field = input.dataset.field;
+    let normalized = input.value;
+    if (field === "label") normalized = normalizeVariantRating(input.value);
+    else if (field === "glass") normalized = normalizeVariantGlass(input.value);
+    else if (field === "colour") normalized = normalizeVariantColour(input.value);
+    else return;
     if (normalized === input.value) return;
     input.value = normalized;
     syncDerivedFields();
@@ -337,6 +356,7 @@ export function collectProductVariants() {
         price: Number(valueOf("price")) || 0,
         quantity: Number(valueOf("quantity")) || 0,
         reorderLevel: Number(valueOf("reorderLevel")) || 0,
+        glass: normalizeVariantGlass(valueOf("glass")),
         colour: normalizeVariantColour(valueOf("colour")),
         amps: ampsRaw === "" ? "" : Number(ampsRaw),
       };
@@ -344,6 +364,7 @@ export function collectProductVariants() {
     .filter(
       (variant) =>
         variant.label
+        || variant.glass
         || variant.colour
         || variant.amps !== ""
         || variant.price

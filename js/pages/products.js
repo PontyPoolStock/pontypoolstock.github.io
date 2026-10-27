@@ -257,7 +257,7 @@ function filterProducts() {
     //^ Search by name, sku, or category name
     if (searchTerm) {
       const ratingsText = getProductVariants(p)
-        .map((variant) => `${variant.label || ""} ${variant.sku || ""} ${variant.colour || ""} ${variant.amps ?? ""}`)
+        .map((variant) => `${variant.label || ""} ${variant.sku || ""} ${variant.glass || ""} ${variant.colour || ""} ${variant.amps ?? ""}`)
         .join(" ")
         .toLowerCase();
       let matches =

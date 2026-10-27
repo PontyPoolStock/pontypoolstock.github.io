@@ -165,6 +165,7 @@ function variantLabel(product, index) {
   if (!v) return "";
   const bits = [];
   if (v.label) bits.push(String(v.label));
+  if (v.glass) bits.push(String(v.glass));
   if (v.colour || v.color) bits.push(String(v.colour || v.color));
   if (v.amps !== "" && v.amps !== null && v.amps !== undefined) bits.push(String(v.amps) + "A");
   const name = bits.join(" - ");

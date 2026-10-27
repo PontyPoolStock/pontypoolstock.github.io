@@ -11,8 +11,12 @@ export function isValidProductData(data, id, variants = []) {
   return isValidProductIdentity(data) && isValidVariantRows(ratingRows);
 }
 
-//* Suggested colours for a rating — the field also accepts any colour typed in
-export const RATING_COLOURS = ["White", "Warm White", "RGB"];
+//* Suggested glow colours for a rating — the field also accepts any colour typed in
+export const RATING_COLOURS = ["White", "Warm White", "Cool White", "Daylight", "RGB"];
+
+//* Bulbs often have both a glass colour and a glow colour: clear glass that
+//* glows warm white is a different stock row from amber glass that glows warm white.
+export const GLASS_COLOURS = ["Clear", "Amber", "Frosted", "Smoked", "White"];
 
 //* Ratings and colours are free text, so the same choice can arrive with messy
 //* spacing or casing. Canonicalise them once so the pickers and stock rows agree.
@@ -24,6 +28,12 @@ export function normalizeVariantColour(value) {
   const colour = normalizeVariantText(value);
   if (!colour) return "";
   return RATING_COLOURS.find((option) => option.toLowerCase() === colour.toLowerCase()) || colour;
+}
+
+export function normalizeVariantGlass(value) {
+  const glass = normalizeVariantText(value);
+  if (!glass) return "";
+  return GLASS_COLOURS.find((option) => option.toLowerCase() === glass.toLowerCase()) || glass;
 }
 
 //* Ratings read best as a number + symbol: "4 watts" → "4W", "63 amps" → "63A".
@@ -52,11 +62,15 @@ export function getVariantRatingLabel(variant) {
   return normalizeVariantRating(variant?.label) || formatVariantAmps(variant?.amps);
 }
 
-//* One stable identity for a rating + colour pair. Two rows with the same key
-//* would be impossible to tell apart in Record Sale, so saving rejects them.
-export function variantSelectionKey(label, colour, amps = "") {
+//* One stable identity for a rating + glass + glow row. Two rows with the same
+//* key would be impossible to tell apart in Record Sale, so saving rejects them.
+export function variantSelectionKey(label, colour, amps = "", glass = "") {
   const rating = normalizeVariantRating(label) || formatVariantAmps(amps);
-  return `${rating.toLowerCase()}::${normalizeVariantColour(colour).toLowerCase()}`;
+  return [
+    normalizeVariantGlass(glass).toLowerCase(),
+    rating.toLowerCase(),
+    normalizeVariantColour(colour).toLowerCase(),
+  ].join("::");
 }
 
 //* Numeric ratings (32, 63) come first in value order; text ratings (4W, 9W)
@@ -92,8 +106,19 @@ export function getVariantColours(variants) {
   );
 }
 
-//* Rating rows are freely combinable (rating + colour + amperes), but each row
-//* must be identifiable and a rating/colour pair may only appear once.
+export function getVariantGlasses(variants) {
+  const glasses = [...new Set(
+    (Array.isArray(variants) ? variants : [])
+      .map((variant) => normalizeVariantGlass(variant?.glass))
+      .filter(Boolean),
+  )];
+  return glasses.sort(
+    (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+  );
+}
+
+//* Rating rows are freely combinable (rating + glass + glow + amperes), but each
+//* row must be identifiable and a rating/glass/glow row may only appear once.
 function isValidVariantRows(variants) {
   const errorBox = document.querySelector(".errorMes-variants");
   if (errorBox) errorBox.innerHTML = "";
@@ -103,6 +128,7 @@ function isValidVariantRows(variants) {
     variant.label = normalizeVariantRating(variant.label);
     variant.sku = String(variant.sku ?? "").trim();
     variant.colour = normalizeVariantColour(variant.colour);
+    variant.glass = normalizeVariantGlass(variant.glass);
     variant.price = Math.max(0, Number(variant.price) || 0);
     variant.quantity = Math.max(0, Number(variant.quantity) || 0);
     variant.reorderLevel = Math.max(0, Number(variant.reorderLevel) || 0);
@@ -111,22 +137,47 @@ function isValidVariantRows(variants) {
         ? ""
         : Math.max(0, Number(variant.amps) || 0);
 
-    if (!variant.label && !variant.colour && variant.amps === "") {
+    if (!variant.label && !variant.colour && !variant.glass && variant.amps === "") {
       if (errorBox) {
-        errorBox.innerHTML = `Rating row ${index + 1}: add a rating, colour or amperage.`;
+        errorBox.innerHTML =
+          `Rating row ${index + 1}: add a rating, glass/glow colour or amperage.`;
       }
       return false;
     }
 
-    const key = variantSelectionKey(variant.label, variant.colour, variant.amps);
+    const key = variantSelectionKey(
+      variant.label,
+      variant.colour,
+      variant.amps,
+      variant.glass,
+    );
     if (seen.has(key)) {
       if (errorBox) {
         errorBox.innerHTML =
-          `Rating rows ${seen.get(key) + 1} and ${index + 1} repeat the same rating and colour.`;
+          `Rating rows ${seen.get(key) + 1} and ${index + 1} repeat the same rating, glass and glow colour.`;
       }
       return false;
     }
     seen.set(key, index);
+  }
+
+  //^ If one row of a rating has glass and another does not, the blank row can
+  //^ never be reached in Record Sale once a glass colour is chosen.
+  const glassGroups = new Map();
+  variants.forEach((variant, index) => {
+    const rating = getVariantRatingLabel(variant) || `row ${index + 1}`;
+    const group = glassGroups.get(rating) || { withGlass: [], withoutGlass: [] };
+    (variant.glass ? group.withGlass : group.withoutGlass).push(index + 1);
+    glassGroups.set(rating, group);
+  });
+  for (const [rating, group] of glassGroups) {
+    if (group.withGlass.length && group.withoutGlass.length) {
+      if (errorBox) {
+        errorBox.innerHTML =
+          `Rating ${rating}: add a glass colour to row(s) ${group.withoutGlass.join(", ")} too, or leave the other rows blank.`;
+      }
+      return false;
+    }
   }
   return true;
 }
@@ -310,7 +361,12 @@ export function getVariantSuffix(variant) {
   const rating = getVariantRatingLabel(variant);
   const amps = formatVariantAmps(variant?.amps);
   const showAmps = amps && amps.toLowerCase() !== rating.toLowerCase();
-  return [rating, normalizeVariantColour(variant?.colour), showAmps ? amps : ""]
+  return [
+    rating,
+    normalizeVariantGlass(variant?.glass),
+    normalizeVariantColour(variant?.colour),
+    showAmps ? amps : "",
+  ]
     .filter(Boolean)
     .join(" · ");
 }

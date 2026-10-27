@@ -17,16 +17,18 @@ import {
   getVariantName,
   getVariantPrice,
   getVariantLabels,
+  getVariantGlasses,
   getVariantColours,
   getVariantRatingLabel,
   getProductDisplayName,
   isNotStockedProduct,
   normalizeVariantColour,
-  normalizeVariantText,
+  normalizeVariantGlass,
+  normalizeVariantRating,
   productThumbnailHtml,
   describeApiError,
   debounce,
-} from "../utils/helpers.js?v=20261027-4";
+} from "../utils/helpers.js?v=20261027-5";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
@@ -152,8 +154,12 @@ function renderSalesPage() {
                 <label class="form-label" for="saleVariantSelect">Rating</label>
                 <select name="variantIndex" id="saleVariantSelect" class="form-select"></select>
               </div>
+              <div id="saleVariantGlassGroup" class="d-none">
+                <label class="form-label" for="saleVariantGlass">Glass colour</label>
+                <select name="variantGlass" id="saleVariantGlass" class="form-select"></select>
+              </div>
               <div id="saleVariantColourGroup" class="d-none">
-                <label class="form-label" for="saleVariantColour" id="saleVariantColourLabel">Colour</label>
+                <label class="form-label" for="saleVariantColour" id="saleVariantColourLabel">Glow colour</label>
                 <select name="variantColour" id="saleVariantColour" class="form-select"></select>
               </div>
             </div>
@@ -746,10 +752,11 @@ function getSelectedProduct() {
 function populateVariantSelect(variantSelect, preferred = {}) {
   const wrapper = document.getElementById("saleVariantWrapper");
   const ratingGroup = document.getElementById("saleVariantRatingGroup");
+  const glassGroup = document.getElementById("saleVariantGlassGroup");
+  const glassSelect = document.getElementById("saleVariantGlass");
   const colourGroup = document.getElementById("saleVariantColourGroup");
-  const colourLabel = document.getElementById("saleVariantColourLabel");
   const colourSelect = document.getElementById("saleVariantColour");
-  if (!variantSelect || !colourSelect) return;
+  if (!variantSelect || !colourSelect || !glassSelect) return;
 
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
@@ -757,8 +764,10 @@ function populateVariantSelect(variantSelect, preferred = {}) {
   if (!product || !variants.length) {
     wrapper?.classList.add("d-none");
     ratingGroup?.classList.add("d-none");
+    glassGroup?.classList.add("d-none");
     colourGroup?.classList.add("d-none");
     variantSelect.innerHTML = "";
+    glassSelect.innerHTML = "";
     colourSelect.innerHTML = "";
     paintStockHint();
     return;
@@ -767,7 +776,8 @@ function populateVariantSelect(variantSelect, preferred = {}) {
   const labels = getVariantLabels(variants);
   const hasRating = labels.length > 0;
   const hasRatingChoice = labels.length > 1;
-  const preferredRating = normalizeVariantText(preferred.rating);
+  const preferredRating = normalizeVariantRating(preferred.rating);
+  const preferredGlass = normalizeVariantGlass(preferred.glass);
   const preferredColour = normalizeVariantColour(preferred.colour);
 
   ratingGroup?.classList.toggle("d-none", !hasRating);
@@ -785,19 +795,42 @@ function populateVariantSelect(variantSelect, preferred = {}) {
     }
   }
 
-  const paintColours = (wantedColour = "") => {
+  const paintGlassAndColours = (wantedGlass = "", wantedColour = "") => {
     const rating = hasRatingChoice
       ? String(variantSelect.value || "")
       : (labels[0] || "");
-    const candidates = hasRating
+    let candidates = hasRating
       ? variants.filter((variant) => getVariantRatingLabel(variant) === rating)
       : variants;
+
+    const glasses = getVariantGlasses(candidates);
+    const wantedG = normalizeVariantGlass(wantedGlass);
+    glassSelect.innerHTML = "";
+    if (glasses.length > 1) {
+      glassSelect.innerHTML = '<option value="">Select glass colour</option>' + glasses
+        .map((glass) => `<option value="${escapeHtml(glass)}">${escapeHtml(glass)}</option>`)
+        .join("");
+      glassSelect.value = glasses.includes(wantedG) ? wantedG : "";
+    } else if (glasses.length === 1) {
+      glassSelect.innerHTML =
+        `<option value="${escapeHtml(glasses[0])}">${escapeHtml(glasses[0])}</option>`;
+      glassSelect.value = glasses[0];
+    }
+    glassGroup?.classList.toggle("d-none", glasses.length === 0);
+
+    const glass = glasses.length > 1
+      ? String(glassSelect.value || "")
+      : (glasses[0] || "");
+    candidates = glasses.length
+      ? candidates.filter((variant) => normalizeVariantGlass(variant.glass) === glass)
+      : candidates;
+    if (glasses.length && !glass) candidates = [];
+
     const colours = getVariantColours(candidates);
     const wanted = normalizeVariantColour(wantedColour);
-
     colourSelect.innerHTML = "";
     if (colours.length > 1) {
-      colourSelect.innerHTML = '<option value="">Select colour</option>' + colours
+      colourSelect.innerHTML = '<option value="">Select glow colour</option>' + colours
         .map((colour) => `<option value="${escapeHtml(colour)}">${escapeHtml(colour)}</option>`)
         .join("");
       colourSelect.value = colours.includes(wanted) ? wanted : "";
@@ -808,11 +841,13 @@ function populateVariantSelect(variantSelect, preferred = {}) {
     }
 
     colourGroup?.classList.toggle("d-none", colours.length === 0);
-    if (colourLabel) colourLabel.textContent = "Colour";
-    wrapper?.classList.toggle("d-none", !hasRating && colours.length === 0);
+    wrapper?.classList.toggle(
+      "d-none",
+      !hasRating && glasses.length === 0 && colours.length === 0,
+    );
   };
 
-  paintColours(preferredColour);
+  paintGlassAndColours(preferredGlass, preferredColour);
 
   const refreshSelection = () => {
     updatePriceDefault(document.getElementById("saleUnitPrice"));
@@ -821,7 +856,11 @@ function populateVariantSelect(variantSelect, preferred = {}) {
   };
 
   variantSelect.onchange = () => {
-    paintColours();
+    paintGlassAndColours();
+    refreshSelection();
+  };
+  glassSelect.onchange = () => {
+    paintGlassAndColours(glassSelect.value);
     refreshSelection();
   };
   colourSelect.onchange = refreshSelection;
@@ -834,28 +873,41 @@ function getVariantSelectionState() {
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
   if (!variants.length) {
-    return { variants, index: null, rating: "", colour: "", error: "" };
+    return { variants, index: null, rating: "", glass: "", colour: "", error: "" };
   }
 
   const labels = getVariantLabels(variants);
   const showRating = labels.length > 1;
   const rating = showRating
-    ? normalizeVariantText(document.getElementById("saleVariantSelect")?.value)
+    ? normalizeVariantRating(document.getElementById("saleVariantSelect")?.value)
     : (labels[0] || "");
 
   if (labels.length && !rating) {
-    return { variants, index: null, rating, colour: "", error: "rating" };
+    return { variants, index: null, rating, glass: "", colour: "", error: "rating" };
   }
 
   let candidates = labels.length
     ? variants.filter((variant) => getVariantRatingLabel(variant) === rating)
     : variants;
+
+  let glass = normalizeVariantGlass(document.getElementById("saleVariantGlass")?.value);
+  const glasses = getVariantGlasses(candidates);
+  if (glasses.length) {
+    if (glasses.length > 1 && !glass) {
+      return { variants, index: null, rating, glass, colour: "", error: "glass" };
+    }
+    glass = glass || glasses[0];
+    candidates = candidates.filter(
+      (variant) => normalizeVariantGlass(variant.glass) === glass,
+    );
+  }
+
   let colour = normalizeVariantColour(document.getElementById("saleVariantColour")?.value);
   const colours = getVariantColours(candidates);
 
   if (colours.length) {
     if (colours.length > 1 && !colour) {
-      return { variants, index: null, rating, colour, error: "colour" };
+      return { variants, index: null, rating, glass, colour, error: "colour" };
     }
     colour = colour || colours[0];
     candidates = candidates.filter(
@@ -864,10 +916,17 @@ function getVariantSelectionState() {
   }
 
   if (!candidates.length) {
-    return { variants, index: null, rating, colour, error: "rating" };
+    return { variants, index: null, rating, glass, colour, error: "rating" };
   }
 
-  return { variants, index: variants.indexOf(candidates[0]), rating, colour, error: "" };
+  return {
+    variants,
+    index: variants.indexOf(candidates[0]),
+    rating,
+    glass,
+    colour,
+    error: "",
+  };
 }
 
 function getSelectedStock() {
@@ -920,13 +979,15 @@ function paintStockHint() {
     const state = getVariantSelectionState();
     variantIndex = state.index;
     if (variantIndex === null) {
-      hint.textContent = state.error === "colour"
-        ? "Choose a colour to see the available stock."
-        : "Choose a rating to see the available stock.";
+      hint.textContent = state.error === "glass"
+        ? "Choose a glass colour to see the available stock."
+        : state.error === "colour"
+          ? "Choose a glow colour to see the available stock."
+          : "Choose a rating to see the available stock.";
       return;
     }
     const variant = variants[variantIndex];
-    const label = [state.rating, state.colour].filter(Boolean).join(" · ");
+    const label = [state.rating, state.glass, state.colour].filter(Boolean).join(" · ");
     base = onOrder
       ? resellerHintFor(product.id, variantIndex)
       : `${label ? `${label} — ` : ""}Stock: ${Number(variant.quantity) || 0}`;
@@ -1299,6 +1360,7 @@ function captureSaleFormState() {
   return {
     productId: document.getElementById("saleProductSelect")?.value || "",
     rating: document.getElementById("saleVariantSelect")?.value || "",
+    glass: document.getElementById("saleVariantGlass")?.value || "",
     colour: document.getElementById("saleVariantColour")?.value || "",
     quantity: document.getElementById("saleQuantity")?.value ?? "",
     unitPrice: document.getElementById("saleUnitPrice")?.value ?? "",
@@ -1324,6 +1386,7 @@ function restoreSaleFormState(state) {
 
   populateVariantSelect(document.getElementById("saleVariantSelect"), {
     rating: state.rating,
+    glass: state.glass,
     colour: state.colour,
   });
 

@@ -331,10 +331,7 @@ async function addProductStock(
         (sum: number, item: Record<string, unknown>) => sum + (Number(item.quantity) || 0),
         0,
       );
-      const suffix = [variant.label, variant.colour]
-        .map((value: unknown) => String(value ?? "").trim())
-        .filter(Boolean)
-        .join(" · ");
+      const suffix = variantNameParts(variant).join(" · ");
       if (suffix) productName = `${productName} ${suffix}`;
     } else {
       if (requestedVariantIndex !== undefined && requestedVariantIndex !== null) {
@@ -762,12 +759,26 @@ async function resolveOriginalVariantIndex(
     : [];
   if (!variants.length) return null;
 
-  const savedName = String(sale.product_name || "");
+  const savedName = String(sale.product_name || "").toLowerCase();
   const found = variants.findIndex((variant) => {
-    const label = String(variant.label ?? "").trim();
-    const colour = String(variant.colour ?? "").trim();
-    if (label && savedName.includes(label)) return true;
-    return Boolean(colour && savedName.includes(colour));
+    const label = displayVariantRating(variant.label);
+    const rawLabel = String(variant.label ?? "").trim();
+    const ampsRaw = variant.amps;
+    const amps =
+      ampsRaw !== "" && ampsRaw !== null && ampsRaw !== undefined && Number.isFinite(Number(ampsRaw))
+        ? `${Number(ampsRaw)}A`
+        : "";
+    const groups = [
+      [label, rawLabel],
+      [String(variant.glass ?? "").trim()],
+      [String(variant.colour ?? "").trim()],
+      [amps && amps.toLowerCase() !== label.toLowerCase() ? amps : ""],
+    ]
+      .map((group) => group.map((part) => part.toLowerCase()).filter(Boolean))
+      .filter((group) => group.length > 0);
+    return groups.length > 0 && groups.every((group) =>
+      group.some((part) => savedName.includes(part)),
+    );
   });
   return found >= 0 ? found : null;
 }
@@ -932,16 +943,35 @@ async function deleteSale(
   }
 }
 
-function saleVariantName(productName: string, variant: Record<string, unknown>) {
+function displayVariantRating(value: unknown) {
+  let rating = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!rating) return "";
+  rating = rating
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:watts?|w)\b/gi, "$1W")
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:amps?|amperes?|a)\b/gi, "$1A")
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:volts?|v)\b/gi, "$1V")
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:kelvins?|k)\b/gi, "$1K");
+  if (/^\d+(?:\.\d+)?$/.test(rating)) rating = `${Number(rating)}W`;
+  return rating;
+}
+
+function variantNameParts(variant: Record<string, unknown>) {
+  const label = displayVariantRating(variant.label);
   const ampsRaw = variant.amps;
   const amps =
     ampsRaw !== "" && ampsRaw !== null && ampsRaw !== undefined && Number.isFinite(Number(ampsRaw))
       ? `${Number(ampsRaw)}A`
       : "";
-  const suffix = [variant.label, variant.colour, amps]
-    .map((part) => String(part ?? "").trim())
-    .filter(Boolean)
-    .join(" · ");
+  return [
+    label,
+    String(variant.glass ?? "").trim().replace(/\s+/g, " "),
+    String(variant.colour ?? "").trim().replace(/\s+/g, " "),
+    amps && amps.toLowerCase() !== label.toLowerCase() ? amps : "",
+  ].filter(Boolean);
+}
+
+function saleVariantName(productName: string, variant: Record<string, unknown>) {
+  const suffix = variantNameParts(variant).join(" · ");
   return suffix ? `${productName} ${suffix}` : productName;
 }
 
