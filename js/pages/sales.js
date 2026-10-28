@@ -569,21 +569,20 @@ function handleCategoryChange() {
 function handleAddToCart() {
   if (isSubmitting) return false;
 
-  const productId = document.getElementById("saleProductSelect")?.value || "";
+  const raw = document.getElementById("saleProductSelect")?.value || "";
+  const [productId, variantIdxStr] = raw.split("::");
   const quantity = Number(document.getElementById("saleQuantity")?.value);
   const unitPrice = Number(document.getElementById("saleUnitPrice")?.value);
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
   const hasVariants = variants.length > 0;
-  const selection = hasVariants
-    ? getVariantSelectionState()
-    : { index: null, error: "" };
+  const variantIndex = hasVariants ? Number(variantIdxStr) : null;
 
-  if (!isValidSaleData({ productId, quantity, unitPrice, hasVariants, selection })) {
+  if (!isValidSaleData({ productId, quantity, unitPrice, hasVariants, variantIndex })) {
     return false;
   }
 
-  const resolvedVariantIndex = hasVariants ? selection.index : null;
+  const resolvedVariantIndex = hasVariants ? variantIndex : null;
   saleCart.push({
     productId,
     variantIndex: resolvedVariantIndex,
@@ -928,13 +927,13 @@ function getVariantSelectionState() {
   };
 }
 
-function getSelectedStock() {
+function getSelectedStock(variantIndex) {
   const product = getSelectedProduct();
   if (!product) return 0;
   const variants = getProductVariants(product);
   if (!variants.length) return Number(product.quantity) || 0;
-  const state = getVariantSelectionState();
-  return state.index === null ? 0 : Number(variants[state.index]?.quantity) || 0;
+  const index = variantIndex != null ? variantIndex : null;
+  return index != null ? Number(variants[index]?.quantity) || 0 : 0;
 }
 
 //* On-order hint backed by the reseller ledger: bought minus sold per
@@ -966,19 +965,20 @@ function paintStockHint() {
   let variantIndex = null;
   let base = "";
 
+  const raw = document.getElementById("saleProductSelect")?.value || "";
+  const [, variantIdxStr] = raw.split("::");
   if (variants.length) {
-    const state = getVariantSelectionState();
-    variantIndex = state.index;
+    variantIndex = variantIdxStr != null && variantIdxStr !== "" ? Number(variantIdxStr) : null;
     if (variantIndex === null) {
-      hint.textContent = state.error === "glass"
-        ? "Choose a glass colour to see the available stock."
-        : state.error === "colour"
-          ? "Choose a colour to see the available stock."
-          : "Choose a rating to see the available stock.";
+      hint.textContent = "Choose a product variant to see the available stock.";
       return;
     }
     const variant = variants[variantIndex];
-    const label = [state.rating, state.glass, state.colour].filter(Boolean).join(" · ");
+    if (!variant) {
+      hint.textContent = "";
+      return;
+    }
+    const label = [variant.label, variant.colour].filter(Boolean).join(" · ");
     base = onOrder
       ? resellerHintFor(product.id, variantIndex)
       : `${label ? `${label} — ` : ""}Stock: ${Number(variant.quantity) || 0}`;
@@ -1007,8 +1007,10 @@ function updatePriceDefault(priceInput) {
   }
   const variants = getProductVariants(product);
   if (variants.length) {
-    const state = getVariantSelectionState();
-    const variant = state.index === null ? undefined : variants[state.index];
+    const raw = document.getElementById("saleProductSelect")?.value || "";
+    const [, variantIdxStr] = raw.split("::");
+    const variantIndex = variantIdxStr != null && variantIdxStr !== "" ? Number(variantIdxStr) : null;
+    const variant = variantIndex != null ? variants[variantIndex] : undefined;
     priceInput.value = variant ? String(getVariantPrice(variant)) : "";
   } else {
     priceInput.value = String(Number(product.price) || 0);
@@ -1274,36 +1276,31 @@ async function reprintLastReceipt() {
   }
 }
 
-function isValidSaleData({ productId, quantity, unitPrice, hasVariants, selection }) {
+function isValidSaleData({ productId, quantity, unitPrice, hasVariants, variantIndex }) {
   document.querySelectorAll(".errorMes").forEach((item) => { item.textContent = ""; });
   let valid = true;
   //* Order-based products skip every stock cap — any quantity can be sold.
   const onOrder = isNotStockedProduct(getSelectedProduct());
-  const selectionReady = !hasVariants || (selection?.index ?? null) !== null;
+  const selectionReady = !hasVariants || variantIndex != null;
 
   if (!productId) {
     setSaleError("productId", "Product is required");
     valid = false;
   }
   if (!selectionReady) {
-    setSaleError(
-      "variantIndex",
-      selection?.error === "colour"
-        ? "Select the colour being sold"
-        : "Select the rating being sold",
-    );
+    setSaleError("variantIndex", "Select the rating being sold");
     valid = false;
   }
   if (!Number.isInteger(quantity) || quantity <= 0) {
     setSaleError("quantity", "Quantity must be a whole number greater than 0");
     valid = false;
   } else if (!onOrder && selectionReady) {
-    const available = getSelectedStock();
+    const available = getSelectedStock(variantIndex);
     //* Units already waiting in the basket are spoken for — without this the
     //* form would happily stage more than the shelf holds.
     const staged = getCartQuantityFor(
       productId,
-      hasVariants ? selection.index : null,
+      hasVariants && variantIndex != null ? variantIndex : null,
     );
     const remaining = Math.max(0, available - staged);
     if (quantity > remaining) {
@@ -1316,8 +1313,6 @@ function isValidSaleData({ productId, quantity, unitPrice, hasVariants, selectio
       valid = false;
     }
   }
-  //* A colour/rating that has not been picked yet leaves the price blank on
-  //* purpose — don't stack "price required" on top of the missing selection.
   if (selectionReady) {
     const priceRaw = String(document.getElementById("saleUnitPrice")?.value ?? "").trim();
     if (priceRaw === "") {
