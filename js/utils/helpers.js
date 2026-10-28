@@ -356,7 +356,7 @@ export function getVariantPriceRange(variants) {
 //* shows a dash for a blank name — exactly like an empty Code (SKU) does.
 export function getProductDisplayName(productOrName) {
   const name = typeof productOrName === "string" ? productOrName : productOrName?.name;
-  return String(name ?? "").trim() || "-";
+  return String(name ?? "").trim() || "Unknown Product";
 }
 //* "4W · White · 0.05A" — the rating text every list, alert and preview shows
 export function getVariantSuffix(variant) {

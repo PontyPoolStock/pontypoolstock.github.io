@@ -265,30 +265,47 @@ function getTableHtml(filteredList = lastFiltered) {
   }
 
   const rows = paginated
-    .map((sale) => `
-      <tr>
-        <td class="text-nowrap">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</td>
-        <td>${escapeHtml(getProductDisplayName(sale.productName))}</td>
-        <td class="text-end">${Number(sale.quantity) || 0}</td>
-        <td class="text-end">${formatCurrency(sale.unitPrice)}</td>
-        <td class="text-end fw-semibold">${formatCurrency(sale.total)}</td>
-        <td>${escapeHtml(sale.soldBy || "—")}</td>
-        <td class="text-end">
-          <div class="d-inline-flex gap-1">
-            ` + (isStaffView() ? "" : `<button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>`) + `
-            ` + (isStaffView() ? "" : `<button class="action-btn sale-delete-btn" data-id="${sale.id}" title="Delete sale" aria-label="Delete sale"><i class="bi bi-trash"></i></button>`) + `
-            <button class="action-btn sale-print-btn" data-id="${sale.id}" title="Print receipt" aria-label="Print receipt"><i class="bi bi-printer"></i></button>
-          </div>
-        </td>
-      </tr>
-    `)
+    .map((sale) => {
+      const product = products.find((p) => String(p.id) === String(sale.productId));
+      const category = product ? getCategoryLabel(categories, product.categoryId) : "";
+      const name = sale.productName || getProductDisplayName(product || null);
+      const categoryHtml = category ? `<small class="text-muted d-block">${escapeHtml(category)}</small>` : "";
+      const isStaff = isStaffView();
+      const editBtn = isStaff ? "" : `<button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>`;
+      const deleteBtn = isStaff ? "" : `<button class="action-btn sale-delete-btn" data-id="${sale.id}" title="Delete sale" aria-label="Delete sale"><i class="bi bi-trash"></i></button>`;
+      const printBtn = `<button class="action-btn sale-print-btn" data-id="${sale.id}" title="Print receipt" aria-label="Print receipt"><i class="bi bi-printer"></i></button>`;
+      return `
+        <tr>
+          <td class="text-nowrap">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</td>
+          <td>${escapeHtml(name)}${categoryHtml}</td>
+          <td class="text-end">${Number(sale.quantity) || 0}</td>
+          <td class="text-end">${formatCurrency(sale.unitPrice)}</td>
+          <td class="text-end fw-semibold">${formatCurrency(sale.total)}</td>
+          <td>${escapeHtml(sale.soldBy || "—")}</td>
+          <td class="text-end">
+            <div class="d-inline-flex gap-1">
+              ${editBtn}${deleteBtn}${printBtn}
+            </div>
+          </td>
+        </tr>
+      `;
+    })
     .join("");
 
   const cards = paginated
-    .map((sale) => `
+    .map((sale) => {
+      const product = products.find((p) => String(p.id) === String(sale.productId));
+      const category = product ? getCategoryLabel(categories, product.categoryId) : "";
+      const name = sale.productName || getProductDisplayName(product || null);
+      const categoryHtml = category ? `<small class="text-muted d-block">${escapeHtml(category)}</small>` : "";
+      const isStaff = isStaffView();
+      const editBtn = isStaff ? "" : `<button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>`;
+      const deleteBtn = isStaff ? "" : `<button class="btn btn-outline-secondary btn-sm sale-delete-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-trash"></i> Delete</button>`;
+      const printBtn = `<button class="btn btn-outline-secondary btn-sm sale-print-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-printer"></i> Receipt</button>`;
+      return `
       <div class="bg-white border rounded p-3 shadow-sm sale-history-card">
         <div class="d-flex justify-content-between align-items-start gap-2">
-          <div class="fw-semibold">${escapeHtml(getProductDisplayName(sale.productName))}</div>
+          <div class="fw-semibold">${escapeHtml(name)}${categoryHtml}</div>
           <span class="badge rounded-pill sale-total-badge">${formatCurrency(sale.total)}</span>
         </div>
         <small class="text-muted">${escapeHtml(formatSaleDate(sale.soldAt || sale.createdAt))}</small>
@@ -297,12 +314,11 @@ function getTableHtml(filteredList = lastFiltered) {
           <span class="text-muted">@${formatCurrency(sale.unitPrice)} each</span>
         </div>
         <div class="d-flex gap-2 mt-3">
-          ` + (isStaffView() ? "" : `<button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>`) + `
-          ` + (isStaffView() ? "" : `<button class="btn btn-outline-secondary btn-sm sale-delete-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-trash"></i> Delete</button>`) + `
-          <button class="btn btn-outline-secondary btn-sm sale-print-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-printer"></i> Receipt</button>
+          ${editBtn}${deleteBtn}${printBtn}
         </div>
       </div>
-    `)
+    `;
+    })
     .join("");
 
   return `
@@ -1047,12 +1063,17 @@ function toCombinedReceipt(recorded) {
     soldBy: last.soldBy || last.sold_by || "",
     soldAt: last.soldAt || last.createdAt || new Date().toISOString(),
     total,
-    lines: list.map((sale) => ({
-      name: sale.productName || "Product",
-      qty: Number(sale.quantity) || 0,
-      unitPrice: Number(sale.unitPrice) || 0,
-      lineTotal: Number(sale.total) || 0,
-    })),
+    lines: list.map((sale) => {
+      const product = products.find((p) => String(p.id) === String(sale.productId));
+      const category = product ? getCategoryLabel(categories, product.categoryId) : "";
+      return {
+        name: sale.productName || "Product",
+        category: category || "",
+        qty: Number(sale.quantity) || 0,
+        unitPrice: Number(sale.unitPrice) || 0,
+        lineTotal: Number(sale.total) || 0,
+      };
+    }),
   };
 }
 
@@ -1158,9 +1179,12 @@ async function handleRecordSale(event) {
 function saleCartSnapshot(sale) {
   //* The recorded sale row carries productId, quantity, unitPrice, etc.
   //* Reconstruct a single-line snapshot from the sale row itself.
+  const product = products.find((p) => String(p.id) === String(sale.productId));
+  const category = product ? getCategoryLabel(categories, product.categoryId) : "";
   return [
     {
       name: sale.productName || "Product",
+      category: category || "",
       qty: Number(sale.quantity) || 0,
       unitPrice: Number(sale.unitPrice) || 0,
       lineTotal: Number(sale.total) || 0,
@@ -1176,20 +1200,22 @@ function renderReceiptHtml(sale, branch) {
   const isDuruma = branch === "Duruma Road";
   const phone = isDuruma ? "0712255416" : "0790225572";
   const barcodeHeight = isDuruma ? "17mm" : "12mm";
-  const lines = Array.isArray(sale.lines) && sale.lines.length ? sale.lines : saleCartSnapshot(sale);
-  const total = Number(sale.total) || lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
-  const formattedTotal = total.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const soldBy = String(sale.soldBy || sale.sold_by || "").trim();
-  const itemRows = lines.map((line) => {
-    const quantity = Number(line.qty) || 0;
-    const unitPrice = Number(line.unitPrice) || 0;
-    const lineTotal = Number(line.lineTotal) || quantity * unitPrice;
-    return `<tr>
-      <td class="receipt-item-name">${escapeHtml(line.name || "Product")}<small>KSH ${unitPrice.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</small></td>
-      <td class="receipt-item-qty">${quantity}</td>
-      <td class="receipt-item-amount">KSH ${lineTotal.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-    </tr>`;
-  }).join("");
+    const lines = Array.isArray(sale.lines) && sale.lines.length ? sale.lines : saleCartSnapshot(sale);
+    const total = Number(sale.total) || lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
+    const formattedTotal = total.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const soldBy = String(sale.soldBy || sale.sold_by || "").trim();
+    const itemRows = lines.map((line) => {
+      const quantity = Number(line.qty) || 0;
+      const unitPrice = Number(line.unitPrice) || 0;
+      const lineTotal = Number(line.lineTotal) || quantity * unitPrice;
+      const category = escapeHtml(line.category || "");
+      const categoryCell = category ? `<div class="receipt-item-category">${category}</div>` : "";
+      return `<tr>
+        <td class="receipt-item-name">${escapeHtml(line.name || "Product")}${categoryCell}<small>KSH ${unitPrice.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</small></td>
+        <td class="receipt-item-qty">${quantity}</td>
+        <td class="receipt-item-amount">KSH ${lineTotal.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      </tr>`;
+    }).join("");
 
   return `<div class="receipt-print">
     <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" class="receipt-art">

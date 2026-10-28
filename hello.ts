@@ -28,7 +28,7 @@ const fieldMap = {
   categories: ["name", "description", "parent_id", "image_url"],
   stockAdjustments: ["product_id", "product_name", "type", "quantity", "reason", "date", "old_quantity", "new_quantity"],
   activityLog: ["action", "details", "user", "timestamp"],
-  sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "branch", "sold_by", "sold_at"],
+  sales: ["product_id", "product_name", "variant_index", "quantity", "unit_price", "total", "branch", "sold_by", "sold_at", "category_id"],
   resellerPurchases: ["product_id", "product_name", "variant_index", "quantity", "unit_cost", "total_cost", "shop_name", "employee_name", "purchased_at"],
 };
 
@@ -609,8 +609,8 @@ async function recordSale(body: Record<string, unknown>, token: string) {
 
     //* variant_index is stored so a later edit knows which rating to give back
     const saleResult = await client.query(
-      `INSERT INTO sales (product_id, product_name, variant_index, quantity, unit_price, total, branch, sold_by, sold_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      `INSERT INTO sales (product_id, product_name, variant_index, quantity, unit_price, total, branch, sold_by, sold_at, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
         productId,
         productName,
@@ -621,6 +621,7 @@ async function recordSale(body: Record<string, unknown>, token: string) {
         branch,
         soldBy,
         soldAt,
+        product.category_id ?? null,
       ],
     );
 
