@@ -14,7 +14,7 @@ import {
   getTotalInventoryValue,
   getResellerTotals,
   isNotStockedProduct,
-} from "../utils/helpers.js?v=20261027-7";
+} from "../utils/helpers.js?v=20261028-1";
 
 let statisticsData = {
   products: [],

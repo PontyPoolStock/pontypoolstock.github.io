@@ -517,6 +517,37 @@ export function getCategoryLabel(categories, id) {
   const category = list.find((item) => item.id == id);
   return category ? category.name : "-";
 }
+//* "Pendants" → "Pendant", "Wall Brackets" → "Wall Bracket". Only the last
+//* word carries the plural, so only the last word is touched.
+export function singularizeCategoryName(name) {
+  const trimmed = String(name ?? "").trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  const parts = trimmed.split(" ");
+  const last = parts[parts.length - 1];
+  let singular = last;
+  if (/[^aeiou]ies$/i.test(last) && last.length > 4) singular = last.slice(0, -3) + "y";
+  else if (/(?:s|x|z|ch|sh)es$/i.test(last) && last.length > 3) singular = last.slice(0, -2);
+  else if (/[^s]s$/i.test(last)) singular = last.slice(0, -1);
+  parts[parts.length - 1] = singular;
+  return parts.join(" ");
+}
+//* "Switches & Sockets" names two things, so a nameless product under it can
+//* be either — every singular part is offered as a choice.
+export function getCategoryNameOptions(categories, id) {
+  const label = getCategoryLabel(categories, id);
+  if (!label || label === "-") return [];
+  return label
+    .split(/\s*&\s*/)
+    .map(singularizeCategoryName)
+    .filter(Boolean);
+}
+//* What a receipt should call a product that was saved without a name: the
+//* product's own name when it has one, otherwise its category, singularised.
+export function getSaleItemName(product, categories, fallback = "") {
+  const own = String(product?.name ?? "").trim();
+  if (own) return own;
+  return getCategoryNameOptions(categories, product?.categoryId)[0] || fallback;
+}
 //* Product thumbnail — shared by the Products table, the low-stock list and reports
 //* Supports lazy hydration when imageUrl is deferred: supply productId to enable background load
 export function productThumbnailHtml(

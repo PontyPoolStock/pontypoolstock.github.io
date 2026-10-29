@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS sales (
   branch TEXT CHECK (branch IN ('Ambala Road', 'Duruma Road')),
   sold_by TEXT NOT NULL DEFAULT 'admin',
   sold_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  category_id BIGINT REFERENCES categories(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

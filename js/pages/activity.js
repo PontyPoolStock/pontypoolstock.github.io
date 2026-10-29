@@ -1,6 +1,6 @@
 import { fetchData } from "../services/api.js";
 import renderPagination, { paginateData } from "../components/pagination.js";
-import { activityRowHtml, sortData, debounce } from "../utils/helpers.js?v=20261027-7";
+import { activityRowHtml, sortData, debounce } from "../utils/helpers.js?v=20261028-1";
 
 let activities = [];
 let lastFiltered = [];

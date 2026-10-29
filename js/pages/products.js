@@ -10,7 +10,7 @@ import {
   PRODUCT_LIST_FIELDS,
   CATEGORY_LIST_FIELDS,
 } from "../services/api.js";
-import { getModal } from "../components/modal.js";
+import { getModal } from "../components/modal.js?v=20261027-10";
 import { openProductPreview } from "../components/preview.js";
 import { openBulkProductsModal } from "../components/bulk-products.js";
 import { showToast, confirmAction } from "../components/toast.js";
@@ -32,7 +32,7 @@ import {
   getProductDisplayName,
   describeApiError,
   debounce,
-} from "../utils/helpers.js?v=20261027-7";
+} from "../utils/helpers.js?v=20261028-1";
 
 let products = [];
 let categories = [];

@@ -12,6 +12,7 @@ import {
   escapeHtml,
   formatCurrency,
   getCategoryLabel,
+  getCategoryNameOptions,
   getProductVariants,
   getVariantsTotalQuantity,
   getVariantName,
@@ -24,6 +25,7 @@ import {
   getResellerKey,
   getResellerStockMap,
   getProductDisplayName,
+  getSaleItemName,
   isNotStockedProduct,
   normalizeVariantColour,
   normalizeVariantGlass,
@@ -32,7 +34,7 @@ import {
   describeApiError,
   debounce,
   SELLER_SUGGESTIONS,
-} from "../utils/helpers.js?v=20261027-8";
+} from "../utils/helpers.js?v=20261028-1";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
@@ -193,6 +195,11 @@ function renderSalesPage() {
               ${SELLER_SUGGESTIONS.map((name) => `<button type="button" class="btn btn-sm btn-outline-secondary" data-seller-name="${name}" aria-pressed="false">${name}</button>`).join("")}
             </div>
           </div>
+          <div class="col-12 d-none" id="saleItemNameWrapper">
+            <label class="form-label" for="saleItemNameSelect">Item name on receipt</label>
+            <select id="saleItemNameSelect" class="form-select"></select>
+            <div class="small text-muted mt-1">This product has no name of its own, so pick what the receipt should print.</div>
+          </div>
           <div class="col-12 col-lg-6">
             <label class="form-label" for="saleDate">Sale date</label>
             <input type="date" id="saleDate" class="form-control">
@@ -268,7 +275,7 @@ function getTableHtml(filteredList = lastFiltered) {
     .map((sale) => {
       const product = products.find((p) => String(p.id) === String(sale.productId));
       const category = product ? getCategoryLabel(categories, product.categoryId) : "";
-      const name = sale.productName || getProductDisplayName(product || null);
+      const name = sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null));
       const categoryHtml = category ? `<small class="text-muted d-block">${escapeHtml(category)}</small>` : "";
       const isStaff = isStaffView();
       const editBtn = isStaff ? "" : `<button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>`;
@@ -296,7 +303,7 @@ function getTableHtml(filteredList = lastFiltered) {
     .map((sale) => {
       const product = products.find((p) => String(p.id) === String(sale.productId));
       const category = product ? getCategoryLabel(categories, product.categoryId) : "";
-      const name = sale.productName || getProductDisplayName(product || null);
+      const name = sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null));
       const categoryHtml = category ? `<small class="text-muted d-block">${escapeHtml(category)}</small>` : "";
       const isStaff = isStaffView();
       const editBtn = isStaff ? "" : `<button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>`;
@@ -447,7 +454,43 @@ function paintSaleProductVisuals(selectedId = "") {
     const current = selectedId || document.getElementById("saleProductSelect")?.value || "";
     gallery.innerHTML = getSaleProductGalleryHtml(current);
   }
+  paintItemNamePicker();
   hydrateEntityImages(document.getElementById("recordSaleForm"));
+}
+
+//* A nameless product still has to print something on the receipt. A simple
+//* category decides it on its own ("Pendants" → "Pendant"); one that names two
+//* things ("Switches & Sockets") offers the choice here instead of guessing.
+function paintItemNamePicker() {
+  const wrapper = document.getElementById("saleItemNameWrapper");
+  const select = document.getElementById("saleItemNameSelect");
+  if (!wrapper || !select) return;
+  const product = getSelectedProduct();
+  const options = product && !String(product.name || "").trim()
+    ? getCategoryNameOptions(categories, product.categoryId)
+    : [];
+  if (!options.length) {
+    wrapper.classList.add("d-none");
+    select.innerHTML = "";
+    return;
+  }
+  const previous = select.value;
+  select.innerHTML = options
+    .map((name, index) =>
+      `<option value="${escapeHtml(name)}" ${name === previous || (!previous && index === 0) ? "selected" : ""}>${escapeHtml(name)}</option>`)
+    .join("");
+  wrapper.classList.remove("d-none");
+}
+
+//* The receipt name for the product currently selected — its own name, or the
+//* picked/only option for a nameless one.
+function getSelectedItemName() {
+  const product = getSelectedProduct();
+  if (!product) return "";
+  const own = String(product.name || "").trim();
+  if (own) return own;
+  const picked = String(document.getElementById("saleItemNameSelect")?.value || "").trim();
+  return picked || getCategoryNameOptions(categories, product.categoryId)[0] || "";
 }
 
 //* Product dropdown — filtered down to the chosen category, out-of-stock rows
@@ -585,27 +628,33 @@ function handleCategoryChange() {
 function handleAddToCart() {
   if (isSubmitting) return false;
 
-  const raw = document.getElementById("saleProductSelect")?.value || "";
-  const [productId, variantIdxStr] = raw.split("::");
+  const productId = String(document.getElementById("saleProductSelect")?.value || "").split("::")[0];
   const quantity = Number(document.getElementById("saleQuantity")?.value);
   const unitPrice = Number(document.getElementById("saleUnitPrice")?.value);
   const product = getSelectedProduct();
   const variants = getProductVariants(product);
   const hasVariants = variants.length > 0;
-  const variantIndex = hasVariants ? Number(variantIdxStr) : null;
+  //* The rating/glass/colour pickers resolve one exact stock row, so the
+  //* staged line never depends on a hidden dropdown position.
+  const selection = getVariantSelectionState();
+  const variantIndex = hasVariants ? selection.index : null;
 
   if (!isValidSaleData({ productId, quantity, unitPrice, hasVariants, variantIndex })) {
     return false;
   }
 
   const resolvedVariantIndex = hasVariants ? variantIndex : null;
+  const variant = resolvedVariantIndex === null ? undefined : variants[resolvedVariantIndex];
+  //* Nameless products carry the receipt name chosen above (or their
+  //* category's), so the basket, the POST and the print all agree. A named
+  //* product keeps its own name plus the rating, exactly as before.
+  const label = String(product?.name || "").trim() ? "" : getSelectedItemName();
+  const namedProduct = label ? { ...product, name: label } : product;
   saleCart.push({
     productId,
     variantIndex: resolvedVariantIndex,
-    productName: getVariantName(
-      product,
-      resolvedVariantIndex === null ? undefined : variants[resolvedVariantIndex],
-    ),
+    productName: getVariantName(namedProduct, variant),
+    label,
     quantity,
     unitPrice,
   });
@@ -978,34 +1027,50 @@ function paintStockHint() {
 
   const variants = getProductVariants(product);
   const onOrder = isNotStockedProduct(product);
-  let variantIndex = null;
-  let base = "";
 
-  const raw = document.getElementById("saleProductSelect")?.value || "";
-  const [, variantIdxStr] = raw.split("::");
-  if (variants.length) {
-    variantIndex = variantIdxStr != null && variantIdxStr !== "" ? Number(variantIdxStr) : null;
-    if (variantIndex === null) {
-      hint.textContent = "Choose a product variant to see the available stock.";
-      return;
-    }
-    const variant = variants[variantIndex];
-    if (!variant) {
-      hint.textContent = "";
-      return;
-    }
-    const label = [variant.label, variant.colour].filter(Boolean).join(" · ");
-    base = onOrder
-      ? resellerHintFor(product.id, variantIndex)
-      : `${label ? `${label} — ` : ""}Stock: ${Number(variant.quantity) || 0}`;
-  } else {
-    base = onOrder
-      ? resellerHintFor(product.id, null)
-      : `${Number(product.quantity) || 0} in stock`;
+  if (!variants.length) {
+    paintHintFor(hint, product, onOrder ? resellerHintFor(product.id, null)
+      : `${Number(product.quantity) || 0} in stock`, null);
+    return;
   }
 
-  //* Tell the picker how many units of this exact line are already staged, so
-  //* "Only 3 left to add" in the validation never comes out of nowhere.
+  //* The pickers resolve one exact stock row; until they do, say which
+  //* choice is missing instead of inventing a stock figure.
+  const selection = getVariantSelectionState();
+  if (selection.error === "rating") {
+    hint.textContent = "Choose a rating to see the available stock.";
+    return;
+  }
+  if (selection.error === "glass") {
+    hint.textContent = "Choose a glass colour to see the available stock.";
+    return;
+  }
+  if (selection.error === "colour") {
+    hint.textContent = "Choose a colour to see the available stock.";
+    return;
+  }
+
+  const variant = variants[selection.index];
+  if (!variant) {
+    hint.textContent = "";
+    return;
+  }
+  const label = [selection.rating, selection.glass, selection.colour]
+    .filter(Boolean)
+    .join(" · ");
+  paintHintFor(
+    hint,
+    product,
+    onOrder
+      ? resellerHintFor(product.id, selection.index)
+      : `${label ? `${label} — ` : ""}Stock: ${Number(variant.quantity) || 0}`,
+    selection.index,
+  );
+}
+
+//* Tell the picker how many units of this exact line are already staged, so
+//* "Only 3 left to add" in the validation never comes out of nowhere.
+function paintHintFor(hint, product, base, variantIndex) {
   const staged = getCartQuantityFor(product.id, variantIndex);
   const stagedNote = staged > 0
     ? ` ${staged} unit${staged === 1 ? "" : "s"} already added to this sale.`
@@ -1023,10 +1088,9 @@ function updatePriceDefault(priceInput) {
   }
   const variants = getProductVariants(product);
   if (variants.length) {
-    const raw = document.getElementById("saleProductSelect")?.value || "";
-    const [, variantIdxStr] = raw.split("::");
-    const variantIndex = variantIdxStr != null && variantIdxStr !== "" ? Number(variantIdxStr) : null;
-    const variant = variantIndex != null ? variants[variantIndex] : undefined;
+    //* No price is guessed until the pickers name one exact stock row.
+    const selection = getVariantSelectionState();
+    const variant = selection.index != null ? variants[selection.index] : undefined;
     priceInput.value = variant ? String(getVariantPrice(variant)) : "";
   } else {
     priceInput.value = String(Number(product.price) || 0);
@@ -1067,7 +1131,7 @@ function toCombinedReceipt(recorded) {
       const product = products.find((p) => String(p.id) === String(sale.productId));
       const category = product ? getCategoryLabel(categories, product.categoryId) : "";
       return {
-        name: sale.productName || "Product",
+        name: sale.productName || getSaleItemName(product || null, categories, "Product"),
         category: category || "",
         qty: Number(sale.quantity) || 0,
         unitPrice: Number(sale.unitPrice) || 0,
@@ -1118,6 +1182,7 @@ async function handleRecordSale(event) {
       variantIndex: line.variantIndex,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
+      label: line.label || undefined,
       branch,
       soldBy,
       soldAt: document.getElementById("saleDate")?.value
@@ -1183,7 +1248,7 @@ function saleCartSnapshot(sale) {
   const category = product ? getCategoryLabel(categories, product.categoryId) : "";
   return [
     {
-      name: sale.productName || "Product",
+      name: sale.productName || getSaleItemName(product || null, categories, "Product"),
       category: category || "",
       qty: Number(sale.quantity) || 0,
       unitPrice: Number(sale.unitPrice) || 0,
@@ -1607,6 +1672,10 @@ function openEditSaleModal(sale) {
       variantIndex: hasVariants ? Number(variantIndex) : null,
       quantity,
       unitPrice,
+      //* A nameless product keeps whatever name this sale already printed.
+      label: String(product?.name || "").trim()
+        ? undefined
+        : String(sale.productName || "").trim() || undefined,
     });
 
     if (!result || result.error) {

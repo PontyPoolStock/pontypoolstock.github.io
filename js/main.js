@@ -5,13 +5,13 @@
 //^  never read as a shake or pop. (Ripples are disabled on nav rows for the
 //^  same reason - see the pointerdown handler in index.html.)
 
-import { loadProducts } from "./pages/products.js";
+import { loadProducts } from "./pages/products.js?v=20261027-10";
 import { loadCategories } from "./pages/categories.js";
 import { loadReports } from "./pages/reports.js";
 import { loadActivityLog } from "./pages/activity.js";
 import { loadDashboard } from "./pages/dashboard.js";
 import { loadStockAdjustments } from "./pages/stockadjustment.js";
-import { loadSales } from "./pages/sales.js?v=20261027-8";
+import { loadSales } from "./pages/sales.js?v=20261028-1";
 //* Shop Purchases loads lazily (see the router below): a static import would
 //* run its module at boot, so any fault in that one page would blank the
 //* entire app — including Dashboard on a fresh login.

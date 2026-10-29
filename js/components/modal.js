@@ -4,7 +4,7 @@ import {
   makeStockAdjustmentForm,
   setupProductVariants,
   collectProductVariants,
-} from "./form.js";
+} from "./form.js?v=20261027-10";
 
 import {
   isValidProductData,
@@ -20,7 +20,7 @@ import {
   getVariantSuffix,
   getProductDisplayName,
   describeApiError,
-} from "../utils/helpers.js?v=20261027-7";
+} from "../utils/helpers.js?v=20261028-1";
 import { showToast } from "./toast.js";
 
 import { postData, updateData, fetchData, fetchEntityImage, PRODUCT_ADJUSTMENT_FIELDS } from "../services/api.js";

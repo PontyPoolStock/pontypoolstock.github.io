@@ -1,4 +1,4 @@
-import { formatCurrency } from "../utils/helpers.js?v=20261027-7";
+import { formatCurrency } from "../utils/helpers.js?v=20261028-1";
 
 export default function renderTable(data, cols, actions = true) {
   if (!data || data.length === 0) {

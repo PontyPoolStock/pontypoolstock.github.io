@@ -148,4 +148,28 @@ assert.deepEqual(symbolRows.map((variant) => variant.label), ["4W", "63A"],
   "saving also normalises ratings that were not blurred");
 assert.equal(isValidProductData({ name: "Panel", categoryId: "" }, "", symbolRows), true);
 
+const resaleCheck = document.getElementById("notStockedCheck");
+const quantityInput = document.querySelector("input[name='quantity']");
+resaleCheck.checked = true;
+resaleCheck.dispatchEvent(new window.Event("change", { bubbles: true }));
+assert.equal(document.getElementById("addVariantBtn").disabled, false,
+  "resale products can still add rating rows");
+assert.equal(field(row, "label").disabled, false,
+  "resale products keep rating fields editable");
+document.getElementById("addVariantBtn").click();
+assert.equal(rows().length, 3, "a rating row is added while resale is selected");
+const resaleRow = rows()[2];
+set(resaleRow, "label", "12 watts");
+set(resaleRow, "price", "250");
+assert.ok(
+  collectProductVariants().some((variant) => variant.label === "12W" && variant.price === 250),
+  "resale rating row is collected for saving",
+);
+assert.equal(quantityInput.value, "0", "resale products keep stock on hand at zero");
+assert.equal(quantityInput.readOnly, true, "resale quantity stays locked");
+resaleCheck.checked = false;
+resaleCheck.dispatchEvent(new window.Event("change", { bubbles: true }));
+assert.equal(quantityInput.value, "4", "normal products derive quantity from ratings again");
+assert.equal(quantityInput.readOnly, true, "normal rated products keep the derived total locked");
+
 console.log("OK — product variants: duplicate, previews, rating units, amperage-only rows, duplicate rejection");

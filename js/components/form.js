@@ -12,7 +12,7 @@ import {
   normalizeVariantGlass,
   normalizeVariantRating,
   UNIT_SUGGESTIONS,
-} from "../utils/helpers.js?v=20261027-7";
+} from "../utils/helpers.js?v=20261028-1";
 export async function makeProductForm(id, categoryId = "", opts = {}) {
   //^ Edit reuses the row you already have so opening the modal is instant —
   //^ no extra product fetch, and categories come from the slim cached list
@@ -206,8 +206,8 @@ function variantRowHtml(variant = {}) {
 }
 
 //* Wire the ratings repeater: add / remove rows, keep Quantity and Price in sync.
-//* The resale toggle below Quantity disables Quantity + the ratings
-//* block — order-based products need no amounts on hand to be sellable.
+//* The resale toggle below Quantity locks only stock on hand - ratings stay
+//* editable so resale products can still be picked by rating at the till.
 export function setupProductVariants() {
   const list = document.getElementById("variantsList");
   const addBtn = document.getElementById("addVariantBtn");
@@ -224,10 +224,6 @@ export function setupProductVariants() {
       if (on) quantityInput.value = "0";
       else quantityInput.readOnly = false;
     }
-    list?.querySelectorAll("input, button").forEach((el) => {
-      el.disabled = on;
-    });
-    addBtn?.toggleAttribute("disabled", on);
     document.querySelector(".errorMes-quantity")?.replaceChildren();
   };
 
@@ -236,15 +232,17 @@ export function setupProductVariants() {
     const priceInput = document.querySelector("input[name='price']");
     if (!totalInput) return;
 
+    const resale = Boolean(notStockedCheck?.checked);
     const variants = collectProductVariants();
     if (!variants.length) {
-      totalInput.readOnly = false;
+      totalInput.readOnly = resale;
+      if (resale) totalInput.value = "0";
       if (priceInput) priceInput.readOnly = false;
       return;
     }
 
     totalInput.readOnly = true;
-    totalInput.value = getVariantsTotalQuantity(variants);
+    totalInput.value = resale ? "0" : getVariantsTotalQuantity(variants);
     if (priceInput) {
       const range = getVariantPriceRange(variants);
       priceInput.readOnly = true;

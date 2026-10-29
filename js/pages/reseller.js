@@ -4,7 +4,7 @@ import { fetchData, postData, updateData, deleteData, hydrateEntityImages, PRODU
 //* loaded the page and then threw ReferenceError, which the router showed as
 //* "Shop Purchases could not be loaded". scripts/reseller-page.test.mjs now
 //* executes this module in jsdom so that failure mode can't ship again.
-import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml, SELLER_SUGGESTIONS } from "../utils/helpers.js?v=20261027-8";
+import { escapeHtml, formatCurrency, GetCurrentDate, debounce, productThumbnailHtml, SELLER_SUGGESTIONS } from "../utils/helpers.js?v=20261028-1";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 

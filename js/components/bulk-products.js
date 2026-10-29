@@ -8,7 +8,7 @@ import {
   normalizeVariantColour,
   normalizeVariantGlass,
   normalizeVariantRating,
-} from "../utils/helpers.js?v=20261027-7";
+} from "../utils/helpers.js?v=20261028-1";
 import { isStaffView } from "../utils/role.js";
 
 let nextRowId = 0;

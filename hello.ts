@@ -554,6 +554,13 @@ async function recordSale(body: Record<string, unknown>, token: string) {
       ? product.variants
       : [];
     let productName = String(product.name || "");
+    //* A product saved with no name still has to print something on the
+    //* receipt: the category stands in ("Pendants" → "Pendant"), or the
+    //* cashier's pick when the category names two things.
+    if (!productName.trim()) {
+      const categoryName = await fetchCategoryName(client, product.category_id);
+      productName = resolveSaleProductName(product.name, categoryName, body.label);
+    }
     let nextQuantity = Number(product.quantity) || 0;
     let nextVariants: Record<string, unknown>[] | null = null;
     //* Order-based products (e.g. LED strips you don't keep in store) skip
@@ -702,7 +709,9 @@ async function updateSale(
       await client.query("ROLLBACK");
       return { error: "Select a valid rating being sold", status: 400 };
     }
-    const take = await applyStockDelta(client, productId, newVariantIndex, -quantity, false);
+    const take = await applyStockDelta(
+      client, productId, newVariantIndex, -quantity, false, body.label,
+    );
     if (take.error) {
       //* Undo the give-back so a refused edit leaves stock untouched
       await client.query("ROLLBACK");
@@ -713,8 +722,9 @@ async function updateSale(
     const updated = await client.query(
       `UPDATE sales
          SET product_id = $1, product_name = $2, variant_index = $3,
-             quantity = $4, unit_price = $5, total = $6, sold_at = $7, updated_at = NOW()
-       WHERE id = $8
+             quantity = $4, unit_price = $5, total = $6, sold_at = $7,
+             category_id = $8, updated_at = NOW()
+       WHERE id = $9
        RETURNING *`,
       [
         productId,
@@ -724,6 +734,7 @@ async function updateSale(
         unitPrice,
         total,
         soldAt,
+        take.categoryId ?? null,
         id,
       ],
     );
@@ -820,7 +831,8 @@ async function applyStockDelta(
   variantIndex: unknown,
   delta: number,
   isGiveBack: boolean,
-): Promise<{ error?: string; productName?: string }> {
+  requestedLabel?: unknown,
+): Promise<{ error?: string; productName?: string; categoryId?: unknown }> {
   const result = await client.query(
     `SELECT ${PRODUCT_STOCK_COLUMNS} FROM products WHERE id = $1 FOR UPDATE`,
     [productId],
@@ -843,6 +855,12 @@ async function applyStockDelta(
     ? product.variants
     : [];
   let productName = String(product.name || "");
+  //* Same no-name fallback as recording a sale, so an edit never rewrites the
+  //* receipt back to a blank or generic name.
+  if (!productName.trim()) {
+    const categoryName = await fetchCategoryName(client, product.category_id);
+    productName = resolveSaleProductName(product.name, categoryName, requestedLabel);
+  }
   if (notStocked) {
     if (variants.length) {
       const index = parseVariantIndex(variantIndex);
@@ -856,7 +874,7 @@ async function applyStockDelta(
       }
       productName = saleVariantName(productName, variant);
     }
-    return { productName };
+    return { productName, categoryId: product.category_id ?? null };
   }
 
   let nextQuantity = Number(product.quantity) || 0;
@@ -903,7 +921,7 @@ async function applyStockDelta(
       : [nextQuantity, product.id],
   );
 
-  return { productName };
+  return { productName, categoryId: product.category_id ?? null };
 }
 
 //* Voiding a sale is the exact mirror of recording one: the stock it consumed
@@ -1001,6 +1019,57 @@ function variantNameParts(variant: Record<string, unknown>) {
 function saleVariantName(productName: string, variant: Record<string, unknown>) {
   const suffix = variantNameParts(variant).join(" · ");
   return suffix ? `${productName} ${suffix}` : productName;
+}
+
+//* "Pendants" → "Pendant", "Wall Brackets" → "Wall Bracket". Only the last
+//* word carries the plural, so only the last word is touched.
+export function singularizeCategoryName(name: unknown): string {
+  const trimmed = String(name ?? "").trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  const parts = trimmed.split(" ");
+  const last = parts[parts.length - 1];
+  let singular = last;
+  if (/[^aeiou]ies$/i.test(last) && last.length > 4) singular = last.slice(0, -3) + "y";
+  else if (/(?:s|x|z|ch|sh)es$/i.test(last) && last.length > 3) singular = last.slice(0, -2);
+  else if (/[^s]s$/i.test(last)) singular = last.slice(0, -1);
+  parts[parts.length - 1] = singular;
+  return parts.join(" ");
+}
+
+//* Every name a compound category could stand for, singularised — the same
+//* list the till offers as a choice ("Switches & Sockets" → Switch, Socket).
+export function categoryNameOptions(categoryName: unknown): string[] {
+  const name = String(categoryName ?? "").trim();
+  if (!name) return [];
+  return name.split(/\s*&\s*/).map(singularizeCategoryName).filter(Boolean);
+}
+
+//* A product saved with no name still needs something printable on a receipt,
+//* so the category name stands in — singularised ("Pendants" → "Pendant").
+//* A compound category ("Switches & Sockets") names two things, so only the
+//* cashier can know which was sold; that pick arrives as `label`. A named
+//* product always keeps its own name — a label can never override it.
+export function resolveSaleProductName(
+  productName: unknown,
+  categoryName: unknown,
+  requestedLabel?: unknown,
+): string {
+  const own = String(productName ?? "").trim();
+  if (own) return own;
+  const label = String(requestedLabel ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+  if (label) return label;
+  return categoryNameOptions(categoryName)[0] || "";
+}
+
+//* Category name for the fallback above — one short query, and only ever run
+//* for a nameless product, so the common sale path stays at a single SELECT.
+async function fetchCategoryName(
+  client: { query: (sql: string, values?: unknown[]) => Promise<any> },
+  categoryId: unknown,
+): Promise<string> {
+  if (categoryId === null || categoryId === undefined || categoryId === "") return "";
+  const result = await client.query("SELECT name FROM categories WHERE id = $1", [categoryId]);
+  return String(result.rows[0]?.name || "");
 }
 
 function variantSuffix(variant: Record<string, unknown>) {
