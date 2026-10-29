@@ -34,7 +34,7 @@ import {
   describeApiError,
   debounce,
   SELLER_SUGGESTIONS,
-} from "../utils/helpers.js?v=20261028-1";
+} from "../utils/helpers.js?v=20261028-2";
 import { showToast, confirmAction } from "../components/toast.js";
 import { isStaffView } from "../utils/role.js";
 import { getCurrentUser } from "./login.js";
@@ -275,7 +275,7 @@ function getTableHtml(filteredList = lastFiltered) {
     .map((sale) => {
       const product = products.find((p) => String(p.id) === String(sale.productId));
       const category = product ? getCategoryLabel(categories, product.categoryId) : "";
-      const name = sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null));
+      const name = sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null, categories));
       const categoryHtml = category ? `<small class="text-muted d-block">${escapeHtml(category)}</small>` : "";
       const isStaff = isStaffView();
       const editBtn = isStaff ? "" : `<button class="action-btn sale-edit-btn" data-id="${sale.id}" title="Edit sale" aria-label="Edit sale"><i class="bi bi-pencil"></i></button>`;
@@ -303,7 +303,7 @@ function getTableHtml(filteredList = lastFiltered) {
     .map((sale) => {
       const product = products.find((p) => String(p.id) === String(sale.productId));
       const category = product ? getCategoryLabel(categories, product.categoryId) : "";
-      const name = sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null));
+      const name = sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null, categories));
       const categoryHtml = category ? `<small class="text-muted d-block">${escapeHtml(category)}</small>` : "";
       const isStaff = isStaffView();
       const editBtn = isStaff ? "" : `<button class="btn btn-outline-secondary btn-sm sale-edit-btn flex-grow-1" data-id="${sale.id}"><i class="bi bi-pencil"></i> Edit</button>`;
@@ -409,9 +409,9 @@ function getSaleProductPreviewHtml(product = null) {
   const category = getCategoryLabel(categories, product.categoryId);
   const meta = [category, onOrder ? `Resale product — ${resellerProductLeft(product)} left` : `${stock} in stock`].filter(Boolean).join(" · ");
   return `
-    ${productThumbnailHtml(product.imageUrl, getProductDisplayName(product), { productId: product.id })}
+    ${productThumbnailHtml(product.imageUrl, getProductDisplayName(product, categories), { productId: product.id })}
     <span class="sale-product-preview-info">
-      <strong>${escapeHtml(getProductDisplayName(product))}</strong>
+      <strong>${escapeHtml(getProductDisplayName(product, categories))}</strong>
       ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
     </span>`;
 }
@@ -427,7 +427,7 @@ function getSaleProductGalleryHtml(selectedId = "") {
         ? getVariantsTotalQuantity(variants)
         : Number(product.quantity) || 0;
       const out = !onOrder && stock <= 0;
-      const name = getProductDisplayName(product);
+      const name = getProductDisplayName(product, categories);
       const isSelected = String(product.id) === String(selectedId);
       return `
         <button type="button" class="sale-photo-card${isSelected ? " is-selected" : ""}${out ? " is-out" : ""}" data-product-id="${escapeHtml(String(product.id))}" role="option" aria-selected="${isSelected ? "true" : "false"}" title="${escapeHtml(name)}" ${out ? "disabled" : ""}>
@@ -504,7 +504,7 @@ function getProductOptionsHtml(selectedId = "") {
   return filtered
     .map((product) => {
       const variants = getProductVariants(product);
-      const name = escapeHtml(getProductDisplayName(product));
+      const name = escapeHtml(getProductDisplayName(product, categories));
       const onOrder = isNotStockedProduct(product);
       const stock = variants.length
         ? getVariantsTotalQuantity(variants)
@@ -1131,7 +1131,7 @@ function toCombinedReceipt(recorded) {
       const product = products.find((p) => String(p.id) === String(sale.productId));
       const category = product ? getCategoryLabel(categories, product.categoryId) : "";
       return {
-        name: sale.productName || getSaleItemName(product || null, categories, "Product"),
+        name: sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null, categories)),
         category: category || "",
         qty: Number(sale.quantity) || 0,
         unitPrice: Number(sale.unitPrice) || 0,
@@ -1248,7 +1248,7 @@ function saleCartSnapshot(sale) {
   const category = product ? getCategoryLabel(categories, product.categoryId) : "";
   return [
     {
-      name: sale.productName || getSaleItemName(product || null, categories, "Product"),
+      name: sale.productName || getSaleItemName(product || null, categories, getProductDisplayName(product || null, categories)),
       category: category || "",
       qty: Number(sale.quantity) || 0,
       unitPrice: Number(sale.unitPrice) || 0,
@@ -1273,10 +1273,8 @@ function renderReceiptHtml(sale, branch) {
       const quantity = Number(line.qty) || 0;
       const unitPrice = Number(line.unitPrice) || 0;
       const lineTotal = Number(line.lineTotal) || quantity * unitPrice;
-      const category = escapeHtml(line.category || "");
-      const categoryCell = category ? `<div class="receipt-item-category">${category}</div>` : "";
       return `<tr>
-        <td class="receipt-item-name">${escapeHtml(line.name || "Product")}${categoryCell}<small>KSH ${unitPrice.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</small></td>
+        <td class="receipt-item-name">${escapeHtml(line.name || "Product")}<small>KSH ${unitPrice.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</small></td>
         <td class="receipt-item-qty">${quantity}</td>
         <td class="receipt-item-amount">KSH ${lineTotal.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       </tr>`;
@@ -1553,7 +1551,7 @@ function openEditSaleModal(sale) {
         ? getVariantsTotalQuantity(variants)
         : Number(product.quantity) || 0;
       const sold = String(product.id) === String(sale.productId);
-      return `<option value="${product.id}" ${stock <= 0 && !sold ? "disabled" : ""}>${escapeHtml(getProductDisplayName(product))} - ${stock} in stock</option>`;
+      return `<option value="${product.id}" ${stock <= 0 && !sold ? "disabled" : ""}>${escapeHtml(getProductDisplayName(product, categories))} - ${stock} in stock</option>`;
     })
     .join("");
 
